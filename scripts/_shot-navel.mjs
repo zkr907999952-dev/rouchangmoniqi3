@@ -15,24 +15,44 @@ try {
   page.setDefaultTimeout(20000);
   page.on("pageerror", (err) => console.error("pageerror", err.message));
   await page.goto("http://127.0.0.1:8080/", { waitUntil: "domcontentloaded", timeout: 20000 });
-  await page.waitForFunction(() => window.__vela && typeof window.__vela.setPose === "function", {
-    timeout: 25000,
-  });
-  await page.waitForTimeout(700);
+  await page.waitForFunction(
+    () => window.__vela && typeof window.__vela.setPose === "function" && typeof window.__vela.frameBelly === "function",
+    { timeout: 25000 },
+  );
+  await page.waitForTimeout(900);
   await page.evaluate(
-    ({ pose, insert, view }) => {
+    ({ pose, insert }) => {
       window.__vela.setPose(pose);
-      if (insert > 0) window.__vela.setNavelInsert(insert);
-      if (view === "wide" && window.__vela.frameArm) window.__vela.frameArm();
-      else if (view === "navel" && window.__vela.frameNavel) window.__vela.frameNavel();
-      else if (window.__vela.frameBelly) window.__vela.frameBelly();
+      if (typeof insert === "number") window.__vela.setNavelInsert(insert);
       window.dispatchEvent(new KeyboardEvent("keydown", { key: "h", bubbles: true }));
     },
-    { pose, insert, view },
+    { pose, insert },
   );
-  await page.waitForTimeout(2400);
+  await page.waitForTimeout(1800);
+  const cam = await page.evaluate((view) => {
+    if (view === "wide" && window.__vela.frameArm) return window.__vela.frameArm();
+    if (view === "close" && window.__vela.frameNavel) return window.__vela.frameNavel();
+    if (window.__vela.frameBelly) return window.__vela.frameBelly();
+    return null;
+  }, view);
+  console.log("cam", cam);
+  await page.waitForTimeout(700);
   const dump = await page.evaluate(() => (window.__vela.dumpArm ? window.__vela.dumpArm() : null));
-  console.log("dump", JSON.stringify(dump, null, 2));
+  console.log(
+    "dump",
+    JSON.stringify(
+      {
+        pose: dump?.pose,
+        navelInsert: dump?.navelInsert,
+        navel: dump?.navel,
+        Index_c: dump?.bones?.R_Index_c,
+        Hand: dump?.bones?.R_Hand_a,
+        fingerDir: dump?.fingerDir,
+      },
+      null,
+      2,
+    ),
+  );
   const data = await page.evaluate(() => {
     const c = document.querySelector("canvas");
     return c ? c.toDataURL("image/png") : "";

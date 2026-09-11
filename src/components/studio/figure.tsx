@@ -2023,6 +2023,7 @@ function FittedFigure({
           controlsRef.current.target.copy(setup.navel);
           controlsRef.current.update();
         }
+        return camera.position.toArray();
       };
       vela.frameArm = () => {
         camera.position.set(0.28, 1.12, 1.15);
@@ -2031,6 +2032,7 @@ function FittedFigure({
           controlsRef.current.target.set(setup.navel.x, setup.navel.y + 0.04, setup.navel.z);
           controlsRef.current.update();
         }
+        return camera.position.toArray();
       };
       vela.dumpArm = () => {
         const names = [
