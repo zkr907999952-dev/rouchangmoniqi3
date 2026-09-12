@@ -367,6 +367,13 @@ type StudioState = StudioParams & {
   cameraPresetIndex: number | null;
   camFocus: CamFocus | null;
   camCmd: CamCmd | null;
+  firstPerson: boolean;
+  fpLookLocked: boolean;
+  fpCrouch: boolean;
+  fpStickX: number;
+  fpStickY: number;
+  fpJumpNonce: number;
+  fpInteractNonce: number;
   setParam: <K extends keyof StudioParams>(key: K, value: StudioParams[K]) => void;
   applyPreset: (id: PresetId) => void;
   setInteractMode: (mode: InteractMode) => void;
@@ -404,6 +411,12 @@ type StudioState = StudioParams & {
   setCamFocus: (focus: CamFocus) => void;
   setCameraZoom: (dist: number) => void;
   panCamera: (dx: number, dy: number, dz: number) => void;
+  setFirstPerson: (v: boolean) => void;
+  setFpLookLocked: (v: boolean) => void;
+  setFpCrouch: (v: boolean) => void;
+  setFpStick: (x: number, y: number) => void;
+  tapFpJump: () => void;
+  tapFpInteract: () => void;
   shake: () => void;
   fireStrike: (point?: [number, number, number] | null) => void;
   resetSim: () => void;
@@ -456,6 +469,13 @@ export const useStudio = create<StudioState>((set) => ({
   cameraPresetIndex: null,
   camFocus: null,
   camCmd: null,
+  firstPerson: false,
+  fpLookLocked: false,
+  fpCrouch: false,
+  fpStickX: 0,
+  fpStickY: 0,
+  fpJumpNonce: 0,
+  fpInteractNonce: 0,
   setParam: (key, value) =>
     set((s) => ({
       ...s,
@@ -670,6 +690,21 @@ export const useStudio = create<StudioState>((set) => ({
     set((s) => ({
       camCmd: { nonce: (s.camCmd?.nonce ?? 0) + 1, kind: "pan", dx, dy, dz },
     })),
+  setFirstPerson: (firstPerson) =>
+    set((s) => ({
+      firstPerson,
+      fpLookLocked: firstPerson ? s.fpLookLocked : false,
+      fpCrouch: firstPerson ? s.fpCrouch : false,
+      fpStickX: 0,
+      fpStickY: 0,
+      autoRotate: firstPerson ? false : s.autoRotate,
+      uiHidden: firstPerson ? true : false,
+    })),
+  setFpLookLocked: (fpLookLocked) => set({ fpLookLocked }),
+  setFpCrouch: (fpCrouch) => set({ fpCrouch }),
+  setFpStick: (fpStickX, fpStickY) => set({ fpStickX, fpStickY }),
+  tapFpJump: () => set((s) => ({ fpJumpNonce: s.fpJumpNonce + 1 })),
+  tapFpInteract: () => set((s) => ({ fpInteractNonce: s.fpInteractNonce + 1 })),
   shake: () => set((s) => ({ shakeNonce: s.shakeNonce + 1 })),
   fireStrike: (point = null) =>
     set((s) => ({ strikeNonce: s.strikeNonce + 1, strikePoint: point ?? null })),

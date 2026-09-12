@@ -6,6 +6,7 @@ import {
   ArrowRight,
   ArrowUp,
   Camera,
+  ChevronsDown,
   ChevronsUpDown,
   Crosshair,
   Eye,
@@ -188,6 +189,21 @@ export function Overlay() {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (useStudio.getState().firstPerson) {
+        if (
+          e.code === "KeyW" ||
+          e.code === "KeyA" ||
+          e.code === "KeyS" ||
+          e.code === "KeyD" ||
+          e.code === "Space" ||
+          e.code === "KeyC" ||
+          e.code === "KeyE" ||
+          e.code === "KeyF" ||
+          e.code.startsWith("Arrow")
+        ) {
+          return;
+        }
+      }
       if (e.key === "r" || e.key === "R") resetSim();
       if (e.key === "b" || e.key === "B") setParam("breathing", !useStudio.getState().breathing);
       if (e.key === "h" || e.key === "H") setParam("uiHidden", !useStudio.getState().uiHidden);
@@ -202,7 +218,9 @@ export function Overlay() {
         setParam("abdomenXray", cur > 0.05 ? 0 : 0.38);
       }
       if (e.key === "k" || e.key === "K") setParam("showLattice", !useStudio.getState().showLattice);
-      if (e.key === "w" || e.key === "W") setParam("showWeights", !useStudio.getState().showWeights);
+      if ((e.key === "w" || e.key === "W") && !useStudio.getState().firstPerson) {
+        setParam("showWeights", !useStudio.getState().showWeights);
+      }
       const exprKeys: Record<string, (typeof EXPRESSIONS)[number]["id"]> = {
         "1": "rest",
         "2": "ahegao",
@@ -232,7 +250,7 @@ export function Overlay() {
   return (
     <div className="pointer-events-none absolute inset-0 z-10 text-fg">
       {loading ? (
-        <div className="absolute inset-0 z-30 flex items-center justify-center bg-bg/70">
+        <div className="pointer-events-auto absolute inset-0 z-30 flex items-center justify-center bg-bg/70">
           <div className="w-64 rounded-xl border border-border bg-surface px-6 py-5 text-center">
             <p className="font-display text-xl tracking-display">
               {loadError ? "载入失败" : "载入模型"}
@@ -286,6 +304,7 @@ export function Overlay() {
         </button>
       </div>
       {camOpen ? <CameraMenu onClose={() => setCamOpen(false)} /> : null}
+      <FirstPersonHud />
 
       {uiHidden ? null : (
         <>
@@ -1471,6 +1490,9 @@ function CameraMenu({ onClose }: { onClose: () => void }) {
   const setCamFocus = useStudio((s) => s.setCamFocus);
   const setCameraZoom = useStudio((s) => s.setCameraZoom);
   const panCamera = useStudio((s) => s.panCamera);
+  const firstPerson = useStudio((s) => s.firstPerson);
+  const setFirstPerson = useStudio((s) => s.setFirstPerson);
+  const fpLookLocked = useStudio((s) => s.fpLookLocked);
   const abdomenXray = useStudio((s) => s.abdomenXray);
   const setParam = useStudio((s) => s.setParam);
   const dist = Math.hypot(live.px - live.tx, live.py - live.ty, live.pz - live.tz);
@@ -1542,6 +1564,29 @@ function CameraMenu({ onClose }: { onClose: () => void }) {
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3" style={{ WebkitOverflowScrolling: "touch" }}>
+        <p className="mb-1.5 text-xs text-muted">第一人称</p>
+        <button
+          type="button"
+          onClick={() => setFirstPerson(!firstPerson)}
+          className={cn(
+            "mb-1 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md border text-xs font-medium",
+            firstPerson
+              ? "border-accent bg-accent/80 text-accent-fg"
+              : "border-border/40 bg-surface/30 text-muted hover:text-fg",
+          )}
+        >
+          <Crosshair className="size-3.5" />
+          {firstPerson ? "第一人称 · 开" : "第一人称 · 关"}
+        </button>
+        <p className="mb-3 text-[11px] leading-snug text-muted">
+          {firstPerson
+            ? fpLookLocked
+              ? "视角已锁定 · 再点右键或 Esc 解除"
+              : "WASD 移动 · 空格跳 · C 蹲 · E 互动 · 右键锁定视角"
+            : "开启后可在房间内走动，右键锁定鼠标视角"}
+        </p>
+        {firstPerson ? null : (
+          <>
         <p className="mb-1.5 text-xs text-muted">视角预设</p>
         <div className="flex flex-col gap-1">
           {presets.map((snap, i) => (
@@ -1643,6 +1688,8 @@ function CameraMenu({ onClose }: { onClose: () => void }) {
             </button>
           </div>
         </div>
+          </>
+        )}
 
         <p className="mt-3 mb-1.5 text-xs text-muted">透视</p>
         <button
@@ -1681,6 +1728,157 @@ function CameraMenu({ onClose }: { onClose: () => void }) {
         </label>
       </div>
     </div>
+  );
+}
+
+function FirstPersonHud() {
+  const firstPerson = useStudio((s) => s.firstPerson);
+  const lookLocked = useStudio((s) => s.fpLookLocked);
+  const crouch = useStudio((s) => s.fpCrouch);
+  const setFpStick = useStudio((s) => s.setFpStick);
+  const setFpCrouch = useStudio((s) => s.setFpCrouch);
+  const tapFpJump = useStudio((s) => s.tapFpJump);
+  const tapFpInteract = useStudio((s) => s.tapFpInteract);
+  const stickRef = useRef<HTMLDivElement>(null);
+  const [knob, setKnob] = useState({ x: 0, y: 0 });
+  const [touchUi, setTouchUi] = useState(false);
+  const pid = useRef<number | null>(null);
+
+  useEffect(() => {
+    const sync = () => {
+      const coarse = window.matchMedia("(pointer: coarse)").matches;
+      setTouchUi(coarse || navigator.maxTouchPoints > 0 || window.innerWidth < 720);
+    };
+    sync();
+    window.addEventListener("resize", sync);
+    return () => window.removeEventListener("resize", sync);
+  }, []);
+
+  useEffect(() => {
+    if (!firstPerson) {
+      setFpStick(0, 0);
+      setKnob({ x: 0, y: 0 });
+    }
+  }, [firstPerson, setFpStick]);
+
+  if (!firstPerson) return null;
+
+  const stickTo = (clientX: number, clientY: number) => {
+    const el = stickRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const cx = r.left + r.width * 0.5;
+    const cy = r.top + r.height * 0.5;
+    let dx = clientX - cx;
+    let dy = clientY - cy;
+    const max = r.width * 0.32;
+    const mag = Math.hypot(dx, dy);
+    if (mag > max) {
+      dx = (dx / mag) * max;
+      dy = (dy / mag) * max;
+    }
+    setKnob({ x: dx, y: dy });
+    setFpStick(dx / max, -dy / max);
+  };
+
+  const onStickDown = (e: PointerEvent<HTMLDivElement>) => {
+    pid.current = e.pointerId;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    e.preventDefault();
+    stickTo(e.clientX, e.clientY);
+  };
+  const onStickMove = (e: PointerEvent<HTMLDivElement>) => {
+    if (pid.current !== e.pointerId) return;
+    e.preventDefault();
+    stickTo(e.clientX, e.clientY);
+  };
+  const onStickUp = (e: PointerEvent<HTMLDivElement>) => {
+    if (pid.current !== e.pointerId) return;
+    pid.current = null;
+    setKnob({ x: 0, y: 0 });
+    setFpStick(0, 0);
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+  };
+
+  const btn =
+    "pointer-events-auto inline-flex size-16 flex-col items-center justify-center gap-0.5 rounded-full border border-border/50 bg-surface/70 text-fg shadow-sm backdrop-blur-[2px] active:scale-[0.97]";
+
+  return (
+    <>
+      <div className="pointer-events-none absolute top-1/2 left-1/2 z-20 size-4 -translate-x-1/2 -translate-y-1/2">
+        <span className="absolute top-1/2 left-0 h-px w-full bg-fg/70" />
+        <span className="absolute top-0 left-1/2 h-full w-px bg-fg/70" />
+      </div>
+      {lookLocked ? (
+        <p className="pointer-events-none absolute bottom-6 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-3 py-1 text-[11px] text-muted sm:block">
+          右键解除视角锁定
+        </p>
+      ) : (
+        <p className="pointer-events-none absolute bottom-6 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-3 py-1 text-[11px] text-muted sm:block">
+          右键锁定鼠标视角 · WASD 移动 · 空格跳 · C 蹲
+        </p>
+      )}
+      {touchUi ? (
+        <>
+          <div
+            ref={stickRef}
+            className="pointer-events-auto absolute bottom-8 left-5 z-20 size-32 touch-none rounded-full border border-border/50 bg-surface/45 backdrop-blur-[2px]"
+            style={{ marginBottom: "env(safe-area-inset-bottom)" }}
+            onPointerDown={onStickDown}
+            onPointerMove={onStickMove}
+            onPointerUp={onStickUp}
+            onPointerCancel={onStickUp}
+          >
+            <span className="absolute top-1/2 left-1/2 size-14 -translate-x-1/2 -translate-y-1/2 rounded-full border border-border/40 bg-fg/15" />
+            <span
+              className="absolute top-1/2 left-1/2 size-12 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent/90"
+              style={{ transform: `translate(calc(-50% + ${knob.x}px), calc(-50% + ${knob.y}px))` }}
+            />
+          </div>
+          <div
+            className="absolute right-5 z-20 flex flex-col gap-3"
+            style={{ bottom: "calc(2rem + env(safe-area-inset-bottom))" }}
+          >
+            <button
+              type="button"
+              aria-label="互动"
+              className={btn}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                tapFpInteract();
+              }}
+            >
+              <Hand className="size-5" />
+              <span className="text-[10px] font-medium leading-none">互动</span>
+            </button>
+            <button
+              type="button"
+              aria-label="下蹲"
+              className={cn(btn, crouch ? "border-accent bg-accent text-accent-fg" : "")}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                setFpCrouch(!useStudio.getState().fpCrouch);
+              }}
+            >
+              <ChevronsDown className="size-5" />
+              <span className="text-[10px] font-medium leading-none">下蹲</span>
+            </button>
+            <button
+              type="button"
+              aria-label="跳跃"
+              className={btn}
+              onPointerDown={(e) => {
+                e.preventDefault();
+                tapFpJump();
+              }}
+            >
+              <ArrowUp className="size-5" />
+              <span className="text-[10px] font-medium leading-none">跳跃</span>
+            </button>
+          </div>
+        </>
+      ) : null}
+    </>
   );
 }
 

@@ -1,10 +1,11 @@
-import { Canvas, useThree } from "@react-three/fiber";
+import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { Suspense, useEffect, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Figure } from "./figure";
 import { useStudio, type CamFocus } from "@/lib/studio-store";
+import { FpInput } from "@/lib/fp-control";
 
 export default function Scene({
   character,
@@ -61,6 +62,7 @@ export default function Scene({
           />
           <ControlsBridge controlsRef={controlsRef} />
           <CameraRig controlsRef={controlsRef} />
+          <FirstPersonRig controlsRef={controlsRef} />
         </Suspense>
       </Canvas>
     </div>
@@ -126,6 +128,7 @@ function ControlsBridge({
 }) {
   const autoRotate = useStudio((s) => s.autoRotate);
   const grabbing = useStudio((s) => s.grabbing);
+  const firstPerson = useStudio((s) => s.firstPerson);
   const { gl, camera } = useThree();
 
   useEffect(() => {
@@ -232,6 +235,7 @@ function ControlsBridge({
     };
 
     const down = (e: PointerEvent) => {
+      if (useStudio.getState().firstPerson) return;
       if (e.pointerType !== "touch") return;
       const now = performance.now();
       const dx = e.clientX - lastTapX;
@@ -257,6 +261,7 @@ function ControlsBridge({
     };
 
     const move = (e: PointerEvent) => {
+      if (useStudio.getState().firstPerson) return;
       if (!rotating || e.pointerId !== rotId) return;
       rotateBy(e.clientX, e.clientY);
       e.stopPropagation();
@@ -264,6 +269,7 @@ function ControlsBridge({
     };
 
     const up = (e: PointerEvent) => {
+      if (useStudio.getState().firstPerson) return;
       if (e.pointerType !== "touch") return;
       if (rotating && e.pointerId === rotId) {
         rotating = false;
@@ -286,6 +292,7 @@ function ControlsBridge({
     };
 
     const touchStart = (e: TouchEvent) => {
+      if (useStudio.getState().firstPerson) return;
       if (e.touches.length < 2) return;
       rotating = false;
       rotId = -1;
@@ -305,6 +312,7 @@ function ControlsBridge({
       }
     };
     const touchMove = (e: TouchEvent) => {
+      if (useStudio.getState().firstPerson) return;
       if (!two || e.touches.length < 2) return;
       const p = twoPos(e);
       panCam(p.x - midX, p.y - midY);
@@ -366,11 +374,13 @@ function ControlsBridge({
     <OrbitControls
       ref={controlsRef}
       makeDefault
-      enableRotate={!grabbing}
-      enablePan={!grabbing}
-      enableDamping
+      enabled={!firstPerson}
+      enableRotate={!grabbing && !firstPerson}
+      enablePan={!grabbing && !firstPerson}
+      enableDamping={!firstPerson}
+      enableZoom={!firstPerson}
       dampingFactor={0.08}
-      autoRotate={autoRotate && !grabbing}
+      autoRotate={autoRotate && !grabbing && !firstPerson}
       autoRotateSpeed={0.45}
       minDistance={0.12}
       maxDistance={6.2}
@@ -425,6 +435,7 @@ function CameraRig({
 
   useEffect(() => {
     if (!cmd) return;
+    if (useStudio.getState().firstPerson) return;
     const c = controlsRef.current;
     if (!c) return;
     const offset = new THREE.Vector3();
@@ -465,6 +476,315 @@ function CameraRig({
       tz: c.target.z,
     });
   }, [cmd, camera, controlsRef]);
+
+  return null;
+}
+
+const FP_STAND = 1.58;
+const FP_CROUCH = 1.08;
+const FP_WALK = 1.65;
+const FP_AIR = 1.15;
+const FP_JUMP = 3.15;
+const FP_GRAV = 14;
+const FP_SENS = 0.00215;
+const FP_BOUNDS = { x: 1.85, zMin: -1.55, zMax: 2.85, bodyR: 0.28 };
+
+function FirstPersonRig({
+  controlsRef,
+}: {
+  controlsRef: RefObject<OrbitControlsImpl | null>;
+}) {
+  const { camera, gl } = useThree();
+  const firstPerson = useStudio((s) => s.firstPerson);
+  const lookLocked = useStudio((s) => s.fpLookLocked);
+  const pos = useRef(new THREE.Vector3(0.12, 0, 1.92));
+  const velY = useRef(0);
+  const yaw = useRef(0);
+  const pitch = useRef(-0.08);
+  const grounded = useRef(true);
+  const coyote = useRef(0);
+  const jumpBuf = useRef(0);
+  const eye = useRef(FP_STAND);
+  const bob = useRef(0);
+  const distWalk = useRef(0);
+  const input = useRef(new FpInput());
+  const lookTouch = useRef<{ id: number; x: number; y: number } | null>(null);
+  const orbitSnap = useRef<{
+    px: number;
+    py: number;
+    pz: number;
+    tx: number;
+    ty: number;
+    tz: number;
+    fov: number;
+  } | null>(null);
+  const lastJumpNonce = useRef(0);
+  const lastInteractNonce = useRef(0);
+  const speedRef = useRef(0);
+
+  useEffect(() => {
+    const persp = camera as THREE.PerspectiveCamera;
+    if (firstPerson) {
+      const c = controlsRef.current;
+      orbitSnap.current = {
+        px: camera.position.x,
+        py: camera.position.y,
+        pz: camera.position.z,
+        tx: c?.target.x ?? 0,
+        ty: c?.target.y ?? 1.06,
+        tz: c?.target.z ?? 0.1,
+        fov: persp.fov,
+      };
+      pos.current.set(0.12, 0, 1.92);
+      velY.current = 0;
+      yaw.current = 0;
+      pitch.current = -0.08;
+      eye.current = FP_STAND;
+      grounded.current = true;
+      persp.fov = 75;
+      persp.near = 0.08;
+      persp.updateProjectionMatrix();
+      camera.position.set(0.12, FP_STAND, 1.92);
+      camera.lookAt(0.12, FP_STAND - 0.08, 0.92);
+      input.current.attach();
+    } else {
+      input.current.detach();
+      if (document.pointerLockElement) document.exitPointerLock();
+      useStudio.getState().setFpLookLocked(false);
+      const snap = orbitSnap.current;
+      if (snap) {
+        camera.position.set(snap.px, snap.py, snap.pz);
+        persp.fov = snap.fov;
+        persp.near = 0.05;
+        persp.updateProjectionMatrix();
+        const c = controlsRef.current;
+        if (c) {
+          c.target.set(snap.tx, snap.ty, snap.tz);
+          c.enabled = true;
+          c.update();
+        }
+        camera.lookAt(snap.tx, snap.ty, snap.tz);
+      }
+    }
+    return () => input.current.detach();
+  }, [firstPerson, camera, controlsRef]);
+
+  useEffect(() => {
+    if (!firstPerson) return;
+    const el = gl.domElement;
+    el.style.cursor = lookLocked ? "none" : "";
+    return () => {
+      el.style.cursor = "";
+    };
+  }, [firstPerson, lookLocked, gl]);
+
+  useEffect(() => {
+    if (!firstPerson) return;
+    const el = gl.domElement;
+    const tryLock = () => {
+      const req = el.requestPointerLock as (opts?: { unadjustedMovement?: boolean }) => Promise<void> | void;
+      try {
+        const result = req.call(el, { unadjustedMovement: true });
+        if (result && typeof (result as Promise<void>).catch === "function") {
+          (result as Promise<void>).catch(() => {
+            try {
+              el.requestPointerLock();
+            } catch {
+              /* iframe preview often rejects pointer lock */
+            }
+          });
+        }
+      } catch {
+        try {
+          el.requestPointerLock();
+        } catch {
+          /* keep software look */
+        }
+      }
+    };
+    const hadPtrLock = { current: false };
+    const onLockChange = () => {
+      if (document.pointerLockElement === el) {
+        hadPtrLock.current = true;
+        useStudio.getState().setFpLookLocked(true);
+      } else if (hadPtrLock.current) {
+        hadPtrLock.current = false;
+        useStudio.getState().setFpLookLocked(false);
+      }
+    };
+    const onPointerLockError = () => {
+      /* iframe preview often rejects — software look stays via store flag */
+    };
+    const onMouseMove = (e: MouseEvent) => {
+      if (!useStudio.getState().fpLookLocked) return;
+      yaw.current -= e.movementX * FP_SENS;
+      pitch.current -= e.movementY * FP_SENS;
+      pitch.current = THREE.MathUtils.clamp(pitch.current, -1.35, 1.35);
+    };
+    const onPointerDown = (e: PointerEvent) => {
+      if (e.button === 2) {
+        e.preventDefault();
+        e.stopPropagation();
+        const st = useStudio.getState();
+        if (st.fpLookLocked) {
+          st.setFpLookLocked(false);
+          if (document.pointerLockElement) document.exitPointerLock();
+        } else {
+          st.setFpLookLocked(true);
+          tryLock();
+        }
+        return;
+      }
+      if (e.pointerType === "touch" && e.button === 0) {
+        const r = el.getBoundingClientRect();
+        if (e.clientX < r.left + r.width * 0.42) return;
+        lookTouch.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+      }
+    };
+    const onPointerMove = (e: PointerEvent) => {
+      const t = lookTouch.current;
+      if (!t || e.pointerId !== t.id) return;
+      const dx = e.clientX - t.x;
+      const dy = e.clientY - t.y;
+      t.x = e.clientX;
+      t.y = e.clientY;
+      yaw.current -= dx * 0.0045;
+      pitch.current -= dy * 0.0045;
+      pitch.current = THREE.MathUtils.clamp(pitch.current, -1.35, 1.35);
+    };
+    const onPointerUp = (e: PointerEvent) => {
+      if (lookTouch.current?.id === e.pointerId) lookTouch.current = null;
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== "Escape") return;
+      if (document.pointerLockElement) document.exitPointerLock();
+      useStudio.getState().setFpLookLocked(false);
+    };
+    document.addEventListener("pointerlockchange", onLockChange);
+    document.addEventListener("pointerlockerror", onPointerLockError);
+    document.addEventListener("mousemove", onMouseMove);
+    document.addEventListener("keydown", onKey);
+    el.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerUp);
+    return () => {
+      document.removeEventListener("pointerlockchange", onLockChange);
+      document.removeEventListener("pointerlockerror", onPointerLockError);
+      document.removeEventListener("mousemove", onMouseMove);
+      document.removeEventListener("keydown", onKey);
+      el.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerUp);
+    };
+  }, [firstPerson, gl]);
+
+  useEffect(() => {
+    const probe = {
+      getYaw: () => yaw.current,
+      getSpeed: () => speedRef.current,
+      getPos: () => pos.current.toArray() as [number, number, number],
+      getEye: () => eye.current,
+      setKeys: (codes: string[]) => input.current.setKeys(codes),
+      setSteer: (v: number) => {
+        input.current.stickX = -v;
+        input.current.stickY = 1;
+      },
+    };
+    window.__controlsTest = probe;
+    return () => {
+      if (window.__controlsTest === probe) delete window.__controlsTest;
+    };
+  }, []);
+
+  useFrame((_, dt) => {
+    if (!firstPerson) return;
+    const d = Math.min(0.05, Math.max(0.001, dt));
+    const st = useStudio.getState();
+    input.current.stickX = st.fpStickX;
+    input.current.stickY = st.fpStickY;
+    input.current.crouchHold = st.fpCrouch;
+    if (st.fpJumpNonce !== lastJumpNonce.current) {
+      lastJumpNonce.current = st.fpJumpNonce;
+      input.current.jumpTap = true;
+    }
+    const act = input.current.poll();
+    if (st.fpInteractNonce !== lastInteractNonce.current) {
+      lastInteractNonce.current = st.fpInteractNonce;
+      window.dispatchEvent(new Event("studio-fp-interact"));
+    } else if (act.interact) {
+      window.dispatchEvent(new Event("studio-fp-interact"));
+    }
+
+    const wantEye = act.crouch ? FP_CROUCH : FP_STAND;
+    eye.current += (wantEye - eye.current) * (1 - Math.exp(-10 * d));
+
+    const fx = -Math.sin(yaw.current);
+    const fz = -Math.cos(yaw.current);
+    const rx = Math.cos(yaw.current);
+    const rz = -Math.sin(yaw.current);
+    const speed = grounded.current ? (act.crouch ? FP_WALK * 0.45 : FP_WALK) : FP_AIR;
+    const wishX = rx * act.moveX + fx * act.moveY;
+    const wishZ = rz * act.moveX + fz * act.moveY;
+    const wishLen = Math.hypot(wishX, wishZ);
+    const nx = wishLen > 1e-5 ? wishX / wishLen : 0;
+    const nz = wishLen > 1e-5 ? wishZ / wishLen : 0;
+    const step = speed * Math.min(1, wishLen) * d;
+    let x = pos.current.x + nx * step;
+    let z = pos.current.z + nz * step;
+    x = THREE.MathUtils.clamp(x, -FP_BOUNDS.x, FP_BOUNDS.x);
+    z = THREE.MathUtils.clamp(z, FP_BOUNDS.zMin, FP_BOUNDS.zMax);
+    const br = FP_BOUNDS.bodyR;
+    const r2 = x * x + z * z;
+    if (r2 < br * br && pos.current.y < 1.75) {
+      const r = Math.sqrt(r2) || 1e-6;
+      x = (x / r) * br;
+      z = (z / r) * br;
+    }
+    pos.current.x = x;
+    pos.current.z = z;
+    speedRef.current = wishLen * speed;
+
+    if (grounded.current) coyote.current = 0.12;
+    else coyote.current = Math.max(0, coyote.current - d);
+    if (act.jump) jumpBuf.current = 0.12;
+    else jumpBuf.current = Math.max(0, jumpBuf.current - d);
+    if (jumpBuf.current > 0 && coyote.current > 0) {
+      velY.current = FP_JUMP;
+      grounded.current = false;
+      coyote.current = 0;
+      jumpBuf.current = 0;
+    }
+    velY.current -= FP_GRAV * d;
+    pos.current.y += velY.current * d;
+    if (pos.current.y <= 0) {
+      pos.current.y = 0;
+      velY.current = 0;
+      grounded.current = true;
+    } else {
+      grounded.current = false;
+    }
+
+    if (grounded.current && wishLen > 0.12) distWalk.current += step;
+    else distWalk.current *= 1 - d * 4;
+    const bobAmp = grounded.current && wishLen > 0.12 ? 0.018 : 0;
+    bob.current = Math.sin(distWalk.current * 14) * bobAmp;
+
+    const lookY = pos.current.y + eye.current + bob.current;
+    camera.position.set(pos.current.x, lookY, pos.current.z);
+    const cy = Math.cos(pitch.current);
+    camera.lookAt(
+      pos.current.x + fx * cy,
+      lookY + Math.sin(pitch.current),
+      pos.current.z + fz * cy,
+    );
+    const c = controlsRef.current;
+    if (c) {
+      c.target.set(pos.current.x + fx * cy, lookY + Math.sin(pitch.current), pos.current.z + fz * cy);
+      c.enabled = false;
+    }
+  });
 
   return null;
 }

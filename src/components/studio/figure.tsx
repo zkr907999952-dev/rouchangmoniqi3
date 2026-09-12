@@ -2133,6 +2133,10 @@ function FittedFigure({
         useStudio.getState().setPose(id as PoseId);
         return useStudio.getState().pose;
       };
+      vela.setFirstPerson = (on: boolean) => {
+        useStudio.getState().setFirstPerson(on);
+        return useStudio.getState().firstPerson;
+      };
       vela.setNavelInsert = (t: number) => {
         useStudio.getState().setNavelInsert(t);
         return useStudio.getState().navelInsert;
@@ -2333,7 +2337,7 @@ function FittedFigure({
       if (_n.lengthSq() < 1e-6) _n.set(1, 0, 0);
       else _n.normalize();
       _plane.setFromNormalAndCoplanarPoint(_n, setup.navel);
-      raycaster.setFromCamera(pointer, camera);
+      raycaster.setFromCamera(st.firstPerson ? _ndc.set(0, 0) : pointer, camera);
       if (!raycaster.ray.intersectPlane(_plane, _hit)) _hit.copy(setup.navel);
       beginGrab(_hit, _n, "navel");
       return;
@@ -2346,7 +2350,7 @@ function FittedFigure({
     if (mode === "bayonet") {
       if (!setup.knife.hasEntry) {
         camera.getWorldDirection(_camDir);
-        raycaster.setFromCamera(pointer, camera);
+        raycaster.setFromCamera(st.firstPerson ? _ndc.set(0, 0) : pointer, camera);
         const hits = raycaster.intersectObjects(setup.torsoMeshes, false);
         const hit = hits.find((h) => h.face && h.distance > 0.001);
         if (!hit?.face) return;
@@ -2369,7 +2373,7 @@ function FittedFigure({
     }
     if (mode === "pose") {
       camera.getWorldDirection(_camDir);
-      raycaster.setFromCamera(pointer, camera);
+      raycaster.setFromCamera(st.firstPerson ? _ndc.set(0, 0) : pointer, camera);
       const gizHits = raycaster.intersectObjects([...setup.rotRings, ...setup.moveArrows], true);
       const giz = gizHits.find((h) => h.object.userData.gizmo);
       if (giz && st.selectedBone >= 0) {
@@ -2405,6 +2409,35 @@ function FittedFigure({
     }
     beginGrab(_hit, _normal, "drag");
   };
+  const onPointerDownRef = useRef(onPointerDown);
+  onPointerDownRef.current = onPointerDown;
+
+  useEffect(() => {
+    const onFpInteract = () => {
+      if (!useStudio.getState().firstPerson) return;
+      raycaster.setFromCamera(_ndc.set(0, 0), camera);
+      const hits = raycaster.intersectObject(setup.root, true);
+      const hit = hits.find((h) => h.face && h.distance > 0.04);
+      if (!hit) return;
+      _hit.copy(hit.point);
+      if (hit.face) {
+        _normal.copy(hit.face.normal).transformDirection(hit.object.matrixWorld).normalize();
+      } else {
+        _normal.set(0, 0, 1);
+      }
+      const fake = {
+        button: 0,
+        nativeEvent: { button: 0 },
+        stopPropagation: () => {},
+        point: _hit,
+        face: hit.face,
+        object: hit.object,
+      } as unknown as ThreeEvent<PointerEvent>;
+      onPointerDownRef.current(fake);
+    };
+    window.addEventListener("studio-fp-interact", onFpInteract);
+    return () => window.removeEventListener("studio-fp-interact", onFpInteract);
+  }, [setup, camera, raycaster]);
 
   const midY = (setup.y0 + setup.y1) * 0.5;
   const ab = setup.abdomen;
