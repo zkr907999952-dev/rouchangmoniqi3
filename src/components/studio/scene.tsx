@@ -5,7 +5,7 @@ import * as THREE from "three";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Figure } from "./figure";
 import { useStudio, type CamFocus } from "@/lib/studio-store";
-import { FpInput } from "@/lib/fp-control";
+import { CrouchHold, FpInput } from "@/lib/fp-control";
 
 export default function Scene({
   character,
@@ -481,7 +481,8 @@ function CameraRig({
 }
 
 const FP_STAND = 1.58;
-const FP_CROUCH = 1.08;
+const FP_CROUCH = 0.86;
+const FP_PRONE = 0.28;
 const FP_WALK = 1.65;
 const FP_AIR = 1.15;
 const FP_JUMP = 3.15;
@@ -497,6 +498,7 @@ function FirstPersonRig({
   const { camera, gl } = useThree();
   const firstPerson = useStudio((s) => s.firstPerson);
   const lookLocked = useStudio((s) => s.fpLookLocked);
+  const fpFov = useStudio((s) => s.fpFov);
   const pos = useRef(new THREE.Vector3(0.12, 0, 1.92));
   const velY = useRef(0);
   const yaw = useRef(0);
@@ -521,6 +523,34 @@ function FirstPersonRig({
   const lastJumpNonce = useRef(0);
   const lastInteractNonce = useRef(0);
   const speedRef = useRef(0);
+  const crouchGate = useRef<CrouchHold | null>(null);
+
+  useEffect(() => {
+    const gate = new CrouchHold(
+      () => {
+        const s = useStudio.getState();
+        if (!s.firstPerson) return;
+        if (s.fpProne) {
+          s.setFpProne(false);
+          s.setFpCrouch(false);
+        } else {
+          s.setFpCrouch(!s.fpCrouch);
+        }
+      },
+      () => {
+        const s = useStudio.getState();
+        if (!s.firstPerson) return;
+        s.setFpProne(!s.fpProne);
+      },
+    );
+    crouchGate.current = gate;
+    input.current.gate = gate;
+    return () => {
+      gate.reset();
+      if (crouchGate.current === gate) crouchGate.current = null;
+      if (input.current.gate === gate) input.current.gate = null;
+    };
+  }, []);
 
   useEffect(() => {
     const persp = camera as THREE.PerspectiveCamera;
@@ -541,13 +571,15 @@ function FirstPersonRig({
       pitch.current = -0.08;
       eye.current = FP_STAND;
       grounded.current = true;
-      persp.fov = 75;
+      persp.fov = useStudio.getState().fpFov;
       persp.near = 0.08;
       persp.updateProjectionMatrix();
       camera.position.set(0.12, FP_STAND, 1.92);
       camera.lookAt(0.12, FP_STAND - 0.08, 0.92);
+      input.current.gate = crouchGate.current;
       input.current.attach();
     } else {
+      crouchGate.current?.reset();
       input.current.detach();
       if (document.pointerLockElement) document.exitPointerLock();
       useStudio.getState().setFpLookLocked(false);
@@ -568,6 +600,27 @@ function FirstPersonRig({
     }
     return () => input.current.detach();
   }, [firstPerson, camera, controlsRef]);
+
+  useEffect(() => {
+    if (!firstPerson) return;
+    const persp = camera as THREE.PerspectiveCamera;
+    persp.fov = fpFov;
+    persp.updateProjectionMatrix();
+  }, [firstPerson, fpFov, camera]);
+
+  useEffect(() => {
+    if (!firstPerson) return;
+    const el = gl.domElement;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      const st = useStudio.getState();
+      st.setFpFov(st.fpFov + dy * 0.045);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, [firstPerson, gl]);
 
   useEffect(() => {
     if (!firstPerson) return;
@@ -686,6 +739,17 @@ function FirstPersonRig({
       getSpeed: () => speedRef.current,
       getPos: () => pos.current.toArray() as [number, number, number],
       getEye: () => eye.current,
+      getCrouch: () => useStudio.getState().fpCrouch,
+      getProne: () => useStudio.getState().fpProne,
+      getDebug: () => ({
+        fp: useStudio.getState().firstPerson,
+        crouch: useStudio.getState().fpCrouch,
+        prone: useStudio.getState().fpProne,
+        gate: !!crouchGate.current,
+        inputGate: !!input.current.gate,
+        held: crouchGate.current?.held ?? null,
+      }),
+      setCrouchHeld: (v: boolean) => crouchGate.current?.setHeld(v),
       setKeys: (codes: string[]) => input.current.setKeys(codes),
       setSteer: (v: number) => {
         input.current.stickX = -v;
@@ -704,12 +768,16 @@ function FirstPersonRig({
     const st = useStudio.getState();
     input.current.stickX = st.fpStickX;
     input.current.stickY = st.fpStickY;
-    input.current.crouchHold = st.fpCrouch;
+    input.current.crouchHold = st.fpCrouchHeld;
     if (st.fpJumpNonce !== lastJumpNonce.current) {
       lastJumpNonce.current = st.fpJumpNonce;
       input.current.jumpTap = true;
     }
     const act = input.current.poll();
+    crouchGate.current?.setHeld(act.crouchHeld);
+    const live = useStudio.getState();
+    const crouched = live.fpCrouch;
+    const prone = live.fpProne;
     if (st.fpInteractNonce !== lastInteractNonce.current) {
       lastInteractNonce.current = st.fpInteractNonce;
       window.dispatchEvent(new Event("studio-fp-interact"));
@@ -717,14 +785,20 @@ function FirstPersonRig({
       window.dispatchEvent(new Event("studio-fp-interact"));
     }
 
-    const wantEye = act.crouch ? FP_CROUCH : FP_STAND;
+    const wantEye = prone ? FP_PRONE : crouched ? FP_CROUCH : FP_STAND;
     eye.current += (wantEye - eye.current) * (1 - Math.exp(-10 * d));
 
     const fx = -Math.sin(yaw.current);
     const fz = -Math.cos(yaw.current);
     const rx = Math.cos(yaw.current);
     const rz = -Math.sin(yaw.current);
-    const speed = grounded.current ? (act.crouch ? FP_WALK * 0.45 : FP_WALK) : FP_AIR;
+    const speed = grounded.current
+      ? prone
+        ? FP_WALK * 0.28
+        : crouched
+          ? FP_WALK * 0.45
+          : FP_WALK
+      : FP_AIR;
     const wishX = rx * act.moveX + fx * act.moveY;
     const wishZ = rz * act.moveX + fz * act.moveY;
     const wishLen = Math.hypot(wishX, wishZ);
@@ -748,6 +822,10 @@ function FirstPersonRig({
 
     if (grounded.current) coyote.current = 0.12;
     else coyote.current = Math.max(0, coyote.current - d);
+    if (act.jump && prone) {
+      useStudio.getState().setFpProne(false);
+      useStudio.getState().setFpCrouch(false);
+    }
     if (act.jump) jumpBuf.current = 0.12;
     else jumpBuf.current = Math.max(0, jumpBuf.current - d);
     if (jumpBuf.current > 0 && coyote.current > 0) {
@@ -768,7 +846,7 @@ function FirstPersonRig({
 
     if (grounded.current && wishLen > 0.12) distWalk.current += step;
     else distWalk.current *= 1 - d * 4;
-    const bobAmp = grounded.current && wishLen > 0.12 ? 0.018 : 0;
+    const bobAmp = grounded.current && wishLen > 0.12 ? (prone ? 0.006 : crouched ? 0.01 : 0.018) : 0;
     bob.current = Math.sin(distWalk.current * 14) * bobAmp;
 
     const lookY = pos.current.y + eye.current + bob.current;

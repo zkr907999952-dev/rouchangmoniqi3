@@ -4,7 +4,7 @@ export type FpActions = {
   moveX: number;
   moveY: number;
   jump: boolean;
-  crouch: boolean;
+  crouchHeld: boolean;
   interact: boolean;
 };
 
@@ -32,18 +32,123 @@ function radialDeadzone(x: number, y: number, dz = 0.15) {
   return { x: x * scale, y: y * scale };
 }
 
+function THREE_CLAMP(v: number, a: number, b: number) {
+  return v < a ? a : v > b ? b : v;
+}
+
+const CROUCH_LONG_MS = 500;
+const CROUCH_COOL_MS = 380;
+const CROUCH_STICKY_MS = 80;
+
+/** Tap vs long-press with sticky release so key-repeat cannot flicker posture. */
+export class CrouchHold {
+  held = false;
+  private downAt = 0;
+  private longFired = false;
+  private lastAction = 0;
+  private longTimer: ReturnType<typeof setTimeout> | null = null;
+  private stickyTimer: ReturnType<typeof setTimeout> | null = null;
+
+  constructor(
+    private readonly onTap: () => void,
+    private readonly onLong: () => void,
+  ) {}
+
+  setHeld(on: boolean) {
+    if (on) this.down();
+    else this.up();
+  }
+
+  reset() {
+    this.clearTimers();
+    this.held = false;
+    this.longFired = false;
+    this.downAt = 0;
+  }
+
+  private down() {
+    if (this.stickyTimer) {
+      clearTimeout(this.stickyTimer);
+      this.stickyTimer = null;
+      if (this.held) {
+        if (!this.longFired) this.armLong();
+        return;
+      }
+    }
+    if (this.held) return;
+    this.held = true;
+    this.downAt = performance.now();
+    this.longFired = false;
+    this.armLong();
+  }
+
+  private armLong() {
+    if (this.longTimer) clearTimeout(this.longTimer);
+    this.longTimer = setTimeout(() => {
+      this.longTimer = null;
+      const age = performance.now() - this.downAt;
+      if (!this.held || this.longFired) return;
+      if (age < 460) return;
+      this.longFired = true;
+      this.lastAction = performance.now();
+      this.onLong();
+    }, 500);
+  }
+
+  private up() {
+    if (!this.held) return;
+    if (this.stickyTimer) return;
+    if (this.longTimer) {
+      clearTimeout(this.longTimer);
+      this.longTimer = null;
+    }
+    this.stickyTimer = setTimeout(() => this.commitUp(), CROUCH_STICKY_MS);
+  }
+
+  private commitUp() {
+    this.stickyTimer = null;
+    if (!this.held) return;
+    this.held = false;
+    if (this.longTimer) {
+      clearTimeout(this.longTimer);
+      this.longTimer = null;
+    }
+    if (this.longFired) return;
+    const now = performance.now();
+    if (now - this.lastAction < CROUCH_COOL_MS) return;
+    this.lastAction = now;
+    this.onTap();
+  }
+
+  private clearTimers() {
+    if (this.longTimer) {
+      clearTimeout(this.longTimer);
+      this.longTimer = null;
+    }
+    if (this.stickyTimer) {
+      clearTimeout(this.stickyTimer);
+      this.stickyTimer = null;
+    }
+  }
+}
+
 export class FpInput {
   readonly keys = new Set<string>();
   stickX = 0;
   stickY = 0;
-  crouchHold = false;
   jumpTap = false;
+  crouchHold = false;
   interactTap = false;
+  gate: CrouchHold | null = null;
   private injected: string[] = [];
   private prevJump = false;
   private prevInteract = false;
 
   attach() {
+    this.prevJump = false;
+    this.prevInteract = false;
+    this.keys.clear();
+    this.injected = [];
     const down = (e: KeyboardEvent) => {
       if (e.repeat) {
         if (GAME_CODES.has(e.code)) e.preventDefault();
@@ -52,12 +157,17 @@ export class FpInput {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       this.keys.add(e.code);
+      if (e.code === "KeyC") this.gate?.setHeld(true);
       if (GAME_CODES.has(e.code)) e.preventDefault();
     };
     const up = (e: KeyboardEvent) => {
       this.keys.delete(e.code);
+      if (e.code === "KeyC") this.gate?.setHeld(false);
     };
-    const clear = () => this.keys.clear();
+    const clear = () => {
+      this.keys.clear();
+      this.gate?.setHeld(false);
+    };
     window.addEventListener("keydown", down, { capture: true });
     window.addEventListener("keyup", up, { capture: true });
     window.addEventListener("blur", clear);
@@ -76,6 +186,7 @@ export class FpInput {
 
   setKeys(codes: string[]) {
     this.injected = codes.slice();
+    this.gate?.setHeld(codes.includes("KeyC"));
   }
 
   poll(): FpActions {
@@ -104,8 +215,8 @@ export class FpInput {
       my /= mag;
     }
     const jumpHeld = this.jumpTap || held("Space");
-    const interactHeld = this.interactTap || held("KeyE") || held("KeyF");
     const jump = jumpHeld && !this.prevJump;
+    const interactHeld = this.interactTap || held("KeyE") || held("KeyF");
     const interact = interactHeld && !this.prevInteract;
     this.prevJump = jumpHeld;
     this.prevInteract = interactHeld;
@@ -115,14 +226,10 @@ export class FpInput {
       moveX: mx,
       moveY: my,
       jump,
-      crouch: this.crouchHold || padCrouch || held("KeyC"),
+      crouchHeld: this.crouchHold || padCrouch || held("KeyC"),
       interact,
     };
   }
-}
-
-function THREE_CLAMP(v: number, a: number, b: number) {
-  return v < a ? a : v > b ? b : v;
 }
 
 declare global {
@@ -132,6 +239,9 @@ declare global {
       getSpeed: () => number;
       getPos?: () => [number, number, number];
       getEye?: () => number;
+      getCrouch?: () => boolean;
+      getProne?: () => boolean;
+      setCrouchHeld?: (v: boolean) => void;
       setKeys?: (codes: string[]) => void;
       setSteer?: (v: number) => void;
     };

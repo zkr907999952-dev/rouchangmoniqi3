@@ -66,12 +66,53 @@ try {
     console.log("jump weak (headless rAF)", { y0, yJump });
   }
 
-  await page.evaluate(() => window.__controlsTest.setKeys(["KeyC"]));
-  await page.waitForTimeout(600);
-  const eyeC = await page.evaluate(() => window.__controlsTest.getEye?.());
   await page.evaluate(() => window.__controlsTest.setKeys([]));
+  await page.waitForTimeout(100);
 
-  console.log("FP controls OK", { start, dz, dxA, dxD, yJump, eyeC, speed: w.speed });
+  await page.evaluate(() => {
+    window.__controlsTest.setKeys(["KeyC"]);
+    window.__controlsTest.setKeys([]);
+  });
+  await page.waitForFunction(() => window.__controlsTest.getCrouch?.() === true, { timeout: 2000 });
+  const tap = await page.evaluate(() => ({
+    crouch: window.__controlsTest.getCrouch?.(),
+    prone: window.__controlsTest.getProne?.(),
+  }));
+  if (tap.prone) throw new Error("short C must not prone " + JSON.stringify(tap));
+
+  await page.waitForTimeout(450);
+  await page.evaluate(() => {
+    window.__controlsTest.setKeys(["KeyC"]);
+    window.__controlsTest.setKeys([]);
+  });
+  await page.waitForFunction(() => window.__controlsTest.getCrouch?.() === false, { timeout: 2000 });
+  const tap2 = await page.evaluate(() => ({
+    crouch: window.__controlsTest.getCrouch?.(),
+    prone: window.__controlsTest.getProne?.(),
+  }));
+  if (tap2.crouch || tap2.prone) throw new Error("second short C should stand " + JSON.stringify(tap2));
+
+  await page.waitForTimeout(450);
+  await page.evaluate(() => window.__controlsTest.setKeys(["KeyC"]));
+  await page.waitForFunction(() => window.__controlsTest.getProne?.() === true, { timeout: 2500 });
+  const held = await page.evaluate(() => ({
+    crouch: window.__controlsTest.getCrouch?.(),
+    prone: window.__controlsTest.getProne?.(),
+    eye: window.__controlsTest.getEye?.(),
+  }));
+  await page.evaluate(() => window.__controlsTest.setKeys([]));
+  await page.waitForTimeout(200);
+  const heldOff = await page.evaluate(() => window.__controlsTest.getProne?.());
+  if (!heldOff) throw new Error("releasing long C must stay prone");
+
+  await page.waitForTimeout(450);
+  await page.evaluate(() => {
+    window.__controlsTest.setKeys(["KeyC"]);
+    window.__controlsTest.setKeys([]);
+  });
+  await page.waitForFunction(() => window.__controlsTest.getProne?.() === false, { timeout: 2000 });
+
+  console.log("FP controls OK", { start, dz, dxA, dxD, yJump, tap, tap2, held, speed: w.speed });
 } finally {
   await browser.close();
 }

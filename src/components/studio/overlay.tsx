@@ -31,10 +31,11 @@ import {
   Wrench,
   Wind,
   Zap,
+  ZoomIn,
 } from "lucide-react";
 import * as Slider from "@radix-ui/react-slider";
 import { cn } from "@/lib/utils";
-import { PRESETS, useStudio, type CamFocus, type PresetId, type StudioParams } from "@/lib/studio-store";
+import { PRESETS, useStudio, type CamFocus, type PresetId, type StudioParams, FP_FOV_MIN, FP_FOV_MAX } from "@/lib/studio-store";
 import { EXPRESSIONS, HAND_GESTURES, POSES } from "@/lib/softbody/soft-skeleton";
 
 const SLIDERS: {
@@ -378,6 +379,7 @@ export function Overlay() {
                 ))}
               </div>
               <div className="flex flex-col gap-3">
+                <FpFovSlider />
                 {SLIDERS.map((item) => (
                   <SliderRow key={item.id} {...item} />
                 ))}
@@ -1582,9 +1584,10 @@ function CameraMenu({ onClose }: { onClose: () => void }) {
           {firstPerson
             ? fpLookLocked
               ? "视角已锁定 · 再点右键或 Esc 解除"
-              : "WASD 移动 · 空格跳 · C 蹲 · E 互动 · 右键锁定视角"
+              : "WASD 移动 · 空格跳 · C 点按蹲 · 长按匍匐 · 滚轮缩放 · 右键锁定视角"
             : "开启后可在房间内走动，右键锁定鼠标视角"}
         </p>
+        <FpFovSlider />
         {firstPerson ? null : (
           <>
         <p className="mb-1.5 text-xs text-muted">视角预设</p>
@@ -1735,8 +1738,9 @@ function FirstPersonHud() {
   const firstPerson = useStudio((s) => s.firstPerson);
   const lookLocked = useStudio((s) => s.fpLookLocked);
   const crouch = useStudio((s) => s.fpCrouch);
+  const prone = useStudio((s) => s.fpProne);
   const setFpStick = useStudio((s) => s.setFpStick);
-  const setFpCrouch = useStudio((s) => s.setFpCrouch);
+  const setFpCrouchHeld = useStudio((s) => s.setFpCrouchHeld);
   const tapFpJump = useStudio((s) => s.tapFpJump);
   const tapFpInteract = useStudio((s) => s.tapFpInteract);
   const stickRef = useRef<HTMLDivElement>(null);
@@ -1757,9 +1761,10 @@ function FirstPersonHud() {
   useEffect(() => {
     if (!firstPerson) {
       setFpStick(0, 0);
+      setFpCrouchHeld(false);
       setKnob({ x: 0, y: 0 });
     }
-  }, [firstPerson, setFpStick]);
+  }, [firstPerson, setFpStick, setFpCrouchHeld]);
 
   if (!firstPerson) return null;
 
@@ -1809,13 +1814,18 @@ function FirstPersonHud() {
         <span className="absolute top-1/2 left-0 h-px w-full bg-fg/70" />
         <span className="absolute top-0 left-1/2 h-full w-px bg-fg/70" />
       </div>
+      <FpZoomBar />
       {lookLocked ? (
         <p className="pointer-events-none absolute bottom-6 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-3 py-1 text-[11px] text-muted sm:block">
           右键解除视角锁定
         </p>
       ) : (
         <p className="pointer-events-none absolute bottom-6 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-3 py-1 text-[11px] text-muted sm:block">
-          右键锁定鼠标视角 · WASD 移动 · 空格跳 · C 蹲
+          {prone
+            ? "匍匐中 · 点按 C 起身 · 长按取消匍匐"
+            : crouch
+              ? "下蹲中 · C 起身 · 长按匍匐"
+              : "右键锁定视角 · WASD 移动 · C 点按蹲 · 长按匍匐"}
         </p>
       )}
       {touchUi ? (
@@ -1853,15 +1863,18 @@ function FirstPersonHud() {
             </button>
             <button
               type="button"
-              aria-label="下蹲"
-              className={cn(btn, crouch ? "border-accent bg-accent text-accent-fg" : "")}
+              aria-label={prone ? "匍匐" : "下蹲"}
+              className={cn(btn, crouch || prone ? "border-accent bg-accent text-accent-fg" : "")}
               onPointerDown={(e) => {
                 e.preventDefault();
-                setFpCrouch(!useStudio.getState().fpCrouch);
+                e.currentTarget.setPointerCapture(e.pointerId);
+                setFpCrouchHeld(true);
               }}
+              onPointerUp={() => setFpCrouchHeld(false)}
+              onPointerCancel={() => setFpCrouchHeld(false)}
             >
               <ChevronsDown className="size-5" />
-              <span className="text-[10px] font-medium leading-none">下蹲</span>
+              <span className="text-[10px] font-medium leading-none">{prone ? "匍匐" : "下蹲"}</span>
             </button>
             <button
               type="button"
@@ -1879,6 +1892,79 @@ function FirstPersonHud() {
         </>
       ) : null}
     </>
+  );
+}
+
+function FpFovSlider() {
+  const fpFov = useStudio((s) => s.fpFov);
+  const setFpFov = useStudio((s) => s.setFpFov);
+  return (
+    <label className="mb-3 block">
+      <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+        <span>第一人称视野</span>
+        <span className="tabular-nums text-fg">{Math.round(fpFov)}°</span>
+      </span>
+      <Slider.Root
+        value={[fpFov]}
+        min={FP_FOV_MIN}
+        max={FP_FOV_MAX}
+        step={1}
+        onValueChange={([v]) => {
+          if (typeof v === "number") setFpFov(v);
+        }}
+        className="relative flex h-5 w-full touch-none items-center"
+      >
+        <Slider.Track className="relative h-1 grow rounded-full bg-surface-2/50">
+          <Slider.Range className="absolute h-full rounded-full bg-accent" />
+        </Slider.Track>
+        <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+      </Slider.Root>
+    </label>
+  );
+}
+
+function FpZoomBar() {
+  const fpFov = useStudio((s) => s.fpFov);
+  const setFpFov = useStudio((s) => s.setFpFov);
+  const boxRef = useRef<HTMLDivElement>(null);
+  const zoom = FP_FOV_MAX + FP_FOV_MIN - fpFov;
+  useEffect(() => {
+    const el = boxRef.current;
+    if (!el) return;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      const st = useStudio.getState();
+      st.setFpFov(st.fpFov + dy * 0.045);
+    };
+    el.addEventListener("wheel", onWheel, { passive: false });
+    return () => el.removeEventListener("wheel", onWheel);
+  }, []);
+  return (
+    <div
+      ref={boxRef}
+      className="pointer-events-auto absolute top-[18%] left-3 z-20 flex h-[34%] min-h-40 flex-col items-center gap-1 rounded-full border border-border/50 bg-surface/55 px-2 py-2.5 backdrop-blur-[2px]"
+    >
+      <ZoomIn className="size-3.5 shrink-0 text-muted" />
+      <Slider.Root
+        orientation="vertical"
+        value={[zoom]}
+        min={FP_FOV_MIN}
+        max={FP_FOV_MAX}
+        step={1}
+        onValueChange={([v]) => {
+          if (typeof v === "number") setFpFov(FP_FOV_MAX + FP_FOV_MIN - v);
+        }}
+        className="relative flex w-8 flex-1 touch-none flex-col items-center"
+        aria-label="第一人称缩放"
+      >
+        <Slider.Track className="relative w-1 grow rounded-full bg-surface-2/70">
+          <Slider.Range className="absolute w-full rounded-full bg-accent" />
+        </Slider.Track>
+        <Slider.Thumb className="block size-5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+      </Slider.Root>
+      <span className="shrink-0 text-[10px] tabular-nums text-muted">{Math.round(fpFov)}°</span>
+    </div>
   );
 }
 

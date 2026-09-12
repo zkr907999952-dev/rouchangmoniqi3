@@ -80,6 +80,9 @@ export type StudioParams = {
 
 /** Park fingertip is ~5cm in front of the navel; full insert is ~5cm in. Contact is halfway. */
 export const NAVEL_CONTACT_T = 0.5;
+export const FP_FOV_MIN = 28;
+export const FP_FOV_MAX = 100;
+export const FP_FOV_DEFAULT = 62;
 export const NAVEL_DEPTH_BASE = 0.06;
 export const NAVEL_DIA_BASE = 0.42;
 export const NAVEL_DEPTH_RATIO_DEFAULT = 0.7;
@@ -370,10 +373,13 @@ type StudioState = StudioParams & {
   firstPerson: boolean;
   fpLookLocked: boolean;
   fpCrouch: boolean;
+  fpProne: boolean;
+  fpCrouchHeld: boolean;
   fpStickX: number;
   fpStickY: number;
   fpJumpNonce: number;
   fpInteractNonce: number;
+  fpFov: number;
   setParam: <K extends keyof StudioParams>(key: K, value: StudioParams[K]) => void;
   applyPreset: (id: PresetId) => void;
   setInteractMode: (mode: InteractMode) => void;
@@ -414,9 +420,12 @@ type StudioState = StudioParams & {
   setFirstPerson: (v: boolean) => void;
   setFpLookLocked: (v: boolean) => void;
   setFpCrouch: (v: boolean) => void;
+  setFpProne: (v: boolean) => void;
+  setFpCrouchHeld: (v: boolean) => void;
   setFpStick: (x: number, y: number) => void;
   tapFpJump: () => void;
   tapFpInteract: () => void;
+  setFpFov: (v: number) => void;
   shake: () => void;
   fireStrike: (point?: [number, number, number] | null) => void;
   resetSim: () => void;
@@ -472,10 +481,13 @@ export const useStudio = create<StudioState>((set) => ({
   firstPerson: false,
   fpLookLocked: false,
   fpCrouch: false,
+  fpProne: false,
+  fpCrouchHeld: false,
   fpStickX: 0,
   fpStickY: 0,
   fpJumpNonce: 0,
   fpInteractNonce: 0,
+  fpFov: FP_FOV_DEFAULT,
   setParam: (key, value) =>
     set((s) => ({
       ...s,
@@ -695,6 +707,8 @@ export const useStudio = create<StudioState>((set) => ({
       firstPerson,
       fpLookLocked: firstPerson ? s.fpLookLocked : false,
       fpCrouch: firstPerson ? s.fpCrouch : false,
+      fpProne: firstPerson ? s.fpProne : false,
+      fpCrouchHeld: false,
       fpStickX: 0,
       fpStickY: 0,
       autoRotate: firstPerson ? false : s.autoRotate,
@@ -702,9 +716,15 @@ export const useStudio = create<StudioState>((set) => ({
     })),
   setFpLookLocked: (fpLookLocked) => set({ fpLookLocked }),
   setFpCrouch: (fpCrouch) => set({ fpCrouch }),
+  setFpProne: (fpProne) => set({ fpProne }),
+  setFpCrouchHeld: (fpCrouchHeld) => set({ fpCrouchHeld }),
   setFpStick: (fpStickX, fpStickY) => set({ fpStickX, fpStickY }),
   tapFpJump: () => set((s) => ({ fpJumpNonce: s.fpJumpNonce + 1 })),
   tapFpInteract: () => set((s) => ({ fpInteractNonce: s.fpInteractNonce + 1 })),
+  setFpFov: (fpFov) =>
+    set({
+      fpFov: Math.max(FP_FOV_MIN, Math.min(FP_FOV_MAX, fpFov)),
+    }),
   shake: () => set((s) => ({ shakeNonce: s.shakeNonce + 1 })),
   fireStrike: (point = null) =>
     set((s) => ({ strikeNonce: s.strikeNonce + 1, strikePoint: point ?? null })),
