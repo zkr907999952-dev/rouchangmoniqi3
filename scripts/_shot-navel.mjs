@@ -44,6 +44,9 @@ try {
       {
         pose: dump?.pose,
         navelInsert: dump?.navelInsert,
+        navelDepth: dump?.navelDepth,
+        navelDiameter: dump?.navelDiameter,
+        navelDepthRatio: dump?.navelDepthRatio,
         navel: dump?.navel,
         Index_c: dump?.bones?.R_Index_c,
         Hand: dump?.bones?.R_Hand_a,

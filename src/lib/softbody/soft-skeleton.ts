@@ -1409,16 +1409,27 @@ export class SoftSkeleton {
     }
   }
 
-  applyNavelFingerInsert(t: number) {
+  applyNavelFingerInsert(t: number, stirX = 0, stirY = 0) {
     if (this.pose !== "navelPoke" || this.navelArm.length === 0) return;
     const k = THREE.MathUtils.clamp(t, 0, 1);
     for (const { i, park, ins } of this.navelArm) {
       this.poseQ[i]!.copy(park).slerp(ins, k);
-      this.q[i]!.copy(this.poseQ[i]!);
       this.qv[i]!.set(0, 0, 0);
       this.poseOff[i]!.set(0, 0, 0);
       this.off[i]!.set(0, 0, 0);
     }
+    if (Math.abs(stirX) + Math.abs(stirY) > 1e-5) {
+      const spin = (name: string, ex: number, ey: number, ez: number) => {
+        const i = this.byName[name];
+        if (i === undefined) return;
+        _q.setFromEuler(_e.set(ex, ey, ez, "XYZ"));
+        this.poseQ[i]!.multiply(_q);
+      };
+      spin("R_Forearm_a", stirY * 5.5, stirX * 4.2, 0);
+      spin("R_Hand_a", stirY * 9.5, stirX * 7.5, stirX * 2.2);
+      spin("R_Index_a", stirY * 3.5, stirX * 2.8, 0);
+    }
+    for (const { i } of this.navelArm) this.q[i]!.copy(this.poseQ[i]!);
   }
 
   private updateActionAim(d: number) {

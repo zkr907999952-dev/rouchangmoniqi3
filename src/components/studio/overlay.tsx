@@ -167,6 +167,14 @@ export function Overlay() {
   const bayonetHasEntry = useStudio((s) => s.bayonetHasEntry);
   const navelInsert = useStudio((s) => s.navelInsert);
   const setNavelInsert = useStudio((s) => s.setNavelInsert);
+  const navelDepthRatio = useStudio((s) => s.navelDepthRatio);
+  const setNavelDepthRatio = useStudio((s) => s.setNavelDepthRatio);
+  const navelThrust = useStudio((s) => s.navelThrust);
+  const navelStir = useStudio((s) => s.navelStir);
+  const navelThrustSpeed = useStudio((s) => s.navelThrustSpeed);
+  const navelThrustStart = useStudio((s) => s.navelThrustStart);
+  const navelStirSpeed = useStudio((s) => s.navelStirSpeed);
+  const navelStirRadius = useStudio((s) => s.navelStirRadius);
   const bayonetPen = useStudio((s) => s.bayonetPen);
   const bayonetAuto = useStudio((s) => s.bayonetAuto);
   const bayonetPump = useStudio((s) => s.bayonetPump);
@@ -688,7 +696,7 @@ export function Overlay() {
               {interactMode === "navel" ? (
                 <div className="mt-3">
                   <p className="text-xs leading-relaxed text-muted">
-                    右手食指对准肚脐，垂直插入。拖动或拉深度时，整条手臂用关节把食指推进去，不会把手腕拉长。
+                    右手食指对准肚脐，垂直插入。手指碰到肚脐之后，脐窝才开始加深。可开自动抽插和搅动。
                   </p>
                   <label className="mt-3 block">
                     <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
@@ -711,6 +719,143 @@ export function Overlay() {
                       <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
                     </Slider.Root>
                   </label>
+                  <label className="mt-3 block">
+                    <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+                      <span>深度比率</span>
+                      <span className="tabular-nums text-fg">{navelDepthRatio.toFixed(2)}</span>
+                    </span>
+                    <Slider.Root
+                      value={[navelDepthRatio]}
+                      min={0}
+                      max={1.2}
+                      step={0.01}
+                      onValueChange={([v]) => {
+                        if (typeof v === "number") setNavelDepthRatio(v);
+                      }}
+                      className="relative flex h-5 w-full touch-none items-center"
+                    >
+                      <Slider.Track className="relative h-1 grow rounded-full bg-surface-2">
+                        <Slider.Range className="absolute h-full rounded-full bg-accent" />
+                      </Slider.Track>
+                      <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+                    </Slider.Root>
+                  </label>
+                  <div className="mt-3 grid grid-cols-2 gap-2">
+                    <Toggle
+                      active={navelThrust}
+                      onClick={() => {
+                        const st = useStudio.getState();
+                        if (!st.navelThrust) {
+                          if (st.navelInsert < 0.55) st.setNavelInsert(1);
+                          st.setParam("navelThrust", true);
+                        } else {
+                          st.setParam("navelThrust", false);
+                        }
+                      }}
+                      icon={<Activity className="size-3.5" />}
+                      label="抽插"
+                    />
+                    <Toggle
+                      active={navelStir}
+                      onClick={() => {
+                        const st = useStudio.getState();
+                        if (!st.navelStir) {
+                          if (st.navelInsert < 0.55) st.setNavelInsert(0.85);
+                          st.setParam("navelStir", true);
+                        } else {
+                          st.setParam("navelStir", false);
+                        }
+                      }}
+                      icon={<RotateCw className="size-3.5" />}
+                      label="搅动"
+                    />
+                  </div>
+                  <div className="mt-3 flex flex-col gap-3">
+                    <label className="block">
+                      <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+                        <span>抽插速度</span>
+                        <span className="tabular-nums text-fg">{navelThrustSpeed.toFixed(2)}</span>
+                      </span>
+                      <Slider.Root
+                        value={[navelThrustSpeed]}
+                        min={0.05}
+                        max={1}
+                        step={0.01}
+                        onValueChange={([v]) => {
+                          if (typeof v === "number") setParam("navelThrustSpeed", v);
+                        }}
+                        className="relative flex h-5 w-full touch-none items-center"
+                      >
+                        <Slider.Track className="relative h-1 grow rounded-full bg-surface-2">
+                          <Slider.Range className="absolute h-full rounded-full bg-accent" />
+                        </Slider.Track>
+                        <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+                      </Slider.Root>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+                        <span>抽插起始</span>
+                        <span className="tabular-nums text-fg">{navelThrustStart.toFixed(2)}</span>
+                      </span>
+                      <Slider.Root
+                        value={[navelThrustStart]}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        onValueChange={([v]) => {
+                          if (typeof v === "number") setParam("navelThrustStart", v);
+                        }}
+                        className="relative flex h-5 w-full touch-none items-center"
+                      >
+                        <Slider.Track className="relative h-1 grow rounded-full bg-surface-2">
+                          <Slider.Range className="absolute h-full rounded-full bg-accent" />
+                        </Slider.Track>
+                        <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+                      </Slider.Root>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+                        <span>搅动速度</span>
+                        <span className="tabular-nums text-fg">{navelStirSpeed.toFixed(2)}</span>
+                      </span>
+                      <Slider.Root
+                        value={[navelStirSpeed]}
+                        min={0.05}
+                        max={1}
+                        step={0.01}
+                        onValueChange={([v]) => {
+                          if (typeof v === "number") setParam("navelStirSpeed", v);
+                        }}
+                        className="relative flex h-5 w-full touch-none items-center"
+                      >
+                        <Slider.Track className="relative h-1 grow rounded-full bg-surface-2">
+                          <Slider.Range className="absolute h-full rounded-full bg-accent" />
+                        </Slider.Track>
+                        <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+                      </Slider.Root>
+                    </label>
+                    <label className="block">
+                      <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+                        <span>搅动半径</span>
+                        <span className="tabular-nums text-fg">{navelStirRadius.toFixed(2)}</span>
+                      </span>
+                      <Slider.Root
+                        value={[navelStirRadius]}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        onValueChange={([v]) => {
+                          if (typeof v === "number") setParam("navelStirRadius", v);
+                        }}
+                        className="relative flex h-5 w-full touch-none items-center"
+                      >
+                        <Slider.Track className="relative h-1 grow rounded-full bg-surface-2">
+                          <Slider.Range className="absolute h-full rounded-full bg-accent" />
+                        </Slider.Track>
+                        <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+                      </Slider.Root>
+                    </label>
+                  </div>
                 </div>
               ) : null}
 

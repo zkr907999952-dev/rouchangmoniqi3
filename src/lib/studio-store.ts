@@ -43,6 +43,13 @@ export type StudioParams = {
   navelDepth: number;
   navelDiameter: number;
   navelInsert: number;
+  navelDepthRatio: number;
+  navelThrust: boolean;
+  navelStir: boolean;
+  navelThrustSpeed: number;
+  navelThrustStart: number;
+  navelStirSpeed: number;
+  navelStirRadius: number;
   showOrgans: boolean;
   showGutHp: boolean;
   gutAmp: number;
@@ -71,6 +78,24 @@ export type StudioParams = {
   uiHidden: boolean;
 };
 
+/** Park fingertip is ~5cm in front of the navel; full insert is ~5cm in. Contact is halfway. */
+export const NAVEL_CONTACT_T = 0.5;
+export const NAVEL_DEPTH_BASE = 0.06;
+export const NAVEL_DIA_BASE = 0.42;
+export const NAVEL_DEPTH_RATIO_DEFAULT = 0.7;
+
+export function navelInsertMorph(insert: number, ratio: number) {
+  const t = Math.max(0, Math.min(1, insert));
+  const r = Math.max(0, Math.min(1.2, ratio));
+  const u = t <= NAVEL_CONTACT_T ? 0 : (t - NAVEL_CONTACT_T) / (1 - NAVEL_CONTACT_T);
+  return {
+    u,
+    depth: NAVEL_DEPTH_BASE + u * r,
+    diameter: NAVEL_DIA_BASE + u * r * 0.5,
+    squeeze: u * Math.min(1, r * 0.72),
+  };
+}
+
 export const PRESETS: Record<
   PresetId,
   { label: string; hint: string } & StudioParams
@@ -96,6 +121,13 @@ export const PRESETS: Record<
     navelDepth: 0,
     navelDiameter: 0,
     navelInsert: 0,
+    navelDepthRatio: 0.7,
+    navelThrust: false,
+    navelStir: false,
+    navelThrustSpeed: 0.45,
+    navelThrustStart: 0.5,
+    navelStirSpeed: 0.55,
+    navelStirRadius: 0.4,
     showOrgans: true,
     showGutHp: false,
     gutAmp: 0.3,
@@ -144,6 +176,13 @@ export const PRESETS: Record<
     navelDepth: 0,
     navelDiameter: 0,
     navelInsert: 0,
+    navelDepthRatio: 0.7,
+    navelThrust: false,
+    navelStir: false,
+    navelThrustSpeed: 0.45,
+    navelThrustStart: 0.5,
+    navelStirSpeed: 0.55,
+    navelStirRadius: 0.4,
     showOrgans: true,
     showGutHp: false,
     gutAmp: 0.3,
@@ -192,6 +231,13 @@ export const PRESETS: Record<
     navelDepth: 0,
     navelDiameter: 0,
     navelInsert: 0,
+    navelDepthRatio: 0.7,
+    navelThrust: false,
+    navelStir: false,
+    navelThrustSpeed: 0.45,
+    navelThrustStart: 0.5,
+    navelStirSpeed: 0.55,
+    navelStirRadius: 0.4,
     showOrgans: true,
     showGutHp: false,
     gutAmp: 0.3,
@@ -240,6 +286,13 @@ export const PRESETS: Record<
     navelDepth: 0,
     navelDiameter: 0,
     navelInsert: 0,
+    navelDepthRatio: 0.7,
+    navelThrust: false,
+    navelStir: false,
+    navelThrustSpeed: 0.45,
+    navelThrustStart: 0.5,
+    navelStirSpeed: 0.55,
+    navelStirRadius: 0.4,
     showOrgans: true,
     showGutHp: false,
     gutAmp: 0.3,
@@ -322,6 +375,7 @@ type StudioState = StudioParams & {
   setExpression: (id: ExpressionId) => void;
   setPose: (id: PoseId) => void;
   setNavelInsert: (v: number) => void;
+  setNavelDepthRatio: (v: number) => void;
   setHandSide: (side: HandSide) => void;
   setHandGesture: (id: HandGesture) => void;
   setEnergy: (v: number) => void;
@@ -417,6 +471,13 @@ export const useStudio = create<StudioState>((set) => ({
       navelDepth: s.navelDepth,
       navelDiameter: s.navelDiameter,
       navelInsert: s.navelInsert,
+      navelDepthRatio: s.navelDepthRatio,
+      navelThrust: s.navelThrust,
+      navelStir: s.navelStir,
+      navelThrustSpeed: s.navelThrustSpeed,
+      navelThrustStart: s.navelThrustStart,
+      navelStirSpeed: s.navelStirSpeed,
+      navelStirRadius: s.navelStirRadius,
       breastSoft: s.breastSoft,
       breastDamp: s.breastDamp,
       hairDamp: s.hairDamp,
@@ -473,7 +534,7 @@ export const useStudio = create<StudioState>((set) => ({
               camCmd: { nonce: (s.camCmd?.nonce ?? 0) + 1, kind: "snap" as const, snap: belly },
             }
           : {}),
-        ...(leaving ? { navelInsert: 0 } : {}),
+        ...(leaving ? { navelInsert: 0, navelThrust: false, navelStir: false } : {}),
       };
     }),
   setPoseEditMode: (poseEditMode) => set({ poseEditMode }),
@@ -539,7 +600,17 @@ export const useStudio = create<StudioState>((set) => ({
   setHandSide: (handSide) => set({ handSide }),
   setNavelInsert: (navelInsert) => {
     const t = Math.max(0, Math.min(1, navelInsert));
-    set({ navelInsert: t, navelDepth: 0.06 + t * 0.92, navelDiameter: 0.4 + t * 0.75 });
+    set((s) => {
+      const m = navelInsertMorph(t, s.navelDepthRatio);
+      return { navelInsert: t, navelDepth: m.depth, navelDiameter: m.diameter };
+    });
+  },
+  setNavelDepthRatio: (navelDepthRatio) => {
+    const r = Math.max(0, Math.min(1.2, navelDepthRatio));
+    set((s) => {
+      const m = navelInsertMorph(s.navelInsert, r);
+      return { navelDepthRatio: r, navelDepth: m.depth, navelDiameter: m.diameter };
+    });
   },
   setHandGesture: (id) =>
     set((s) => (s.handSide === "L" ? { handGestureL: id } : { handGestureR: id })),
@@ -609,6 +680,8 @@ export const useStudio = create<StudioState>((set) => ({
       bayonetHasEntry: false,
       bayonetPen: 0,
       navelInsert: 0,
+      navelThrust: false,
+      navelStir: false,
     })),
   retryLoad: () =>
     set((s) => ({

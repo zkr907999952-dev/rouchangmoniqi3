@@ -11,7 +11,7 @@ import { GutHealth } from "@/lib/softbody/gut-health";
 import { FistPlay } from "@/lib/softbody/fist-play";
 import { BayonetPlay } from "@/lib/softbody/bayonet-play";
 import { applyNavelMorph, buildNavelMorph } from "@/lib/softbody/navel-morph";
-import { useStudio } from "@/lib/studio-store";
+import { useStudio, navelInsertMorph } from "@/lib/studio-store";
 
 const _hit = new THREE.Vector3();
 const _normal = new THREE.Vector3();
@@ -1203,6 +1203,10 @@ function FittedFigure({
   const lastPol = useRef<number | null>(null);
   const bayonetPenRef = useRef(0);
   const navelInsert0 = useRef(0);
+  const navelThrustPhase = useRef(0);
+  const navelStirPhase = useRef(0);
+  const navelLiveInsert = useRef(0);
+  const navelThrustOn = useRef(false);
   const rmbDown = useRef(false);
   const { camera, gl, raycaster, pointer } = useThree();
 
@@ -1799,12 +1803,42 @@ function FittedFigure({
       setup.skeleton.setGazeTarget(null);
     }
     const navelPlay = s.interactMode === "navel" || s.pose === "navelPoke";
-    if (navelPlay || s.pose === "inspectNavel") setup.skeleton.applyNavelFingerInsert(s.navelInsert);
+    const grabbingNavel = Boolean(grab.current?.active && grab.current.mode === "navel");
+    let navelT = s.navelInsert;
+    let stirX = 0;
+    let stirY = 0;
+    if (navelPlay && !grabbingNavel) {
+      if (s.navelThrust) {
+        if (!navelThrustOn.current) navelThrustPhase.current = Math.PI;
+        navelThrustOn.current = true;
+        navelThrustPhase.current += dt * (0.55 + s.navelThrustSpeed * 2.2);
+        const wave = 0.5 - 0.5 * Math.cos(navelThrustPhase.current);
+        const start = THREE.MathUtils.clamp(s.navelThrustStart, 0, 0.98);
+        const deep = navelT > start + 0.04 ? navelT : 1;
+        navelT = start + (deep - start) * wave;
+      } else {
+        navelThrustOn.current = false;
+      }
+      if (s.navelStir) {
+        navelStirPhase.current += dt * (0.45 + s.navelStirSpeed * 2.5);
+        const u = navelInsertMorph(navelT, s.navelDepthRatio).u;
+        const r = (0.004 + s.navelStirRadius * 0.014) * u;
+        stirX = Math.cos(navelStirPhase.current) * r;
+        stirY = Math.sin(navelStirPhase.current) * r;
+      } else {
+        navelStirPhase.current = 0;
+      }
+    } else if (!navelPlay) {
+      navelThrustPhase.current = 0;
+      navelStirPhase.current = 0;
+    }
+    navelLiveInsert.current = navelT;
+    if (navelPlay || s.pose === "inspectNavel") setup.skeleton.applyNavelFingerInsert(navelT, stirX, stirY);
     if (navelPlay) {
-      const t = s.navelInsert;
-      if (t > 0.04) {
+      const m = navelInsertMorph(navelT, s.navelDepthRatio);
+      if (m.u > 0.04) {
         const n = setup.navel;
-        setup.skeleton.setTissueDrag(n.x, n.y, n.z, n.x, n.y - 0.004 * t, n.z - t * 0.048, 0.052);
+        setup.skeleton.setTissueDrag(n.x, n.y, n.z, n.x + stirX, n.y + stirY - 0.003 * m.u, n.z - m.u * 0.028, 0.036);
       }
     }
     setup.fist.step(dt, {
@@ -1863,10 +1897,10 @@ function FittedFigure({
       let dia = s.navelDiameter;
       let squeeze = 0;
       if (navelPlay) {
-        const t = s.navelInsert;
-        depth = 0.06 + t * 0.92;
-        dia = 0.4 + t * 0.75;
-        squeeze = t * 0.92;
+        const m = navelInsertMorph(navelT, s.navelDepthRatio);
+        depth = m.depth;
+        dia = m.diameter;
+        squeeze = m.squeeze;
       } else if (s.pose === "inspectNavel") {
         depth = Math.max(depth, 0.18);
         dia = Math.max(dia, 0.55);
@@ -1933,7 +1967,9 @@ function FittedFigure({
       Math.abs(s.bellyInflate) > 0.04 ||
       s.navelDepth > 0.03 ||
       s.navelDiameter > 0.03 ||
-      s.navelInsert > 0.03;
+      s.navelInsert > 0.03 ||
+      s.navelThrust ||
+      s.navelStir;
     if (deforming || energyTick.current % 2 === 0) {
       for (const geo of setup.boundGeos) {
         geo.computeVertexNormals();
@@ -2073,6 +2109,12 @@ function FittedFigure({
           pose: st.pose,
           gestureR: st.handGestureR,
           navelInsert: st.navelInsert,
+          navelLiveInsert: navelLiveInsert.current,
+          navelThrust: st.navelThrust,
+          navelStir: st.navelStir,
+          navelDepth: st.navelDepth,
+          navelDiameter: st.navelDiameter,
+          navelDepthRatio: st.navelDepthRatio,
           interactMode: st.interactMode,
           navel: setup.navel.toArray(),
           bones,
