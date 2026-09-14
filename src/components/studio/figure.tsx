@@ -2518,6 +2518,8 @@ function FittedFigure({
     e.stopPropagation();
     _hit.copy(e.point);
     const st = useStudio.getState();
+    const pt = e.nativeEvent.pointerType;
+    if (st.firstPerson && (pt === "touch" || pt === "pen")) return;
     const mode = st.interactMode;
     if (mode === "strike") {
       useStudio.getState().fireStrike([_hit.x, _hit.y, _hit.z]);

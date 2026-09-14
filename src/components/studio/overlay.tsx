@@ -114,6 +114,7 @@ export function Overlay() {
   const showOrgans = useStudio((s) => s.showOrgans);
   const showGutHp = useStudio((s) => s.showGutHp);
   const uiHidden = useStudio((s) => s.uiHidden);
+  const firstPerson = useStudio((s) => s.firstPerson);
   const abdomenXray = useStudio((s) => s.abdomenXray);
   const bedStance = useStudio((s) => s.bedStance);
   const interactMode = useStudio((s) => s.interactMode);
@@ -313,7 +314,9 @@ export function Overlay() {
       <header className="pointer-events-none absolute top-0 right-0 left-0 flex items-start justify-between gap-4 p-4 pr-28 sm:p-6 sm:pr-32">
         <div className="max-w-[16rem]">
           <p className="font-display text-2xl leading-none tracking-display text-fg sm:text-3xl">柔肠模拟器</p>
-          <p className="mt-1.5 text-[11px] leading-snug text-muted sm:hidden">双指拖动平移 · 双击后拖动旋转</p>
+          <p className="mt-1.5 text-[11px] leading-snug text-muted sm:hidden">
+            {firstPerson ? "滑动转视角 · 左摇杆移动" : "双指拖动平移 · 双击后拖动旋转"}
+          </p>
         </div>
       </header>
 
@@ -1864,17 +1867,18 @@ function FirstPersonHud() {
         <>
           <div
             ref={stickRef}
-            className="pointer-events-auto absolute bottom-8 left-5 z-20 size-32 touch-none rounded-full border border-border/50 bg-surface/45 backdrop-blur-[2px]"
+            className="pointer-events-auto absolute bottom-8 left-5 z-20 grid size-32 place-items-center touch-none rounded-full border border-border/50 bg-surface/45 backdrop-blur-[2px]"
             style={{ marginBottom: "env(safe-area-inset-bottom)" }}
             onPointerDown={onStickDown}
             onPointerMove={onStickMove}
             onPointerUp={onStickUp}
             onPointerCancel={onStickUp}
           >
-            <span className="absolute top-1/2 left-1/2 size-14 -translate-x-1/2 -translate-y-1/2 rounded-full border border-border/40 bg-fg/15" />
+            <span className="pointer-events-none absolute inset-0 m-auto size-[4.5rem] rounded-full border border-border/35 bg-fg/10" />
+            <span className="pointer-events-none absolute inset-0 z-[1] m-auto size-1.5 rounded-full bg-fg/50" />
             <span
-              className="absolute top-1/2 left-1/2 size-12 -translate-x-1/2 -translate-y-1/2 rounded-full bg-accent/90"
-              style={{ transform: `translate(calc(-50% + ${knob.x}px), calc(-50% + ${knob.y}px))` }}
+              className="pointer-events-none relative z-10 size-12 rounded-full bg-accent/90 shadow-sm"
+              style={{ transform: `translate(${knob.x}px, ${knob.y}px)` }}
             />
           </div>
           <div

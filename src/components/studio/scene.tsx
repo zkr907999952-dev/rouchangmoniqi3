@@ -754,10 +754,15 @@ function FirstPersonRig({
         }
         return;
       }
-      if (e.pointerType === "touch" && e.button === 0) {
-        const r = el.getBoundingClientRect();
-        if (e.clientX < r.left + r.width * 0.42) return;
+      if (e.pointerType === "touch" || e.pointerType === "pen") {
+        if (e.button !== 0) return;
         lookTouch.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+        e.preventDefault();
       }
     };
     const onPointerMove = (e: PointerEvent) => {
@@ -772,7 +777,13 @@ function FirstPersonRig({
       pitch.current = THREE.MathUtils.clamp(pitch.current, -FP_PITCH_LIM, FP_PITCH_LIM);
     };
     const onPointerUp = (e: PointerEvent) => {
-      if (lookTouch.current?.id === e.pointerId) lookTouch.current = null;
+      if (lookTouch.current?.id !== e.pointerId) return;
+      lookTouch.current = null;
+      try {
+        if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
     };
     const onKey = (e: KeyboardEvent) => {
       if (e.code !== "Escape") return;

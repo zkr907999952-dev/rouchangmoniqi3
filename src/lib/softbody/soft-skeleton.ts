@@ -177,6 +177,7 @@ const _e = new THREE.Euler();
 const IDENTITY = new THREE.Quaternion();
 const _c = new THREE.Color();
 const _lookQ = new THREE.Quaternion();
+const LOCO_STOP_DUR = 0.7;
 
 const LOCO_BONES = [
   "C_Hip_a",
@@ -199,10 +200,23 @@ const LOCO_BONES = [
   "R_Forearm_a",
   "L_Hand_a",
   "R_Hand_a",
+  "L_Index_a",
+  "L_Middle_a",
+  "L_Ring_a",
+  "L_Pinky_a",
+  "L_Thumb_a",
+  "R_Index_a",
+  "R_Middle_a",
+  "R_Ring_a",
+  "R_Pinky_a",
+  "R_Thumb_a",
 ] as const;
 
-type LocoClip = { dur: number; n: number; hipY: number[]; bones: Record<string, number[][]>; stride?: number };
+type LocoClip = { dur: number; n: number; hipY: number[]; bones: Record<string, number[][]>; stride?: number; fmt?: string };
 const LOCO_CLIPS = (locoPack as { clips: Record<string, LocoClip> }).clips;
+
+const _qa = new THREE.Quaternion();
+const _qb = new THREE.Quaternion();
 
 function pickLocoClip(mode: LocoMode, fwd: number, side: number, mag: number, airborne = false) {
   if (airborne) return "jump";
@@ -236,16 +250,24 @@ function sampleLocoClip(clip: LocoClip, u: number, loop = true) {
   const t = x - Math.floor(x);
   const hipY = clip.hipY[i]! + (clip.hipY[j]! - clip.hipY[i]!) * t;
   const pose: Record<string, [number, number, number]> = {};
+  const poseQ: Record<string, THREE.Quaternion> = {};
   for (const [name, frames] of Object.entries(clip.bones)) {
     const a = frames[i]!;
     const b = frames[j]!;
-    pose[name] = [
-      a[0]! + (b[0]! - a[0]!) * t,
-      lerpAng(a[1]!, b[1]!, t),
-      a[2]! + (b[2]! - a[2]!) * t,
-    ];
+    if (a.length >= 4 && b.length >= 4) {
+      _qa.set(a[0]!, a[1]!, a[2]!, a[3]!);
+      _qb.set(b[0]!, b[1]!, b[2]!, b[3]!);
+      if (_qa.dot(_qb) < 0) _qb.set(-_qb.x, -_qb.y, -_qb.z, -_qb.w);
+      poseQ[name] = new THREE.Quaternion().copy(_qa).slerp(_qb, t);
+    } else {
+      pose[name] = [
+        a[0]! + (b[0]! - a[0]!) * t,
+        lerpAng(a[1]!, b[1]!, t),
+        a[2]! + (b[2]! - a[2]!) * t,
+      ];
+    }
   }
-  return { hipY, pose };
+  return { hipY, pose, poseQ };
 }
 
 type Group = "body" | "face" | "hair" | "foot";
@@ -339,6 +361,10 @@ export class SoftSkeleton {
   private poseSnap = 0;
   locoPhase = 0;
   private locoWasAir = false;
+  private locoWasMoving = false;
+  private locoSettle = 1;
+  private readonly locoHoldQ: Record<string, THREE.Quaternion> = {};
+  private readonly locoHoldOff: Record<string, THREE.Vector3> = {};
   private locoLast = { mode: "stand" as LocoMode, fwd: 0, side: 0, mag: 0 };
   private readonly gazeNeckQ = new THREE.Quaternion();
   private readonly gazeHeadQ = new THREE.Quaternion();
@@ -1209,6 +1235,8 @@ export class SoftSkeleton {
       fwd: this.locoLast.fwd,
       side: this.locoLast.side,
       mag: this.locoLast.mag,
+      settle: this.locoSettle,
+      moving: this.locoWasMoving,
       head: hi >= 0 ? ([this.wpos[hi]!.x, this.wpos[hi]!.y, this.wpos[hi]!.z] as number[]) : null,
       bones,
     };
@@ -1232,9 +1260,16 @@ export class SoftSkeleton {
   ) {
     const mag = THREE.MathUtils.clamp(opts.mag, 0, 1);
     const airborne = Boolean(opts.airborne);
+    const looping = Boolean(opts.timeLoop);
+    const active = looping || airborne || mag > 0.07;
+    if (this.locoWasMoving && !active) {
+      this.captureLocoHold();
+      this.locoSettle = 0;
+    }
+    if (active) this.locoSettle = 1;
     const clipName = opts.clip ?? pickLocoClip(opts.mode, opts.fwd, opts.side, mag, airborne);
     const clip = clipName ? LOCO_CLIPS[clipName] : undefined;
-    if (opts.timeLoop && clip) {
+    if (looping && clip) {
       this.locoPhase += dt / Math.max(0.05, clip.dur);
     } else if (airborne) {
       if (opts.jumpU != null) {
@@ -1252,17 +1287,59 @@ export class SoftSkeleton {
             ? opts.stepDist
             : Math.max(0.08, opts.speedMps ?? 1.65) * mag * dt;
         this.locoPhase += dist / Math.max(0.28, stride);
-      } else {
+      } else if (this.locoSettle >= 1) {
         this.locoPhase += dt * 0.06;
       }
     }
     this.locoWasAir = airborne;
     this.applyLocomotion(opts.mode, opts.fwd, opts.side, mag, this.locoPhase, airborne, clipName);
+    if (!active && this.locoSettle < 1) {
+      this.locoSettle = Math.min(1, this.locoSettle + dt / LOCO_STOP_DUR);
+      const u = this.locoSettle * this.locoSettle * (3 - 2 * this.locoSettle);
+      this.applyLocoSettle(u);
+    }
+    this.locoWasMoving = active;
     for (const name of LOCO_BONES) {
       const i = this.byName[name];
       if (i === undefined) continue;
       this.q[i]!.copy(this.poseQ[i]!);
       this.qv[i]!.set(0, 0, 0);
+    }
+  }
+
+  private captureLocoHold() {
+    for (const name of LOCO_BONES) {
+      const i = this.byName[name];
+      if (i === undefined) continue;
+      let hq = this.locoHoldQ[name];
+      if (!hq) {
+        hq = new THREE.Quaternion();
+        this.locoHoldQ[name] = hq;
+      }
+      hq.copy(this.poseQ[i]!);
+      let ho = this.locoHoldOff[name];
+      if (!ho) {
+        ho = new THREE.Vector3();
+        this.locoHoldOff[name] = ho;
+      }
+      ho.copy(this.poseOff[i]!);
+    }
+  }
+
+  private applyLocoSettle(u: number) {
+    for (const name of LOCO_BONES) {
+      const i = this.byName[name];
+      const hq = this.locoHoldQ[name];
+      if (i === undefined || !hq) continue;
+      _qa.copy(hq);
+      _qb.copy(this.poseQ[i]!);
+      if (_qa.dot(_qb) < 0) _qb.set(-_qb.x, -_qb.y, -_qb.z, -_qb.w);
+      this.poseQ[i]!.copy(_qa).slerp(_qb, u);
+      const ho = this.locoHoldOff[name];
+      if (ho) {
+        _v.copy(this.poseOff[i]!);
+        this.poseOff[i]!.copy(ho).lerp(_v, u);
+      }
     }
   }
 
@@ -1290,6 +1367,7 @@ export class SoftSkeleton {
     const u = loop ? (((phase % 1) + 1) % 1) : THREE.MathUtils.clamp(phase, 0, 0.999);
     const move = clip ? sampleLocoClip(clip, u, loop) : null;
     const rest = stance ? sampleLocoClip(stance, u, true) : null;
+    const tBlend = clip && rest && clipName !== stanceName ? k : move ? 1 : rest ? 1 : 0;
     const set = (name: string, ex: number, ey: number, ez: number, ox = 0, oy = 0, oz = 0) => {
       const i = this.byName[name];
       if (i === undefined) return;
@@ -1302,9 +1380,27 @@ export class SoftSkeleton {
     this.locoLast = { mode, fwd, side, mag: k };
     const names = new Set<string>([
       ...Object.keys(move?.pose ?? {}),
+      ...Object.keys(move?.poseQ ?? {}),
       ...Object.keys(rest?.pose ?? {}),
+      ...Object.keys(rest?.poseQ ?? {}),
     ]);
     for (const name of names) {
+      const qMove = move?.poseQ?.[name];
+      const qRest = rest?.poseQ?.[name];
+      const i = this.byName[name];
+      if (i === undefined) continue;
+      if (qMove || qRest) {
+        if (qMove && qRest && tBlend < 1) {
+          this.poseQ[i]!.copy(qRest).slerp(qMove, tBlend);
+        } else {
+          this.poseQ[i]!.copy(qMove ?? qRest!);
+        }
+        this.poseOff[i]!.set(0, 0, 0);
+        const aw = this.poseQ[i]!.w;
+        const ang = 2 * Math.acos(Math.min(1, Math.abs(aw)));
+        this.maxAng[i] = Math.max(this.maxAng[i]!, Math.min(2.8, ang + 0.3));
+        continue;
+      }
       const a = rest?.pose[name] ?? [0, 0, 0];
       const b = move?.pose[name] ?? a;
       const t = clip && rest && clipName !== stanceName ? k : move ? 1 : rest ? 1 : 0;
@@ -1577,6 +1673,8 @@ export class SoftSkeleton {
     this.pose = id;
     this.poseAimY = 0;
     this.poseSnap = 1;
+    this.locoSettle = 1;
+    this.locoWasMoving = false;
     for (let i = 0; i < this.count; i++) {
       this.poseQ[i]!.identity();
       this.poseOff[i]!.set(0, 0, 0);
