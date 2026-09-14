@@ -1476,7 +1476,7 @@ export class SoftSkeleton {
       if (_from.lengthSq() < 1e-8) return;
       _from.normalize();
       _to.copy(_from).applyQuaternion(this.poseQ[i]!);
-      _v.set(_to.x, _to.y, Math.min(_to.z - 0.42, -0.16));
+      _v.set(_to.x, _to.y, Math.min(_to.z - 0.22, 0.04));
       if (_v.lengthSq() < 1e-8) return;
       _v.normalize();
       _q.setFromUnitVectors(_to, _v);
