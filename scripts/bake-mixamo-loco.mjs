@@ -10,7 +10,6 @@ import { FBXLoader } from "three/examples/jsm/loaders/FBXLoader.js";
 const SRC = "/tmp/mixamo";
 const OUT = path.resolve("src/lib/softbody/loco-clips.json");
 const FRAMES = 12;
-const STAND_HIP_Y = 98;
 
 const FILES = {
   walk: "Walking.fbx",
@@ -24,6 +23,8 @@ const FILES = {
   crouchRight: "Crouch_Walk_Strafe_Right.fbx",
   crawl: "Crawling.fbx",
   proneIdle: "Prone_Idle.fbx",
+  proneWalk: "Prone_Forward.fbx",
+  jump: "Jump.fbx",
 };
 
 const CHAINS = [
@@ -66,6 +67,7 @@ const PARENT = {
 };
 
 const TWIST_BONES = new Set(["L_Forearm_a", "R_Forearm_a"]);
+const RECUMBENT = new Set(["proneIdle", "proneWalk", "crawl"]);
 
 const native = JSON.parse(fs.readFileSync("src/lib/softbody/nude-rig-data.json", "utf8")).bones;
 const restPos = Object.fromEntries(native.map((b) => [b.name, new THREE.Vector3(b.x, b.y, b.z)]));
@@ -115,7 +117,34 @@ function mixDirRaw(obj, from, to) {
   return _pb.sub(_pa).normalize().clone();
 }
 
-function facingCancel(obj, hipTrack, dur) {
+function standHipY(obj) {
+  const clip = obj.animations[0];
+  const hipTrack = clip.tracks.find((t) => t.name === "mixamorigHips.position");
+  if (!hipTrack) return 98;
+  const y0 = hipTrack.createInterpolant().evaluate(0)[1] ?? 98;
+  return y0 > 70 ? y0 : 98;
+}
+
+function facingCancel(obj, hipTrack, dur, name) {
+  // Recumbent clips: thighs point toward the feet, so knee-average facing
+  // yaws the whole body ~180° and turns belly-down into a backbend.
+  if (RECUMBENT.has(name)) {
+    const hips = obj.getObjectByName("mixamorigHips");
+    const head =
+      obj.getObjectByName("mixamorigHead") ||
+      obj.getObjectByName("mixamorigNeck") ||
+      obj.getObjectByName("mixamorigSpine2");
+    if (hips && head) {
+      hips.getWorldPosition(_pa);
+      head.getWorldPosition(_pb);
+      _f.copy(_pb).sub(_pa);
+      _f.y = 0;
+      if (_f.lengthSq() > 1e-4) {
+        _f.normalize();
+        return -Math.atan2(_f.x, _f.z);
+      }
+    }
+  }
   const L = mixDirRaw(obj, "mixamorigLeftUpLeg", "mixamorigLeftLeg");
   const R = mixDirRaw(obj, "mixamorigRightUpLeg", "mixamorigRightLeg");
   let travel = 0;
@@ -124,7 +153,6 @@ function facingCancel(obj, hipTrack, dur) {
     const p1 = hipTrack.createInterpolant().evaluate(dur * 0.99);
     travel = Math.hypot((p1[0] ?? 0) - (p0[0] ?? 0), (p1[2] ?? 0) - (p0[2] ?? 0));
   }
-  // Stationary clips (crouch idle): hips yaw often doesn't match the knees.
   if (travel < 25 && L && R) {
     _f.copy(L).add(R);
     _f.y = 0;
@@ -213,14 +241,18 @@ for (const [name, file] of Object.entries(FILES)) {
   const clip = obj.animations[0];
   const hipTrack = clip.tracks.find((t) => t.name === "mixamorigHips.position");
   const dur = clip.duration;
+  const bindY = name === "jump" ? 99 : 98;
+  const nFrames = name === "jump" || name === "proneWalk" ? 16 : FRAMES;
   const bones = {};
   const hipY = [];
-  for (let i = 0; i < FRAMES; i++) {
-    const t = (i / FRAMES) * dur;
+  for (let i = 0; i < nFrames; i++) {
+    const t = (i / nFrames) * dur;
     poseAt(obj, t);
-    const yaw = facingCancel(obj, hipTrack, dur);
-    const hip = hipTrack ? hipTrack.createInterpolant().evaluate(t) : [0, STAND_HIP_Y, 0];
-    hipY.push(+(((hip[1] ?? STAND_HIP_Y) - STAND_HIP_Y) * 0.01).toFixed(4));
+    const yaw = facingCancel(obj, hipTrack, dur, name);
+    const hip = hipTrack ? hipTrack.createInterpolant().evaluate(t) : [0, bindY, 0];
+    let hy = ((hip[1] ?? bindY) - bindY) * 0.01;
+    if (name === "jump") hy = Math.min(0, hy);
+    hipY.push(+hy.toFixed(4));
 
     const worldQ = {};
     for (const chain of CHAINS) {
@@ -242,7 +274,13 @@ for (const [name, file] of Object.entries(FILES)) {
       let y = _e.y;
       let z = _e.z;
       if (chain.ours === "C_Hip_a") y = 0;
-      if (/UpperArm/.test(chain.ours)) {
+      if (RECUMBENT.has(name) && chain.ours === "C_Hip_a") {
+        x = Math.abs(x);
+        if (name === "proneIdle") x = Math.max(x, 1.2);
+        else if (name === "proneWalk") x = Math.max(x, 1.05);
+        else x = Math.max(x, 0.88);
+      }
+      if (/UpperArm/.test(chain.ours) && name !== "jump") {
         y = THREE.MathUtils.clamp(y, -0.22, 0.22);
         z = THREE.MathUtils.clamp(z, -0.42, 0.42);
       }
@@ -250,28 +288,50 @@ for (const [name, file] of Object.entries(FILES)) {
       bones[chain.ours].push([+x.toFixed(3), +y.toFixed(3), +z.toFixed(3)]);
     }
   }
-  clips[name] = { dur: +dur.toFixed(4), n: FRAMES, hipY, bones };
+  let stride = 1.2;
+  if (hipTrack) {
+    const p0 = hipTrack.createInterpolant().evaluate(0);
+    const p1 = hipTrack.createInterpolant().evaluate(dur * 0.99);
+    stride = Math.hypot((p1[0] ?? 0) - (p0[0] ?? 0), (p1[2] ?? 0) - (p0[2] ?? 0)) * 0.01;
+  }
+  if (stride < 0.28) {
+    stride =
+      name === "proneWalk" || name === "proneIdle" || name === "crawl"
+        ? 0.7
+        : name.startsWith("crouch")
+          ? 0.72
+          : name === "jump"
+            ? 0
+            : 1.35;
+  }
+  if (name.startsWith("crouch")) stride = THREE.MathUtils.clamp(stride, 0.5, 1.05);
+  if (name === "crawl") stride = THREE.MathUtils.clamp(stride, 0.4, 0.75);
+  if (name === "proneWalk") stride = THREE.MathUtils.clamp(stride, 0.45, 0.95);
+  if (name === "jump") stride = 0;
+  clips[name] = { dur: +dur.toFixed(4), n: nFrames, stride: +stride.toFixed(3), hipY, bones };
   console.log(
     "baked",
     name.padEnd(12),
     "dur",
     dur.toFixed(2),
+    "stride",
+    stride.toFixed(3),
     "hipY0",
     hipY[0],
+    "hipX0",
+    bones.C_Hip_a?.[0],
     "Lleg",
     bones.L_UpperLeg_a?.[0],
     "Larm",
     bones.L_UpperArm_a?.[0],
-    "Lhand",
-    bones.L_Hand_a?.[0],
   );
 }
 
 fs.writeFileSync(
   OUT,
   JSON.stringify({
-    source: "Mixamo aim-retarget (Walking, Crouch Idle, Crouch Walk Forward, Walk Strafe, Crawling)",
-    bind: "character-space child-from-parent directions, hip yaw cancelled, mesh faces +Z",
+    source: "Mixamo aim-retarget (Walking, Crouch, Strafe, Crawling, Prone Idle/Forward, Jump)",
+    bind: "character-space child-from-parent directions, hip yaw cancelled, mesh faces +Z; recumbent facing = hips→head",
     clips,
   }),
 );

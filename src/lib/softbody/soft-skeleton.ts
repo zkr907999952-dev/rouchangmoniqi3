@@ -60,7 +60,8 @@ export type PoseId =
   | "walkLeft"
   | "walkRight"
   | "crouchWalk"
-  | "crawl";
+  | "crawl"
+  | "jump";
 export type LocoMode = "stand" | "crouch" | "prone";
 export type HandGesture = "rest" | "fist" | "point" | "two" | "peace" | "middle";
 export type HandSide = "L" | "R";
@@ -85,6 +86,7 @@ export const POSES: { id: PoseId; label: string }[] = [
   { id: "walkRight", label: "右走" },
   { id: "crouchWalk", label: "蹲走" },
   { id: "crawl", label: "匍匐" },
+  { id: "jump", label: "跳跃" },
   { id: "splits", label: "一字马" },
   { id: "backbend", label: "下腰" },
   { id: "inspectNavel", label: "检查肚脐" },
@@ -172,14 +174,15 @@ const LOCO_BONES = [
   "R_Hand_a",
 ] as const;
 
-type LocoClip = { dur: number; n: number; hipY: number[]; bones: Record<string, number[][]> };
+type LocoClip = { dur: number; n: number; hipY: number[]; bones: Record<string, number[][]>; stride?: number };
 const LOCO_CLIPS = (locoPack as { clips: Record<string, LocoClip> }).clips;
 
-function pickLocoClip(mode: LocoMode, fwd: number, side: number, mag: number) {
+function pickLocoClip(mode: LocoMode, fwd: number, side: number, mag: number, airborne = false) {
+  if (airborne) return "jump";
   const moving = mag > 0.07;
   const af = Math.abs(fwd);
   const as = Math.abs(side);
-  if (mode === "prone") return moving ? "crawl" : "proneIdle";
+  if (mode === "prone") return moving ? "proneWalk" : "proneIdle";
   if (mode === "crouch") {
     if (!moving) return "crouchIdle";
     if (af >= as) return fwd >= 0 ? "crouchWalk" : "crouchBack";
@@ -190,11 +193,12 @@ function pickLocoClip(mode: LocoMode, fwd: number, side: number, mag: number) {
   return side >= 0 ? "walkRight" : "walkLeft";
 }
 
-function sampleLocoClip(clip: LocoClip, u: number) {
+function sampleLocoClip(clip: LocoClip, u: number, loop = true) {
   const n = clip.n;
-  const x = (((u % 1) + 1) % 1) * n;
+  const wrapped = loop ? (((u % 1) + 1) % 1) : THREE.MathUtils.clamp(u, 0, 0.999);
+  const x = wrapped * n;
   const i = Math.floor(x) % n;
-  const j = (i + 1) % n;
+  const j = loop ? (i + 1) % n : Math.min(n - 1, i + 1);
   const t = x - Math.floor(x);
   const hipY = clip.hipY[i]! + (clip.hipY[j]! - clip.hipY[i]!) * t;
   const pose: Record<string, [number, number, number]> = {};
@@ -300,6 +304,7 @@ export class SoftSkeleton {
   private poseAimY = 0;
   private poseSnap = 0;
   locoPhase = 0;
+  private locoWasAir = false;
   private locoLast = { mode: "stand" as LocoMode, fwd: 0, side: 0, mag: 0 };
   private readonly gazeNeckQ = new THREE.Quaternion();
   private readonly gazeHeadQ = new THREE.Quaternion();
@@ -1132,41 +1137,21 @@ export class SoftSkeleton {
     if (point) this.gazeTarget.copy(point);
   }
 
-  /** Eye in root-local space from the posed head, so crouch/prone cameras drop with the body. */
+  /** Stable eye in root-local space. Stance height only — no head nod, look pitch, or walk bob. */
   fpEyeLocal(out: THREE.Vector3) {
-    const i = this.iHead >= 0 ? this.iHead : this.iNeck;
-    if (i < 0) {
-      out.set(0, 1.48, 0.22);
-      return out;
-    }
-    out.copy(this.wpos[i]!);
-    const hipI = this.byName["C_Hip_a"];
-    let stance: LocoMode = "stand";
-    if (hipI !== undefined) {
-      _e.setFromQuaternion(this.poseQ[hipI]!, "XYZ");
-      if (_e.x > 0.7) stance = "prone";
-      else if (this.poseOff[hipI]!.y < -0.3) stance = "crouch";
-    }
-    if (stance === "prone") _v.set(0, 0.06, 0.08);
-    else if (stance === "crouch") _v.set(0, -0.04, 0.12);
-    else _v.set(0, -0.03, 0.12);
-    _v.applyQuaternion(this.wrot[i]!);
-    out.add(_v);
-    out.y = Math.max(stance === "prone" ? 0.18 : stance === "crouch" ? 0.78 : 0.2, out.y);
+    const mode = this.locoLast.mode;
+    if (mode === "prone") out.set(0, 0.24, 0.56);
+    else if (mode === "crouch") out.set(0, 0.94, 0.14);
+    else out.set(0, 1.5, 0.12);
     return out;
   }
 
-  /** Posed chest aim point so looking down tracks the body in crouch/prone. */
+  /** Stable chest aim so looking down sees the body without inheriting walk bob. */
   fpChestLocal(out: THREE.Vector3) {
-    const i = this.iSpine >= 0 ? this.iSpine : (this.byName["C_Spine_b"] ?? -1);
-    if (i < 0) {
-      out.set(0, 1.12, 0.12);
-      return out;
-    }
-    out.copy(this.wpos[i]!);
-    _v.set(0, -0.05, 0.11);
-    _v.applyQuaternion(this.wrot[i]!);
-    out.add(_v);
+    const mode = this.locoLast.mode;
+    if (mode === "prone") out.set(0, 0.18, 0.28);
+    else if (mode === "crouch") out.set(0, 0.7, 0.18);
+    else out.set(0, 1.08, 0.14);
     return out;
   }
 
@@ -1196,15 +1181,45 @@ export class SoftSkeleton {
 
   tickLocomotion(
     dt: number,
-    opts: { mode: LocoMode; fwd: number; side: number; mag: number },
+    opts: {
+      mode: LocoMode;
+      fwd: number;
+      side: number;
+      mag: number;
+      speedMps?: number;
+      stepDist?: number;
+      airborne?: boolean;
+      airTime?: number;
+      jumpU?: number;
+      clip?: string | null;
+    },
   ) {
     const mag = THREE.MathUtils.clamp(opts.mag, 0, 1);
-    const clipName = pickLocoClip(opts.mode, opts.fwd, opts.side, mag);
+    const airborne = Boolean(opts.airborne);
+    const clipName = opts.clip ?? pickLocoClip(opts.mode, opts.fwd, opts.side, mag, airborne);
     const clip = clipName ? LOCO_CLIPS[clipName] : undefined;
-    const dur = clip?.dur ?? 1.2;
-    if (mag > 0.05) this.locoPhase += dt / dur;
-    else this.locoPhase += dt * 0.08;
-    this.applyLocomotion(opts.mode, opts.fwd, opts.side, mag, this.locoPhase);
+    if (airborne) {
+      if (opts.jumpU != null) {
+        this.locoPhase = THREE.MathUtils.clamp(opts.jumpU, 0, 0.999);
+      } else {
+        const t = THREE.MathUtils.clamp((opts.airTime ?? 0) / 0.48, 0, 1);
+        this.locoPhase = 0.28 + t * 0.3;
+      }
+    } else {
+      if (this.locoWasAir) this.locoPhase = 0;
+      if (mag > 0.05) {
+        const stride = clip?.stride || (opts.mode === "prone" ? 0.55 : opts.mode === "crouch" ? 0.72 : 1.45);
+        const dist =
+          opts.stepDist != null && opts.stepDist > 0
+            ? opts.stepDist
+            : Math.max(0.08, opts.speedMps ?? 1.65) * mag * dt;
+        this.locoPhase += dist / Math.max(0.28, stride);
+      } else {
+        this.locoPhase += dt * 0.06;
+      }
+    }
+    this.locoWasAir = airborne;
+    this.applyLocomotion(opts.mode, opts.fwd, opts.side, mag, this.locoPhase, airborne, clipName);
     for (const name of LOCO_BONES) {
       const i = this.byName[name];
       if (i === undefined) continue;
@@ -1213,21 +1228,30 @@ export class SoftSkeleton {
     }
   }
 
-  applyLocomotion(mode: LocoMode, fwd: number, side: number, mag: number, phase: number) {
+  applyLocomotion(
+    mode: LocoMode,
+    fwd: number,
+    side: number,
+    mag: number,
+    phase: number,
+    airborne = false,
+    clipNameArg?: string | null,
+  ) {
     for (const name of LOCO_BONES) {
       const i = this.byName[name];
       if (i === undefined) continue;
       this.poseQ[i]!.identity();
       this.poseOff[i]!.set(0, 0, 0);
     }
-    const clipName = pickLocoClip(mode, fwd, side, mag);
+    const clipName = clipNameArg ?? pickLocoClip(mode, fwd, side, mag, airborne);
     const clip = clipName ? LOCO_CLIPS[clipName] : undefined;
-    const stanceName = mode === "crouch" ? "crouchIdle" : mode === "prone" ? "proneIdle" : null;
+    const stanceName = airborne ? null : mode === "crouch" ? "crouchIdle" : mode === "prone" ? "proneIdle" : null;
     const stance = stanceName ? LOCO_CLIPS[stanceName] : undefined;
     const k = THREE.MathUtils.smoothstep(THREE.MathUtils.clamp(mag, 0, 1), 0.04, 0.22);
-    const u = ((phase % 1) + 1) % 1;
-    const move = clip ? sampleLocoClip(clip, u) : null;
-    const rest = stance ? sampleLocoClip(stance, u) : null;
+    const loop = clipName !== "jump";
+    const u = loop ? (((phase % 1) + 1) % 1) : THREE.MathUtils.clamp(phase, 0, 0.999);
+    const move = clip ? sampleLocoClip(clip, u, loop) : null;
+    const rest = stance ? sampleLocoClip(stance, u, true) : null;
     const set = (name: string, ex: number, ey: number, ez: number, ox = 0, oy = 0, oz = 0) => {
       const i = this.byName[name];
       if (i === undefined) return;
@@ -1563,6 +1587,8 @@ export class SoftSkeleton {
       twistAlong("R_Hand_a", "R_Middle_a", -0.5);
     } else if (id === "squat") {
       this.applyLocomotion("crouch", 0, 0, 0, 0);
+    } else if (id === "jump") {
+      this.applyLocomotion("stand", 0, 0, 1, 0.5, true);
     } else if (id === "splits") {
       set("C_Hip_a", 0.05, 0.1, -0.5);
       set("C_Spine_a", 0.06, 0.05, 0.34);
@@ -1607,7 +1633,7 @@ export class SoftSkeleton {
       twistAlong("R_Hand_a", "R_Middle_a", -0.32);
     } else if (LOCO_POSES[id]) {
       const spec = LOCO_POSES[id]!;
-      this.applyLocomotion(spec.mode, spec.fwd, spec.side, 1, 0.35);
+      this.applyLocomotion(spec.mode, spec.fwd, spec.side, 1, 0.35, false, id === "crawl" ? "crawl" : undefined);
     } else if (id === "navelPoke") {
       // Parked: index along world -Z, tip ~5 cm in front of the navel.
       // Inserted: same pointing, driven by shoulder/elbow/wrist/knuckle FK — never wrist translate.

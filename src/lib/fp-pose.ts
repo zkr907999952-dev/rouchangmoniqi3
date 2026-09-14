@@ -21,4 +21,9 @@ export const fpLive = {
   headReady: false,
   moveFwd: 0,
   moveSide: 0,
+  speedMps: 1.65,
+  stepDist: 0,
+  grounded: true,
+  airTime: 0,
+  velY: 0,
 };

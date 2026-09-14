@@ -898,6 +898,8 @@ function FirstPersonRig({
     const nx = wishLen > 1e-5 ? wishX / wishLen : 0;
     const nz = wishLen > 1e-5 ? wishZ / wishLen : 0;
     const step = speed * Math.min(1, wishLen) * d;
+    const prevX = pos.current.x;
+    const prevZ = pos.current.z;
     let x = pos.current.x + nx * step;
     let z = pos.current.z + nz * step;
     x = THREE.MathUtils.clamp(x, -FP_BOUNDS.x, FP_BOUNDS.x);
@@ -912,6 +914,7 @@ function FirstPersonRig({
     pos.current.x = x;
     pos.current.z = z;
     speedRef.current = wishLen * speed;
+    const stepDist = Math.hypot(x - prevX, z - prevZ);
 
     if (grounded.current) coyote.current = 0.12;
     else coyote.current = Math.max(0, coyote.current - d);
@@ -953,6 +956,12 @@ function FirstPersonRig({
     fpLive.prone = prone;
     fpLive.moveFwd = act.moveY;
     fpLive.moveSide = act.moveX;
+    fpLive.speedMps = speed;
+    fpLive.stepDist = grounded.current ? stepDist : 0;
+    fpLive.grounded = grounded.current;
+    fpLive.velY = velY.current;
+    if (grounded.current) fpLive.airTime = 0;
+    else fpLive.airTime += d;
   }, -1);
 
   useFrame(() => {
@@ -961,7 +970,7 @@ function FirstPersonRig({
     const fx = -Math.sin(yaw.current);
     const fz = -Math.cos(yaw.current);
     if (body) {
-      camera.position.set(fpLive.eyeX, fpLive.eyeY + bob.current, fpLive.eyeZ);
+      camera.position.set(fpLive.eyeX, fpLive.eyeY, fpLive.eyeZ);
       lookDirFromYawPitch(yaw.current, pitch.current, _fpFwd);
       const down = THREE.MathUtils.clamp(-pitch.current, 0, FP_PITCH_LIM);
       const t = THREE.MathUtils.smoothstep(down, 0.12, 0.7);

@@ -1189,6 +1189,8 @@ function FittedFigure({
   const exprRef = useRef(useStudio.getState().expression);
   const poseRef = useRef(useStudio.getState().pose);
   const bodyWasOn = useRef(false);
+  const eyeSmooth = useRef(new THREE.Vector3(0, 1.5, 0.12));
+  const jumpMenuT = useRef(0);
   const gestLRef = useRef(useStudio.getState().handGestureL);
   const gestRRef = useRef(useStudio.getState().handGestureR);
   const grab = useRef<{
@@ -1689,9 +1691,11 @@ function FittedFigure({
     if (s.pose !== poseRef.current) {
       poseRef.current = s.pose;
       setup.skeleton.setPose(s.pose);
+      jumpMenuT.current = 0;
     }
     const bodyOn = s.firstPerson && s.fpView === "body";
     if (bodyOn) {
+      if (!bodyWasOn.current) setup.skeleton.fpEyeLocal(eyeSmooth.current);
       setup.root.position.set(fpLive.x, fpLive.y, fpLive.z);
       _bodyE.set(0, fpLive.yaw + Math.PI, 0, "YXZ");
       setup.root.quaternion.setFromEuler(_bodyE);
@@ -1702,6 +1706,10 @@ function FittedFigure({
         fwd: fpLive.moveFwd,
         side: fpLive.moveSide,
         mag: Math.min(1, Math.hypot(fpLive.moveFwd, fpLive.moveSide)),
+        speedMps: fpLive.speedMps,
+        stepDist: fpLive.stepDist,
+        airborne: !fpLive.grounded,
+        airTime: fpLive.airTime,
       });
     } else {
       setup.root.position.set(0, 0, 0);
@@ -1710,14 +1718,25 @@ function FittedFigure({
       if (bodyWasOn.current) {
         setup.skeleton.setPose(s.pose);
         poseRef.current = s.pose;
+        jumpMenuT.current = 0;
       }
-      if (isLocoPose(s.pose) || s.pose === "squat") {
-        const spec = s.pose === "squat" ? { mode: "crouch" as const, fwd: 0, side: 0 } : LOCO_POSES[s.pose]!;
+      if (s.pose === "jump") jumpMenuT.current += dt;
+      if (isLocoPose(s.pose) || s.pose === "squat" || s.pose === "jump") {
+        const spec =
+          s.pose === "squat"
+            ? { mode: "crouch" as const, fwd: 0, side: 0 }
+            : s.pose === "jump"
+              ? { mode: "stand" as const, fwd: 0, side: 0 }
+              : LOCO_POSES[s.pose]!;
         setup.skeleton.tickLocomotion(dt, {
           mode: spec.mode,
           fwd: spec.fwd,
           side: spec.side,
           mag: s.pose === "squat" ? 0 : 1,
+          speedMps: 1.65,
+          airborne: s.pose === "jump",
+          jumpU: s.pose === "jump" ? (jumpMenuT.current % 2.17) / 2.17 : undefined,
+          clip: s.pose === "crawl" ? "crawl" : undefined,
         });
       }
     }
@@ -2007,15 +2026,15 @@ function FittedFigure({
     writeBindings();
     if (bodyOn) {
       setup.skeleton.fpEyeLocal(_eye);
+      const err = eyeSmooth.current.distanceTo(_eye);
+      const k = 1 - Math.exp(-(err > 0.28 ? 22 : 12) * dt);
+      eyeSmooth.current.lerp(_eye, k);
+      _eye.copy(eyeSmooth.current);
       setup.root.localToWorld(_eye);
       fpLive.eyeX = _eye.x;
       fpLive.eyeY = _eye.y;
       fpLive.eyeZ = _eye.z;
-      if (typeof setup.skeleton.fpChestLocal === "function") setup.skeleton.fpChestLocal(_eye);
-      else {
-        _eye.copy(setup.navel);
-        _eye.y += 0.08;
-      }
+      setup.skeleton.fpChestLocal(_eye);
       setup.root.localToWorld(_eye);
       fpLive.chestX = _eye.x;
       fpLive.chestY = _eye.y;
@@ -2189,7 +2208,7 @@ function FittedFigure({
           if (e.length >= 3) setup.skeleton.snapPoseEuler(name, e[0]!, e[1]!, e[2]!);
         }
         setup.skeleton.snapFK();
-        return vela.dumpArm();
+        return (vela.dumpArm as () => unknown)();
       };
       vela.setPose = (id: string) => {
         useStudio.getState().setPose(id as PoseId);
@@ -2211,6 +2230,30 @@ function FittedFigure({
       vela.setFpProne = (on: boolean) => {
         useStudio.getState().setFpProne(on);
         return useStudio.getState().fpProne;
+      };
+      vela.applyLoco = (opts: {
+        mode: "stand" | "crouch" | "prone";
+        fwd?: number;
+        side?: number;
+        mag?: number;
+        airborne?: boolean;
+        airTime?: number;
+        jumpU?: number;
+        clip?: string | null;
+        phase?: number;
+      }) => {
+        if (opts.phase != null) setup.skeleton.locoPhase = opts.phase;
+        setup.skeleton.tickLocomotion(0.016, {
+          mode: opts.mode,
+          fwd: opts.fwd ?? 0,
+          side: opts.side ?? 0,
+          mag: opts.mag ?? 0,
+          airborne: opts.airborne,
+          airTime: opts.airTime,
+          jumpU: opts.jumpU,
+          clip: opts.clip,
+        });
+        return setup.skeleton.dumpLoco();
       };
       vela.bodyDebug = () => {
         const hi = setup.headBone;
@@ -2245,10 +2288,10 @@ function FittedFigure({
         };
       };
       vela.frameFigure = (mode?: string) => {
-        if (mode === "crawl") {
-          camera.position.set(1.35, 0.72, 1.15);
-          camera.lookAt(0, 0.22, 0.45);
-          if (controlsRef.current) controlsRef.current.target.set(0, 0.22, 0.45);
+        if (mode === "crawl" || mode === "prone") {
+          camera.position.set(1.45, 0.62, 0.85);
+          camera.lookAt(0, 0.18, 0.2);
+          if (controlsRef.current) controlsRef.current.target.set(0, 0.18, 0.2);
         } else if (mode === "crouch" || mode === "side") {
           camera.position.set(1.45, 0.95, 1.35);
           camera.lookAt(0, 0.7, 0.08);
@@ -2261,6 +2304,10 @@ function FittedFigure({
           camera.position.set(1.55, 1.02, 1.25);
           camera.lookAt(0, 0.88, 0.08);
           if (controlsRef.current) controlsRef.current.target.set(0, 0.88, 0.08);
+        } else if (mode === "jump") {
+          camera.position.set(1.55, 1.15, 1.45);
+          camera.lookAt(0, 0.95, 0.08);
+          if (controlsRef.current) controlsRef.current.target.set(0, 0.95, 0.08);
         } else {
           camera.position.set(1.2, 1.08, 1.85);
           camera.lookAt(0, 0.9, 0.06);
