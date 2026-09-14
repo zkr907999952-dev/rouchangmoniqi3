@@ -10,6 +10,7 @@ export const fpLive = {
   z: 0,
   yaw: 0,
   pitch: 0,
+  bodyYaw: Math.PI,
   crouched: false,
   prone: false,
   eyeX: 0,

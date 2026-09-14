@@ -1407,13 +1407,16 @@ export class SoftSkeleton {
     }
   }
 
-  /** FPS look pitch (neg = look down). Curls spine/neck so the torso rises into view. */
-  setBodyLook(pitch: number) {
+  /** FPS look. Yaw/pitch are relative to the body (camera − body). Head stays locked to the camera. */
+  setBodyLook(yaw: number, pitch = 0) {
     this.bodyLookOn = true;
-    const down = THREE.MathUtils.clamp(-pitch, -0.2, 1.35);
-    this.bodySpineQ.setFromEuler(_e.set(down * 0.22, 0, 0, "XYZ"));
-    this.bodyNeckQ.setFromEuler(_e.set(down * 0.42, 0, 0, "XYZ"));
-    this.bodyHeadQ.setFromEuler(_e.set(down * 0.2, 0, 0, "XYZ"));
+    const ny = yaw * 0.52;
+    const hy = yaw - ny;
+    const np = -pitch * 0.5;
+    const hp = -pitch - np;
+    this.bodyNeckQ.setFromEuler(_e.set(np, ny, 0, "YXZ"));
+    this.bodyHeadQ.setFromEuler(_e.set(hp, hy, 0, "YXZ"));
+    this.bodySpineQ.identity();
   }
 
   clearBodyLook() {
@@ -2202,20 +2205,13 @@ export class SoftSkeleton {
       }
       if (!locked && this.bodyLookOn) {
         const extra =
-          i === this.iNeck ? this.bodyNeckQ : i === this.iHead ? this.bodyHeadQ : i === this.iSpine ? this.bodySpineQ : null;
+          i === this.iNeck ? this.bodyNeckQ : i === this.iHead ? this.bodyHeadQ : null;
         if (extra) {
-          _lookQ.copy(targetQ).multiply(extra);
-          targetQ = _lookQ;
+          _lookQ.copy(this.poseQ[i]!).multiply(extra);
+          q.copy(_lookQ);
+          qv.set(0, 0, 0);
+          continue;
         }
-      }
-      if (
-        !locked &&
-        this.bodyLookOn &&
-        (i === this.iNeck || i === this.iHead || i === this.iSpine)
-      ) {
-        q.slerp(targetQ, 1 - Math.exp(-18 * d));
-        qv.set(0, 0, 0);
-        continue;
       }
       if (
         !locked &&

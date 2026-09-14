@@ -163,7 +163,11 @@ function WallMirror() {
           shown.push(obj);
         }
       }
+      const fill = scene.getObjectByName("BodyFillLight") as THREE.PointLight | undefined;
+      const fillI = fill?.intensity ?? 0;
+      if (fill) fill.intensity = 0;
       draw(renderer, scene, camera, geometry, material, group);
+      if (fill) fill.intensity = fillI;
       for (const obj of shown) obj.visible = false;
     };
     g.add(glass);
@@ -697,6 +701,7 @@ function FirstPersonRig({
         pos.current.set(0, 0, 0);
         yaw.current = Math.PI;
         pitch.current = -0.72;
+        fpLive.bodyYaw = Math.PI;
         fpLive.eyeX = 0;
         fpLive.eyeY = 1.46;
         fpLive.eyeZ = 0.22;
@@ -1104,8 +1109,24 @@ function BodyFillLight() {
       l.intensity = 0;
       return;
     }
-    l.intensity = 2.4;
-    l.position.set(fpLive.eyeX + 0.04, fpLive.eyeY + 0.1, fpLive.eyeZ + 0.06);
+    const yaw = fpLive.yaw;
+    const fx = -Math.sin(yaw);
+    const fz = -Math.cos(yaw);
+    l.intensity = 1.05;
+    l.position.set(
+      fpLive.chestX + fx * 0.32,
+      fpLive.chestY + 0.02,
+      fpLive.chestZ + fz * 0.32,
+    );
   });
-  return <pointLight ref={ref} color="#ffd2b6" distance={1.6} decay={2} intensity={0} />;
+  return (
+    <pointLight
+      ref={ref}
+      name="BodyFillLight"
+      color="#ffd2b6"
+      distance={1.15}
+      decay={2}
+      intensity={0}
+    />
+  );
 }

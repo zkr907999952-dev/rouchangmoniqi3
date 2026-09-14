@@ -28,6 +28,11 @@ const _center = new THREE.Vector3();
 const _local = new THREE.Vector3();
 const _eye = new THREE.Vector3();
 const _bodyE = new THREE.Euler();
+const BODY_LOOK_DEAD = Math.PI / 3;
+
+function shortestAng(a: number) {
+  return Math.atan2(Math.sin(a), Math.cos(a));
+}
 
 const TORSO_RE = /skin|dress|body|torso|outfit|cloth|top|bottom|nude|mesh/i;
 const SKIP_BIND_RE = /charm|wing/i;
@@ -1189,6 +1194,7 @@ function FittedFigure({
   const exprRef = useRef(useStudio.getState().expression);
   const poseRef = useRef(useStudio.getState().pose);
   const bodyWasOn = useRef(false);
+  const bodyYawRef = useRef(Math.PI);
   const eyeSmooth = useRef(new THREE.Vector3(0, 1.5, 0.12));
   const jumpMenuT = useRef(0);
   const gestLRef = useRef(useStudio.getState().handGestureL);
@@ -1696,13 +1702,28 @@ function FittedFigure({
     }
     const bodyOn = s.firstPerson && s.fpView === "body";
     if (bodyOn) {
-      if (!bodyWasOn.current) setup.skeleton.fpEyeLocal(eyeSmooth.current);
+      if (!bodyWasOn.current) {
+        setup.skeleton.fpEyeLocal(eyeSmooth.current);
+        bodyYawRef.current = fpLive.yaw;
+      }
+      const lookYaw = fpLive.yaw;
+      let bodyYaw = bodyYawRef.current;
+      const delta = shortestAng(lookYaw - bodyYaw);
+      const moving = Math.hypot(fpLive.moveFwd, fpLive.moveSide) > 0.1 || !fpLive.grounded;
+      if (moving) {
+        bodyYaw += shortestAng(lookYaw - bodyYaw) * (1 - Math.exp(-10 * dt));
+      } else if (Math.abs(delta) > BODY_LOOK_DEAD) {
+        bodyYaw = lookYaw - Math.sign(delta) * BODY_LOOK_DEAD;
+      }
+      bodyYaw = shortestAng(bodyYaw);
+      bodyYawRef.current = bodyYaw;
+      fpLive.bodyYaw = bodyYaw;
       setup.root.position.set(fpLive.x, fpLive.y, fpLive.z);
-      _bodyE.set(0, fpLive.yaw + Math.PI, 0, "YXZ");
+      _bodyE.set(0, bodyYaw + Math.PI, 0, "YXZ");
       setup.root.quaternion.setFromEuler(_bodyE);
       setup.root.updateMatrixWorld(true);
-      setup.skeleton.clearBodyLook?.();
       setup.skeleton.setGazeTarget(null);
+      setup.skeleton.setBodyLook(shortestAng(lookYaw - bodyYaw), fpLive.pitch);
       setup.skeleton.tickLocomotion(dt, {
         mode: s.fpProne ? "prone" : s.fpCrouch ? "crouch" : "stand",
         fwd: fpLive.moveFwd,
@@ -2288,6 +2309,21 @@ function FittedFigure({
           hideCount: setup.hideMeshes.length,
           root: setup.root.position.toArray(),
           rotY: setup.root.rotation.y,
+          lookYaw: fpLive.yaw,
+          bodyYaw: fpLive.bodyYaw,
+          lookPitch: fpLive.pitch,
+          neckEul: (() => {
+            const i = setup.skeleton.names.indexOf("C_Neck_a");
+            if (i < 0) return null;
+            _bodyE.setFromQuaternion(setup.skeleton.boneRot(i), "YXZ");
+            return [_bodyE.x, _bodyE.y, _bodyE.z];
+          })(),
+          headEul: (() => {
+            const i = setup.headBone;
+            if (i < 0) return null;
+            _bodyE.setFromQuaternion(setup.skeleton.boneRot(i), "YXZ");
+            return [_bodyE.x, _bodyE.y, _bodyE.z];
+          })(),
           cam: camera.position.toArray(),
           eye: [fpLive.eyeX, fpLive.eyeY, fpLive.eyeZ],
           chest: [fpLive.chestX, fpLive.chestY, fpLive.chestZ],
