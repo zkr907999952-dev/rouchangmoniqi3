@@ -595,6 +595,7 @@ export const useStudio = create<StudioState>((set) => ({
   setPose: (pose) => {
     const pack: Record<PoseId, { expression: ExpressionId; handGestureL: HandGesture; handGestureR: HandGesture }> = {
       idle: { expression: "rest", handGestureL: "rest", handGestureR: "rest" },
+      tpose: { expression: "rest", handGestureL: "rest", handGestureR: "rest" },
       disdain: { expression: "disgust", handGestureL: "rest", handGestureR: "middle" },
       ahegaoPose: { expression: "ahegao", handGestureL: "peace", handGestureR: "peace" },
       squat: { expression: "rest", handGestureL: "rest", handGestureR: "rest" },

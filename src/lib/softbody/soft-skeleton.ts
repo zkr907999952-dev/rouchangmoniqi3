@@ -48,6 +48,7 @@ export type SkelParams = {
 export type ExpressionId = "rest" | "ahegao" | "pain" | "vomit" | "disgust" | "climax";
 export type PoseId =
   | "idle"
+  | "tpose"
   | "disdain"
   | "ahegaoPose"
   | "squat"
@@ -84,7 +85,8 @@ export const EXPRESSIONS: { id: ExpressionId; label: string }[] = [
 ];
 
 export const POSES: { id: PoseId; label: string }[] = [
-  { id: "idle", label: "默认" },
+  { id: "idle", label: "待机" },
+  { id: "tpose", label: "T姿势" },
   { id: "disdain", label: "嫌弃" },
   { id: "ahegaoPose", label: "阿黑颜" },
   { id: "squat", label: "蹲下" },
@@ -1331,6 +1333,7 @@ export class SoftSkeleton {
     }
     this.locoWasMoving = active;
     for (const name of LOCO_BONES) {
+      if (name === "C_Neck_a") continue;
       const i = this.byName[name];
       if (i === undefined) continue;
       this.q[i]!.copy(this.poseQ[i]!);
@@ -1456,6 +1459,31 @@ export class SoftSkeleton {
     if (hipI !== undefined) {
       this.poseOff[hipI]!.y = hipY0 + (hipY1 - hipY0) * t;
     }
+    if (clipName === "standIdle") this.nudgeIdleArmsBack();
+  }
+
+  /** Hang idle arms at the sides, slightly behind the torso instead of in front. */
+  private nudgeIdleArmsBack() {
+    const pull = (arm: string, child: string) => {
+      const i = this.byName[arm];
+      const c = this.byName[child];
+      if (i === undefined || c === undefined) return;
+      _from.set(
+        this.rest[c * 3]! - this.rest[i * 3]!,
+        this.rest[c * 3 + 1]! - this.rest[i * 3 + 1]!,
+        this.rest[c * 3 + 2]! - this.rest[i * 3 + 2]!,
+      );
+      if (_from.lengthSq() < 1e-8) return;
+      _from.normalize();
+      _to.copy(_from).applyQuaternion(this.poseQ[i]!);
+      _v.set(_to.x, _to.y, Math.min(_to.z - 0.42, -0.16));
+      if (_v.lengthSq() < 1e-8) return;
+      _v.normalize();
+      _q.setFromUnitVectors(_to, _v);
+      this.poseQ[i]!.premultiply(_q);
+    };
+    pull("L_UpperArm_a", "L_Forearm_a");
+    pull("R_UpperArm_a", "R_Forearm_a");
   }
 
   /** FPS look. Yaw/pitch are relative to the body (camera − body). Head stays locked to the camera. */
@@ -1833,6 +1861,7 @@ export class SoftSkeleton {
     } else if (id === "idle") {
       this.applyLocomotion("stand", 0, 0, 0, 0);
     }
+    // tpose: leave identity rest
     this.navelArm = [];
     if (id === "navelPoke") {
       const park: Record<string, [number, number, number]> = {
@@ -2243,10 +2272,12 @@ export class SoftSkeleton {
       if (!locked && (this.gazeEyeBlend > 0.01 || this.gazeNeckBlend > 0.01 || gb > 0.01)) {
         const lockEyes = this.expression !== "rest";
         if (i === this.iNeck) {
-          _q2.copy(this.poseQ[i]!).slerp(this.gazeNeckQ, this.gazeNeckBlend);
+          _lookQ.copy(this.poseQ[i]!).multiply(this.gazeNeckQ);
+          _q2.copy(this.poseQ[i]!).slerp(_lookQ, this.gazeNeckBlend);
           targetQ = _q2;
         } else if (i === this.iHead) {
-          _q2.copy(this.poseQ[i]!).slerp(this.gazeHeadQ, this.gazeBlend);
+          _lookQ.copy(this.poseQ[i]!).multiply(this.gazeHeadQ);
+          _q2.copy(this.poseQ[i]!).slerp(_lookQ, this.gazeBlend);
           targetQ = _q2;
         } else if (i === this.iEyeL && !lockEyes) {
           _q2.copy(targetQ).slerp(this.gazeEyeLQ, this.gazeEyeBlend);
