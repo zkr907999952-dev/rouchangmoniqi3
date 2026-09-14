@@ -45,7 +45,22 @@ export type SkelParams = {
 };
 
 export type ExpressionId = "rest" | "ahegao" | "pain" | "vomit" | "disgust" | "climax";
-export type PoseId = "idle" | "disdain" | "ahegaoPose" | "squat" | "splits" | "backbend" | "inspectNavel" | "navelPoke";
+export type PoseId =
+  | "idle"
+  | "disdain"
+  | "ahegaoPose"
+  | "squat"
+  | "splits"
+  | "backbend"
+  | "inspectNavel"
+  | "navelPoke"
+  | "walk"
+  | "walkBack"
+  | "walkLeft"
+  | "walkRight"
+  | "crouchWalk"
+  | "crawl";
+export type LocoMode = "stand" | "crouch" | "prone";
 export type HandGesture = "rest" | "fist" | "point" | "two" | "peace" | "middle";
 export type HandSide = "L" | "R";
 
@@ -63,6 +78,12 @@ export const POSES: { id: PoseId; label: string }[] = [
   { id: "disdain", label: "嫌弃" },
   { id: "ahegaoPose", label: "阿黑颜" },
   { id: "squat", label: "蹲下" },
+  { id: "walk", label: "行走" },
+  { id: "walkBack", label: "后退" },
+  { id: "walkLeft", label: "左走" },
+  { id: "walkRight", label: "右走" },
+  { id: "crouchWalk", label: "蹲走" },
+  { id: "crawl", label: "匍匐" },
   { id: "splits", label: "一字马" },
   { id: "backbend", label: "下腰" },
   { id: "inspectNavel", label: "检查肚脐" },
@@ -77,6 +98,19 @@ export const HAND_GESTURES: { id: HandGesture; label: string }[] = [
   { id: "peace", label: "剪刀手" },
   { id: "middle", label: "竖中指" },
 ];
+
+export const LOCO_POSES: Record<string, { mode: LocoMode; fwd: number; side: number }> = {
+  walk: { mode: "stand", fwd: 1, side: 0 },
+  walkBack: { mode: "stand", fwd: -1, side: 0 },
+  walkLeft: { mode: "stand", fwd: 0, side: -1 },
+  walkRight: { mode: "stand", fwd: 0, side: 1 },
+  crouchWalk: { mode: "crouch", fwd: 1, side: 0 },
+  crawl: { mode: "prone", fwd: 1, side: 0 },
+};
+
+export function isLocoPose(id: PoseId) {
+  return Boolean(LOCO_POSES[id]);
+}
 
 export type SkinBinding = {
   positions: Float32Array;
@@ -112,6 +146,26 @@ const _nml = new THREE.Vector3();
 const _e = new THREE.Euler();
 const IDENTITY = new THREE.Quaternion();
 const _c = new THREE.Color();
+const _lookQ = new THREE.Quaternion();
+
+const LOCO_BONES = [
+  "C_Hip_a",
+  "C_Spine_a",
+  "C_Spine_b",
+  "C_Neck_a",
+  "L_UpperLeg_a",
+  "R_UpperLeg_a",
+  "L_Foreleg_a",
+  "R_Foreleg_a",
+  "L_Foot_a",
+  "R_Foot_a",
+  "L_Shoulder_a",
+  "R_Shoulder_a",
+  "L_UpperArm_a",
+  "R_UpperArm_a",
+  "L_Forearm_a",
+  "R_Forearm_a",
+] as const;
 
 type Group = "body" | "face" | "hair" | "foot";
 
@@ -202,10 +256,16 @@ export class SoftSkeleton {
   private readonly viewPoint = new THREE.Vector3(0, 1.5, 2);
   private poseAimY = 0;
   private poseSnap = 0;
+  locoPhase = 0;
+  private locoLast = { mode: "stand" as LocoMode, fwd: 0, side: 0, mag: 0 };
   private readonly gazeNeckQ = new THREE.Quaternion();
   private readonly gazeHeadQ = new THREE.Quaternion();
   private readonly gazeEyeLQ = new THREE.Quaternion();
   private readonly gazeEyeRQ = new THREE.Quaternion();
+  private bodyLookOn = false;
+  private readonly bodyNeckQ = new THREE.Quaternion();
+  private readonly bodyHeadQ = new THREE.Quaternion();
+  private readonly bodySpineQ = new THREE.Quaternion();
   private iNeck = -1;
   private iHead = -1;
   private iSpine = -1;
@@ -1029,6 +1089,241 @@ export class SoftSkeleton {
     if (point) this.gazeTarget.copy(point);
   }
 
+  /** Eye in root-local space from the posed head, so crouch/prone cameras drop with the body. */
+  fpEyeLocal(out: THREE.Vector3) {
+    const i = this.iHead >= 0 ? this.iHead : this.iNeck;
+    if (i < 0) {
+      out.set(0, 1.48, 0.22);
+      return out;
+    }
+    out.copy(this.wpos[i]!);
+    const hipI = this.byName["C_Hip_a"];
+    let stance: LocoMode = "stand";
+    if (hipI !== undefined) {
+      _e.setFromQuaternion(this.poseQ[hipI]!, "XYZ");
+      if (_e.x > 0.7) stance = "prone";
+      else if (this.poseOff[hipI]!.y < -0.3) stance = "crouch";
+    }
+    if (stance === "prone") _v.set(0, 0.06, 0.08);
+    else if (stance === "crouch") _v.set(0, -0.04, 0.12);
+    else _v.set(0, -0.03, 0.12);
+    _v.applyQuaternion(this.wrot[i]!);
+    out.add(_v);
+    out.y = Math.max(stance === "prone" ? 0.18 : stance === "crouch" ? 0.78 : 0.2, out.y);
+    return out;
+  }
+
+  /** Posed chest aim point so looking down tracks the body in crouch/prone. */
+  fpChestLocal(out: THREE.Vector3) {
+    const i = this.iSpine >= 0 ? this.iSpine : (this.byName["C_Spine_b"] ?? -1);
+    if (i < 0) {
+      out.set(0, 1.12, 0.12);
+      return out;
+    }
+    out.copy(this.wpos[i]!);
+    _v.set(0, -0.05, 0.11);
+    _v.applyQuaternion(this.wrot[i]!);
+    out.add(_v);
+    return out;
+  }
+
+  dumpLoco() {
+    const bones: Record<string, { pos: number[]; eul: number[] }> = {};
+    for (const name of LOCO_BONES) {
+      const i = this.byName[name];
+      if (i === undefined) continue;
+      _e.setFromQuaternion(this.poseQ[i]!, "XYZ");
+      bones[name] = {
+        pos: [this.wpos[i]!.x, this.wpos[i]!.y, this.wpos[i]!.z],
+        eul: [_e.x, _e.y, _e.z],
+      };
+    }
+    const hi = this.iHead >= 0 ? this.iHead : this.iNeck;
+    return {
+      phase: this.locoPhase,
+      pose: this.pose,
+      mode: this.locoLast.mode,
+      fwd: this.locoLast.fwd,
+      side: this.locoLast.side,
+      mag: this.locoLast.mag,
+      head: hi >= 0 ? ([this.wpos[hi]!.x, this.wpos[hi]!.y, this.wpos[hi]!.z] as number[]) : null,
+      bones,
+    };
+  }
+
+  tickLocomotion(
+    dt: number,
+    opts: { mode: LocoMode; fwd: number; side: number; mag: number },
+  ) {
+    const mag = THREE.MathUtils.clamp(opts.mag, 0, 1);
+    const cadence = opts.mode === "prone" ? 6.4 : opts.mode === "crouch" ? 7.6 : 9.8;
+    if (mag > 0.05) this.locoPhase += dt * cadence * (0.5 + mag * 0.72);
+    else this.locoPhase += dt * 0.08;
+    this.applyLocomotion(opts.mode, opts.fwd, opts.side, mag, this.locoPhase);
+    for (const name of LOCO_BONES) {
+      const i = this.byName[name];
+      if (i === undefined) continue;
+      this.q[i]!.copy(this.poseQ[i]!);
+      this.qv[i]!.set(0, 0, 0);
+    }
+  }
+
+  applyLocomotion(mode: LocoMode, fwd: number, side: number, mag: number, phase: number) {
+    const f = THREE.MathUtils.clamp(fwd, -1, 1);
+    const s = THREE.MathUtils.clamp(side, -1, 1);
+    const k = THREE.MathUtils.smoothstep(THREE.MathUtils.clamp(mag, 0, 1), 0.03, 0.28);
+    const wF = k * Math.max(0, f);
+    const wB = k * Math.max(0, -f);
+    const wR = k * Math.max(0, s);
+    const wL = k * Math.max(0, -s);
+    const fAmt = k * f;
+    const sAmt = k * s;
+    const absF = Math.abs(fAmt);
+    const absS = Math.abs(sAmt);
+    const sn = Math.sin(phase);
+    const cs = Math.cos(phase);
+    const liftF = Math.max(0, -sn);
+    const liftR = Math.max(0, sn);
+    for (const name of LOCO_BONES) {
+      const i = this.byName[name];
+      if (i === undefined) continue;
+      this.poseQ[i]!.identity();
+      this.poseOff[i]!.set(0, 0, 0);
+    }
+    const set = (name: string, ex: number, ey: number, ez: number, ox = 0, oy = 0, oz = 0) => {
+      const i = this.byName[name];
+      if (i === undefined) return;
+      this.poseQ[i]!.setFromEuler(_e.set(ex, ey, ez, "XYZ"));
+      this.poseOff[i]!.set(ox, oy, oz);
+      this.maxAng[i] = Math.max(this.maxAng[i]!, Math.hypot(ex, ey, ez) + 0.3);
+    };
+    this.poseSnap = 1;
+    this.locoLast = { mode, fwd: f, side: s, mag: k };
+    if (mode === "stand") {
+      const swing = 0.88;
+      set(
+        "C_Hip_a",
+        0.05 * k + 0.12 * wB - 0.03 * wF,
+        0.18 * sn * sAmt,
+        0.1 * sn * fAmt + 0.12 * sAmt,
+        -0.07 * sAmt,
+        -0.025 * k + 0.03 * Math.abs(cs) * k,
+        0.03 * wB,
+      );
+      set("C_Spine_a", 0.06 * wF + 0.14 * wB, -0.1 * sn * fAmt + 0.1 * sAmt, 0.12 * sn * sAmt + 0.1 * sAmt);
+      set("C_Spine_b", 0.03 * k, -0.05 * sn * fAmt, 0.06 * sn * sAmt);
+      set(
+        "L_UpperLeg_a",
+        -0.12 - swing * sn * fAmt + 0.28 * wB,
+        0.08 * sn * sAmt,
+        0.78 * sn * sAmt + 0.42 * wL - 0.18 * wR,
+      );
+      set(
+        "R_UpperLeg_a",
+        -0.12 + swing * sn * fAmt + 0.28 * wB,
+        -0.08 * sn * sAmt,
+        -0.78 * sn * sAmt - 0.42 * wR + 0.18 * wL,
+      );
+      set("L_Foreleg_a", 0.16 + 0.78 * liftF * absF + 0.5 * liftR * absS, 0, 0);
+      set("R_Foreleg_a", 0.16 + 0.78 * liftR * absF + 0.5 * liftF * absS, 0, 0);
+      set("L_Foot_a", 0.24 * sn * fAmt, 0, 0.12 * sAmt);
+      set("R_Foot_a", -0.24 * sn * fAmt, 0, -0.12 * sAmt);
+      set("L_Shoulder_a", 0.06 * k, 0.05 * sAmt, 0.12 * k + 0.22 * wL + 0.08 * wR);
+      set("R_Shoulder_a", 0.06 * k, -0.05 * sAmt, -0.12 * k - 0.22 * wR - 0.08 * wL);
+      set("L_UpperArm_a", 0.7 * sn * fAmt + 0.12 * absS, 0.12 * sAmt, 0.16 * k + 0.32 * wL);
+      set("R_UpperArm_a", -0.7 * sn * fAmt + 0.12 * absS, -0.12 * sAmt, -0.16 * k - 0.32 * wR);
+      set("L_Forearm_a", 0.24 * k + 0.16 * wB, 0, 0);
+      set("R_Forearm_a", 0.24 * k + 0.16 * wB, 0, 0);
+    } else if (mode === "crouch") {
+      const swing = 0.38;
+      set(
+        "C_Hip_a",
+        0.16,
+        0.1 * sn * sAmt,
+        0.08 * sn * fAmt,
+        -0.03 * sAmt,
+        -0.64 + 0.025 * Math.abs(cs) * k,
+        -0.05 + 0.03 * wB,
+      );
+      set("C_Spine_a", 0.18 + 0.06 * wB, -0.08 * sn * fAmt, 0.07 * sn * sAmt);
+      set("C_Spine_b", 0.1, 0, 0.04 * sAmt);
+      set(
+        "L_UpperLeg_a",
+        -1.12 - swing * sn * fAmt,
+        0.04 * sn * sAmt,
+        0.36 * sn * sAmt + 0.22 * wL - 0.1 * wR,
+      );
+      set(
+        "R_UpperLeg_a",
+        -1.12 + swing * sn * fAmt,
+        -0.04 * sn * sAmt,
+        -0.36 * sn * sAmt - 0.22 * wR + 0.1 * wL,
+      );
+      set("L_Foreleg_a", 1.72 + 0.28 * liftF * k, 0, 0);
+      set("R_Foreleg_a", 1.72 + 0.28 * liftR * k, 0, 0);
+      set("L_Foot_a", 0.34 + 0.14 * sn * fAmt, 0, 0.08 * sAmt);
+      set("R_Foot_a", 0.34 - 0.14 * sn * fAmt, 0, -0.08 * sAmt);
+      set("L_Shoulder_a", 0.16, 0.08, 0.24 + 0.16 * wL);
+      set("R_Shoulder_a", 0.16, -0.08, -0.24 - 0.16 * wR);
+      set("L_UpperArm_a", 0.34 * sn * fAmt - 0.2, 0.14 * sAmt, 0.24 + 0.2 * wL);
+      set("R_UpperArm_a", -0.34 * sn * fAmt - 0.2, -0.14 * sAmt, -0.24 - 0.2 * wR);
+      set("L_Forearm_a", 0.52, 0, 0);
+      set("R_Forearm_a", 0.52, 0, 0);
+    } else {
+      const reach = 0.55;
+      set(
+        "C_Hip_a",
+        1.32,
+        0.12 * sn * sAmt,
+        0.08 * sn * fAmt,
+        0.03 * sAmt,
+        -0.72 + 0.035 * Math.abs(cs) * k,
+        0.14 + 0.05 * Math.abs(sn) * absF,
+      );
+      set("C_Spine_a", 0.14, -0.08 * sn * fAmt, 0.1 * sn * sAmt);
+      set("C_Spine_b", 0.1, 0, 0.05 * sAmt);
+      set("C_Neck_a", -0.55, 0.06 * sn * sAmt, 0);
+      set(
+        "L_UpperLeg_a",
+        -0.28 - reach * 0.45 * sn * fAmt,
+        0,
+        0.16 + 0.34 * sn * sAmt + 0.2 * wL - 0.1 * wR,
+      );
+      set(
+        "R_UpperLeg_a",
+        -0.28 + reach * 0.45 * sn * fAmt,
+        0,
+        -0.16 - 0.34 * sn * sAmt - 0.2 * wR + 0.1 * wL,
+      );
+      set("L_Foreleg_a", 0.58 + 0.32 * liftF * k, 0, 0);
+      set("R_Foreleg_a", 0.58 + 0.32 * liftR * k, 0, 0);
+      set("L_Foot_a", 0.22, 0, 0.08 * sAmt);
+      set("R_Foot_a", 0.22, 0, -0.08 * sAmt);
+      set("L_Shoulder_a", 0.32, 0.18, 0.52 + 0.16 * wL);
+      set("R_Shoulder_a", 0.32, -0.18, -0.52 - 0.16 * wR);
+      set("L_UpperArm_a", -0.82 - reach * sn * fAmt + 0.2 * wL, 0.24 + 0.22 * sAmt, 0.4);
+      set("R_UpperArm_a", -0.82 + reach * sn * fAmt + 0.2 * wR, -0.24 - 0.22 * sAmt, -0.4);
+      set("L_Forearm_a", 0.64 + 0.32 * liftR * k, 0, 0);
+      set("R_Forearm_a", 0.64 + 0.32 * liftF * k, 0, 0);
+    }
+  }
+
+  /** FPS look pitch (neg = look down). Curls spine/neck so the torso rises into view. */
+  setBodyLook(pitch: number) {
+    this.bodyLookOn = true;
+    const down = THREE.MathUtils.clamp(-pitch, -0.2, 1.35);
+    this.bodySpineQ.setFromEuler(_e.set(down * 0.22, 0, 0, "XYZ"));
+    this.bodyNeckQ.setFromEuler(_e.set(down * 0.42, 0, 0, "XYZ"));
+    this.bodyHeadQ.setFromEuler(_e.set(down * 0.2, 0, 0, "XYZ"));
+  }
+
+  clearBodyLook() {
+    this.bodyLookOn = false;
+    this.bodySpineQ.identity();
+    this.bodyNeckQ.identity();
+    this.bodyHeadQ.identity();
+  }
+
   setViewPoint(point: THREE.Vector3) {
     this.viewPoint.copy(point);
   }
@@ -1319,13 +1614,13 @@ export class SoftSkeleton {
       twistAlong("R_Forearm_a", "R_Hand_a", -0.35);
       twistAlong("R_Hand_a", "R_Middle_a", -0.5);
     } else if (id === "squat") {
-      set("C_Hip_a", 0.08, 0, 0, 0, -0.18, -0.06);
-      set("L_UpperLeg_a", -1.02, 0, 0);
-      set("L_Foreleg_a", 1.72, 0, 0);
-      set("L_Foot_a", 0.28, 0, 0);
-      set("R_UpperLeg_a", -1.02, 0, 0);
-      set("R_Foreleg_a", 1.72, 0, 0);
-      set("R_Foot_a", 0.28, 0, 0);
+      set("C_Hip_a", 0.12, 0, 0, 0, -0.55, -0.06);
+      set("L_UpperLeg_a", -1.05, 0, 0);
+      set("L_Foreleg_a", 1.7, 0, 0);
+      set("L_Foot_a", 0.32, 0, 0);
+      set("R_UpperLeg_a", -1.05, 0, 0);
+      set("R_Foreleg_a", 1.7, 0, 0);
+      set("R_Foot_a", 0.32, 0, 0);
     } else if (id === "splits") {
       set("C_Hip_a", 0.05, 0.1, -0.5);
       set("C_Spine_a", 0.06, 0.05, 0.34);
@@ -1368,6 +1663,9 @@ export class SoftSkeleton {
       set("R_Hand_a", 0.701, -0.023, 0.66);
       twistAlong("R_Forearm_a", "R_Hand_a", 0.2);
       twistAlong("R_Hand_a", "R_Middle_a", -0.32);
+    } else if (LOCO_POSES[id]) {
+      const spec = LOCO_POSES[id]!;
+      this.applyLocomotion(spec.mode, spec.fwd, spec.side, 1, Math.PI * 0.35);
     } else if (id === "navelPoke") {
       // Parked: index along world -Z, tip ~5 cm in front of the navel.
       // Inserted: same pointing, driven by shoulder/elbow/wrist/knuckle FK — never wrist translate.
@@ -1801,6 +2099,23 @@ export class SoftSkeleton {
           _q2.copy(targetQ).slerp(this.gazeEyeRQ, this.gazeEyeBlend);
           targetQ = _q2;
         }
+      }
+      if (!locked && this.bodyLookOn) {
+        const extra =
+          i === this.iNeck ? this.bodyNeckQ : i === this.iHead ? this.bodyHeadQ : i === this.iSpine ? this.bodySpineQ : null;
+        if (extra) {
+          _lookQ.copy(targetQ).multiply(extra);
+          targetQ = _lookQ;
+        }
+      }
+      if (
+        !locked &&
+        this.bodyLookOn &&
+        (i === this.iNeck || i === this.iHead || i === this.iSpine)
+      ) {
+        q.slerp(targetQ, 1 - Math.exp(-18 * d));
+        qv.set(0, 0, 0);
+        continue;
       }
       if (
         !locked &&

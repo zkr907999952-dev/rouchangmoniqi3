@@ -32,10 +32,11 @@ import {
   Wind,
   Zap,
   ZoomIn,
+  User,
 } from "lucide-react";
 import * as Slider from "@radix-ui/react-slider";
 import { cn } from "@/lib/utils";
-import { PRESETS, useStudio, type CamFocus, type PresetId, type StudioParams, FP_FOV_MIN, FP_FOV_MAX } from "@/lib/studio-store";
+import { PRESETS, useStudio, type CamFocus, type PresetId, type StudioParams, FP_FOV_MIN, FP_FOV_MAX, FP_LOOK_SPEED_MIN, FP_LOOK_SPEED_MAX } from "@/lib/studio-store";
 import { EXPRESSIONS, HAND_GESTURES, POSES } from "@/lib/softbody/soft-skeleton";
 
 const SLIDERS: {
@@ -380,6 +381,7 @@ export function Overlay() {
               </div>
               <div className="flex flex-col gap-3">
                 <FpFovSlider />
+                <FpLookSlider />
                 {SLIDERS.map((item) => (
                   <SliderRow key={item.id} {...item} />
                 ))}
@@ -1493,7 +1495,8 @@ function CameraMenu({ onClose }: { onClose: () => void }) {
   const setCameraZoom = useStudio((s) => s.setCameraZoom);
   const panCamera = useStudio((s) => s.panCamera);
   const firstPerson = useStudio((s) => s.firstPerson);
-  const setFirstPerson = useStudio((s) => s.setFirstPerson);
+  const fpView = useStudio((s) => s.fpView);
+  const setFpView = useStudio((s) => s.setFpView);
   const fpLookLocked = useStudio((s) => s.fpLookLocked);
   const abdomenXray = useStudio((s) => s.abdomenXray);
   const setParam = useStudio((s) => s.setParam);
@@ -1566,28 +1569,46 @@ function CameraMenu({ onClose }: { onClose: () => void }) {
         </button>
       </div>
       <div className="min-h-0 flex-1 overflow-y-auto overscroll-y-contain p-3" style={{ WebkitOverflowScrolling: "touch" }}>
-        <p className="mb-1.5 text-xs text-muted">第一人称</p>
+        <p className="mb-1.5 text-xs text-muted">视角模式</p>
         <button
           type="button"
-          onClick={() => setFirstPerson(!firstPerson)}
+          onClick={() => setFpView("observe")}
           className={cn(
             "mb-1 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md border text-xs font-medium",
-            firstPerson
+            firstPerson && fpView === "observe"
               ? "border-accent bg-accent/80 text-accent-fg"
               : "border-border/40 bg-surface/30 text-muted hover:text-fg",
           )}
         >
           <Crosshair className="size-3.5" />
-          {firstPerson ? "第一人称 · 开" : "第一人称 · 关"}
+          {firstPerson && fpView === "observe" ? "第一人称观察 · 开" : "第一人称观察"}
+        </button>
+        <button
+          type="button"
+          onClick={() => setFpView("body")}
+          className={cn(
+            "mb-1 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md border text-xs font-medium",
+            firstPerson && fpView === "body"
+              ? "border-accent bg-accent/80 text-accent-fg"
+              : "border-border/40 bg-surface/30 text-muted hover:text-fg",
+          )}
+        >
+          <User className="size-3.5" />
+          {firstPerson && fpView === "body" ? "角色视角 · 开" : "角色视角"}
         </button>
         <p className="mb-3 text-[11px] leading-snug text-muted">
           {firstPerson
-            ? fpLookLocked
-              ? "视角已锁定 · 再点右键或 Esc 解除"
-              : "WASD 移动 · 空格跳 · C 点按蹲 · 长按匍匐 · 滚轮缩放 · 右键锁定视角"
-            : "开启后可在房间内走动，右键锁定鼠标视角"}
+            ? fpView === "body"
+              ? fpLookLocked
+                ? "角色视角已锁定 · 再点右键或 Esc 解除 · 低头可见身体"
+                : "控制角色 · WASD 移动 · 空格跳 · C 蹲 · 低头看身体 · 右键锁定视角"
+              : fpLookLocked
+                ? "观察视角已锁定 · 再点右键或 Esc 解除"
+                : "WASD 移动 · 空格跳 · C 点按蹲 · 长按匍匐 · 滚轮缩放 · 右键锁定视角"
+            : "观察：在房间走动看角色。角色视角：以角色头部为镜头，身体跟随转向。"}
         </p>
         <FpFovSlider />
+        <FpLookSlider />
         {firstPerson ? null : (
           <>
         <p className="mb-1.5 text-xs text-muted">视角预设</p>
@@ -1736,6 +1757,7 @@ function CameraMenu({ onClose }: { onClose: () => void }) {
 
 function FirstPersonHud() {
   const firstPerson = useStudio((s) => s.firstPerson);
+  const fpView = useStudio((s) => s.fpView);
   const lookLocked = useStudio((s) => s.fpLookLocked);
   const crouch = useStudio((s) => s.fpCrouch);
   const prone = useStudio((s) => s.fpProne);
@@ -1814,6 +1836,9 @@ function FirstPersonHud() {
         <span className="absolute top-1/2 left-0 h-px w-full bg-fg/70" />
         <span className="absolute top-0 left-1/2 h-full w-px bg-fg/70" />
       </div>
+      <p className="pointer-events-none absolute top-5 left-1/2 z-20 -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-2.5 py-0.5 text-[10px] tracking-wide text-muted">
+        {fpView === "body" ? "角色视角" : "观察"}
+      </p>
       <FpZoomBar />
       {lookLocked ? (
         <p className="pointer-events-none absolute bottom-6 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-3 py-1 text-[11px] text-muted sm:block">
@@ -1911,6 +1936,34 @@ function FpFovSlider() {
         step={1}
         onValueChange={([v]) => {
           if (typeof v === "number") setFpFov(v);
+        }}
+        className="relative flex h-5 w-full touch-none items-center"
+      >
+        <Slider.Track className="relative h-1 grow rounded-full bg-surface-2/50">
+          <Slider.Range className="absolute h-full rounded-full bg-accent" />
+        </Slider.Track>
+        <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+      </Slider.Root>
+    </label>
+  );
+}
+
+function FpLookSlider() {
+  const speed = useStudio((s) => s.fpLookSpeed);
+  const setFpLookSpeed = useStudio((s) => s.setFpLookSpeed);
+  return (
+    <label className="mb-3 block">
+      <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+        <span>视角速度</span>
+        <span className="tabular-nums text-fg">{Math.round(speed * 100)}%</span>
+      </span>
+      <Slider.Root
+        value={[speed]}
+        min={FP_LOOK_SPEED_MIN}
+        max={FP_LOOK_SPEED_MAX}
+        step={0.05}
+        onValueChange={([v]) => {
+          if (typeof v === "number") setFpLookSpeed(v);
         }}
         className="relative flex h-5 w-full touch-none items-center"
       >

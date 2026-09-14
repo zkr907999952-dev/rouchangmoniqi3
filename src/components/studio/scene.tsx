@@ -6,6 +6,7 @@ import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Figure } from "./figure";
 import { useStudio, type CamFocus } from "@/lib/studio-store";
 import { CrouchHold, FpInput } from "@/lib/fp-control";
+import { fpLive } from "@/lib/fp-pose";
 
 export default function Scene({
   character,
@@ -51,6 +52,7 @@ export default function Scene({
         <Suspense fallback={null}>
           <Bedroom room={room} />
           <StudioLights />
+          <BodyFillLight />
           <Figure
             controlsRef={controlsRef}
             character={character}
@@ -487,8 +489,47 @@ const FP_WALK = 1.65;
 const FP_AIR = 1.15;
 const FP_JUMP = 3.15;
 const FP_GRAV = 14;
-const FP_SENS = 0.00215;
+const FP_SENS = 0.0017;
+const FP_TOUCH_SENS = 0.00305;
+const FP_PITCH_LIM = 1.18;
 const FP_BOUNDS = { x: 1.85, zMin: -1.55, zMax: 2.85, bodyR: 0.28 };
+const ORBIT_HOME = { px: 0.28, py: 1.18, pz: 2.35, tx: 0, ty: 1.06, tz: 0.1, fov: 34 };
+const _fpRight = new THREE.Vector3();
+const _fpFwd = new THREE.Vector3();
+const _fpUp = new THREE.Vector3();
+const _fpZ = new THREE.Vector3();
+const _fpAim = new THREE.Vector3();
+const _fpMat = new THREE.Matrix4();
+
+function lookDirFromYawPitch(yaw: number, pitch: number, out: THREE.Vector3) {
+  const cy = Math.cos(pitch);
+  out.set(-Math.sin(yaw) * cy, Math.sin(pitch), -Math.cos(yaw) * cy);
+  return out;
+}
+
+/** Roll-free look. Right axis stays horizontal from yaw so looking down never mirrors. */
+function applyLookDir(camera: THREE.Camera, dir: THREE.Vector3, yaw: number) {
+  _fpFwd.copy(dir);
+  const len = _fpFwd.length();
+  if (len < 1e-6) _fpFwd.set(-Math.sin(yaw), 0, -Math.cos(yaw));
+  else _fpFwd.multiplyScalar(1 / len);
+  _fpRight.set(Math.cos(yaw), 0, -Math.sin(yaw));
+  _fpUp.crossVectors(_fpRight, _fpFwd);
+  if (_fpUp.lengthSq() < 1e-8) {
+    _fpUp.set(0, 1, 0);
+    _fpRight.crossVectors(_fpFwd, _fpUp).normalize();
+    _fpUp.crossVectors(_fpRight, _fpFwd);
+  } else {
+    _fpUp.normalize();
+  }
+  _fpZ.copy(_fpFwd).multiplyScalar(-1);
+  _fpMat.makeBasis(_fpRight, _fpUp, _fpZ);
+  camera.quaternion.setFromRotationMatrix(_fpMat);
+}
+
+function applyFpLook(camera: THREE.Camera, yaw: number, pitch: number) {
+  applyLookDir(camera, lookDirFromYawPitch(yaw, pitch, _fpFwd), yaw);
+}
 
 function FirstPersonRig({
   controlsRef,
@@ -497,6 +538,7 @@ function FirstPersonRig({
 }) {
   const { camera, gl } = useThree();
   const firstPerson = useStudio((s) => s.firstPerson);
+  const fpView = useStudio((s) => s.fpView);
   const lookLocked = useStudio((s) => s.fpLookLocked);
   const fpFov = useStudio((s) => s.fpFov);
   const pos = useRef(new THREE.Vector3(0.12, 0, 1.92));
@@ -556,50 +598,74 @@ function FirstPersonRig({
     const persp = camera as THREE.PerspectiveCamera;
     if (firstPerson) {
       const c = controlsRef.current;
-      orbitSnap.current = {
-        px: camera.position.x,
-        py: camera.position.y,
-        pz: camera.position.z,
-        tx: c?.target.x ?? 0,
-        ty: c?.target.y ?? 1.06,
-        tz: c?.target.z ?? 0.1,
-        fov: persp.fov,
-      };
-      pos.current.set(0.12, 0, 1.92);
+      if (!orbitSnap.current) {
+        orbitSnap.current = {
+          px: camera.position.x,
+          py: camera.position.y,
+          pz: camera.position.z,
+          tx: c?.target.x ?? 0,
+          ty: c?.target.y ?? 1.06,
+          tz: c?.target.z ?? 0.1,
+          fov: persp.fov,
+        };
+      }
+      const body = fpView === "body";
+      if (body) {
+        pos.current.set(0, 0, 0);
+        yaw.current = Math.PI;
+        pitch.current = -0.72;
+        fpLive.eyeX = 0;
+        fpLive.eyeY = 1.46;
+        fpLive.eyeZ = 0.22;
+        fpLive.chestX = 0;
+        fpLive.chestY = 1.14;
+        fpLive.chestZ = 0.12;
+        fpLive.headReady = true;
+        camera.position.set(0, 1.46, 0.22);
+        lookDirFromYawPitch(Math.PI, -0.72, _fpFwd);
+        applyLookDir(camera, _fpFwd, Math.PI);
+      } else {
+        pos.current.set(0.12, 0, 1.92);
+        yaw.current = 0;
+        pitch.current = -0.08;
+        camera.position.set(0.12, FP_STAND, 1.92);
+        camera.lookAt(0.12, FP_STAND - 0.08, 0.92);
+      }
       velY.current = 0;
-      yaw.current = 0;
-      pitch.current = -0.08;
       eye.current = FP_STAND;
       grounded.current = true;
       persp.fov = useStudio.getState().fpFov;
-      persp.near = 0.08;
+      persp.near = body ? 0.04 : 0.08;
       persp.updateProjectionMatrix();
-      camera.position.set(0.12, FP_STAND, 1.92);
-      camera.lookAt(0.12, FP_STAND - 0.08, 0.92);
+      fpLive.active = true;
+      fpLive.view = fpView;
       input.current.gate = crouchGate.current;
       input.current.attach();
     } else {
       crouchGate.current?.reset();
       input.current.detach();
+      fpLive.active = false;
+      fpLive.headReady = false;
       if (document.pointerLockElement) document.exitPointerLock();
       useStudio.getState().setFpLookLocked(false);
       const snap = orbitSnap.current;
-      if (snap) {
-        camera.position.set(snap.px, snap.py, snap.pz);
-        persp.fov = snap.fov;
-        persp.near = 0.05;
-        persp.updateProjectionMatrix();
-        const c = controlsRef.current;
-        if (c) {
-          c.target.set(snap.tx, snap.ty, snap.tz);
-          c.enabled = true;
-          c.update();
-        }
-        camera.lookAt(snap.tx, snap.ty, snap.tz);
+      orbitSnap.current = null;
+      const home =
+        snap && Math.hypot(snap.px - snap.tx, snap.pz - snap.tz) > 0.45 ? snap : ORBIT_HOME;
+      camera.position.set(home.px, home.py, home.pz);
+      persp.fov = home.fov;
+      persp.near = 0.05;
+      persp.updateProjectionMatrix();
+      const c = controlsRef.current;
+      if (c) {
+        c.target.set(home.tx, home.ty, home.tz);
+        c.enabled = true;
+        c.update();
       }
+      camera.lookAt(home.tx, home.ty, home.tz);
     }
     return () => input.current.detach();
-  }, [firstPerson, camera, controlsRef]);
+  }, [firstPerson, fpView, camera, controlsRef]);
 
   useEffect(() => {
     if (!firstPerson) return;
@@ -670,9 +736,10 @@ function FirstPersonRig({
     };
     const onMouseMove = (e: MouseEvent) => {
       if (!useStudio.getState().fpLookLocked) return;
-      yaw.current -= e.movementX * FP_SENS;
-      pitch.current -= e.movementY * FP_SENS;
-      pitch.current = THREE.MathUtils.clamp(pitch.current, -1.35, 1.35);
+      const sens = FP_SENS * useStudio.getState().fpLookSpeed;
+      yaw.current -= e.movementX * sens;
+      pitch.current -= e.movementY * sens;
+      pitch.current = THREE.MathUtils.clamp(pitch.current, -FP_PITCH_LIM, FP_PITCH_LIM);
     };
     const onPointerDown = (e: PointerEvent) => {
       if (e.button === 2) {
@@ -701,9 +768,9 @@ function FirstPersonRig({
       const dy = e.clientY - t.y;
       t.x = e.clientX;
       t.y = e.clientY;
-      yaw.current -= dx * 0.0045;
-      pitch.current -= dy * 0.0045;
-      pitch.current = THREE.MathUtils.clamp(pitch.current, -1.35, 1.35);
+      yaw.current -= dx * FP_TOUCH_SENS * useStudio.getState().fpLookSpeed;
+      pitch.current -= dy * FP_TOUCH_SENS * useStudio.getState().fpLookSpeed;
+      pitch.current = THREE.MathUtils.clamp(pitch.current, -FP_PITCH_LIM, FP_PITCH_LIM);
     };
     const onPointerUp = (e: PointerEvent) => {
       if (lookTouch.current?.id === e.pointerId) lookTouch.current = null;
@@ -736,6 +803,21 @@ function FirstPersonRig({
   useEffect(() => {
     const probe = {
       getYaw: () => yaw.current,
+      getPitch: () => pitch.current,
+      setPitch: (v: number) => {
+        pitch.current = THREE.MathUtils.clamp(v, -FP_PITCH_LIM, FP_PITCH_LIM);
+      },
+      setLook: (y: number, p: number) => {
+        yaw.current = y;
+        pitch.current = THREE.MathUtils.clamp(p, -FP_PITCH_LIM, FP_PITCH_LIM);
+      },
+      getLookSpeed: () => useStudio.getState().fpLookSpeed,
+      applyLook: (dx: number, dy: number) => {
+        const sens = FP_SENS * useStudio.getState().fpLookSpeed;
+        yaw.current -= dx * sens;
+        pitch.current -= dy * sens;
+        pitch.current = THREE.MathUtils.clamp(pitch.current, -FP_PITCH_LIM, FP_PITCH_LIM);
+      },
       getSpeed: () => speedRef.current,
       getPos: () => pos.current.toArray() as [number, number, number],
       getEye: () => eye.current,
@@ -743,11 +825,21 @@ function FirstPersonRig({
       getProne: () => useStudio.getState().fpProne,
       getDebug: () => ({
         fp: useStudio.getState().firstPerson,
+        view: useStudio.getState().fpView,
         crouch: useStudio.getState().fpCrouch,
         prone: useStudio.getState().fpProne,
         gate: !!crouchGate.current,
         inputGate: !!input.current.gate,
         held: crouchGate.current?.held ?? null,
+        lookSpeed: useStudio.getState().fpLookSpeed,
+        pitch: pitch.current,
+        fov: (camera as THREE.PerspectiveCamera).fov,
+        near: (camera as THREE.PerspectiveCamera).near,
+        aspect: (camera as THREE.PerspectiveCamera).aspect,
+        quat: camera.quaternion.toArray(),
+        canvas: [gl.domElement.width, gl.domElement.height, gl.domElement.clientWidth, gl.domElement.clientHeight],
+        tri: gl.info.render.triangles,
+        calls: gl.info.render.calls,
       }),
       setCrouchHeld: (v: boolean) => crouchGate.current?.setHeld(v),
       setKeys: (codes: string[]) => input.current.setKeys(codes),
@@ -766,6 +858,7 @@ function FirstPersonRig({
     if (!firstPerson) return;
     const d = Math.min(0.05, Math.max(0.001, dt));
     const st = useStudio.getState();
+    const body = st.fpView === "body";
     input.current.stickX = st.fpStickX;
     input.current.stickY = st.fpStickY;
     input.current.crouchHold = st.fpCrouchHeld;
@@ -811,7 +904,7 @@ function FirstPersonRig({
     z = THREE.MathUtils.clamp(z, FP_BOUNDS.zMin, FP_BOUNDS.zMax);
     const br = FP_BOUNDS.bodyR;
     const r2 = x * x + z * z;
-    if (r2 < br * br && pos.current.y < 1.75) {
+    if (!body && r2 < br * br && pos.current.y < 1.75) {
       const r = Math.sqrt(r2) || 1e-6;
       x = (x / r) * br;
       z = (z / r) * br;
@@ -849,17 +942,47 @@ function FirstPersonRig({
     const bobAmp = grounded.current && wishLen > 0.12 ? (prone ? 0.006 : crouched ? 0.01 : 0.018) : 0;
     bob.current = Math.sin(distWalk.current * 14) * bobAmp;
 
-    const lookY = pos.current.y + eye.current + bob.current;
-    camera.position.set(pos.current.x, lookY, pos.current.z);
-    const cy = Math.cos(pitch.current);
-    camera.lookAt(
-      pos.current.x + fx * cy,
-      lookY + Math.sin(pitch.current),
-      pos.current.z + fz * cy,
-    );
+    fpLive.active = true;
+    fpLive.view = body ? "body" : "observe";
+    fpLive.x = pos.current.x;
+    fpLive.y = pos.current.y;
+    fpLive.z = pos.current.z;
+    fpLive.yaw = yaw.current;
+    fpLive.pitch = pitch.current;
+    fpLive.crouched = crouched;
+    fpLive.prone = prone;
+    fpLive.moveFwd = act.moveY;
+    fpLive.moveSide = act.moveX;
+  }, -1);
+
+  useFrame(() => {
+    if (!firstPerson) return;
+    const body = useStudio.getState().fpView === "body";
+    const fx = -Math.sin(yaw.current);
+    const fz = -Math.cos(yaw.current);
+    if (body) {
+      camera.position.set(fpLive.eyeX, fpLive.eyeY + bob.current, fpLive.eyeZ);
+      lookDirFromYawPitch(yaw.current, pitch.current, _fpFwd);
+      const down = THREE.MathUtils.clamp(-pitch.current, 0, FP_PITCH_LIM);
+      const t = THREE.MathUtils.smoothstep(down, 0.12, 0.7);
+      _fpAim.set(
+        fpLive.chestX - camera.position.x,
+        fpLive.chestY - camera.position.y,
+        fpLive.chestZ - camera.position.z,
+      );
+      if (_fpAim.lengthSq() > 1e-8) {
+        _fpAim.normalize();
+        _fpFwd.lerp(_fpAim, t).normalize();
+      }
+      applyLookDir(camera, _fpFwd, yaw.current);
+    } else {
+      const lookY = pos.current.y + eye.current + bob.current;
+      camera.position.set(pos.current.x, lookY, pos.current.z);
+      applyFpLook(camera, yaw.current, pitch.current);
+    }
     const c = controlsRef.current;
     if (c) {
-      c.target.set(pos.current.x + fx * cy, lookY + Math.sin(pitch.current), pos.current.z + fz * cy);
+      c.target.set(camera.position.x + fx, camera.position.y, camera.position.z + fz);
       c.enabled = false;
     }
   });
@@ -878,4 +1001,20 @@ function StudioLights() {
       <pointLight position={[1.4, 1.7, -2.1]} intensity={1.1} distance={4.2} decay={2} color="#ffc98a" />
     </>
   );
+}
+
+function BodyFillLight() {
+  const ref = useRef<THREE.PointLight>(null);
+  const on = useStudio((s) => s.firstPerson && s.fpView === "body");
+  useFrame(() => {
+    const l = ref.current;
+    if (!l) return;
+    if (!on) {
+      l.intensity = 0;
+      return;
+    }
+    l.intensity = 2.4;
+    l.position.set(fpLive.eyeX + 0.04, fpLive.eyeY + 0.1, fpLive.eyeZ + 0.06);
+  });
+  return <pointLight ref={ref} color="#ffd2b6" distance={1.6} decay={2} intensity={0} />;
 }

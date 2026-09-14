@@ -3,7 +3,7 @@ import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { SkeletonUtils } from "three-stdlib";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import { SoftSkeleton, type PoseId, type SkinBinding } from "@/lib/softbody/soft-skeleton";
+import { SoftSkeleton, type PoseId, type SkinBinding, isLocoPose, LOCO_POSES } from "@/lib/softbody/soft-skeleton";
 import { meshMatKey, nudeBones, nudeMapFor } from "@/lib/softbody/nude-rig";
 import { GutPeristalsis } from "@/lib/softbody/peristalsis";
 import { BellyStrike } from "@/lib/softbody/belly-strike";
@@ -12,6 +12,7 @@ import { FistPlay } from "@/lib/softbody/fist-play";
 import { BayonetPlay } from "@/lib/softbody/bayonet-play";
 import { applyNavelMorph, buildNavelMorph } from "@/lib/softbody/navel-morph";
 import { useStudio, navelInsertMorph } from "@/lib/studio-store";
+import { fpLive } from "@/lib/fp-pose";
 
 const _hit = new THREE.Vector3();
 const _normal = new THREE.Vector3();
@@ -25,6 +26,8 @@ const _box = new THREE.Box3();
 const _size = new THREE.Vector3();
 const _center = new THREE.Vector3();
 const _local = new THREE.Vector3();
+const _eye = new THREE.Vector3();
+const _bodyE = new THREE.Euler();
 
 const TORSO_RE = /skin|dress|body|torso|outfit|cloth|top|bottom|nude|mesh/i;
 const SKIP_BIND_RE = /charm|wing/i;
@@ -1185,6 +1188,7 @@ function FittedFigure({
   const bonesRef = useRef<THREE.LineSegments>(null);
   const exprRef = useRef(useStudio.getState().expression);
   const poseRef = useRef(useStudio.getState().pose);
+  const bodyWasOn = useRef(false);
   const gestLRef = useRef(useStudio.getState().handGestureL);
   const gestRRef = useRef(useStudio.getState().handGestureR);
   const grab = useRef<{
@@ -1275,6 +1279,7 @@ function FittedFigure({
     const boundGeos: THREE.BufferGeometry[] = [];
     const torsoBinds: SkinBinding[] = [];
     const weightViews: { mesh: THREE.Mesh; orig: THREE.Material | THREE.Material[]; weight: THREE.Material }[] = [];
+    const hideMeshes: THREE.Mesh[] = [];
 
     const bindMesh = (mesh: THREE.Mesh, hint?: string) => {
       let geo = mesh.geometry as THREE.BufferGeometry;
@@ -1363,6 +1368,11 @@ function FittedFigure({
     body.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
       if (!mesh.isMesh || !mesh.geometry) return;
+      const hint = bindHint(mesh);
+      const k = meshKey(mesh);
+      if (hint === "hair" || hint === "face" || hint === "eye" || hint === "mouth" || /charm|lash|头发|hair/.test(k)) {
+        hideMeshes.push(mesh);
+      }
       if (!shouldBind(mesh)) {
         mesh.raycast = () => {};
         return;
@@ -1560,6 +1570,8 @@ function FittedFigure({
       moveArrows,
       boneLines,
       jointBuf,
+      hideMeshes,
+      headBone: skeleton.names.indexOf("C_Head_a"),
     };
   }, [character, intestines, pelvis, arm, bayonet, bayonetLong]);
 
@@ -1678,6 +1690,39 @@ function FittedFigure({
       poseRef.current = s.pose;
       setup.skeleton.setPose(s.pose);
     }
+    const bodyOn = s.firstPerson && s.fpView === "body";
+    if (bodyOn) {
+      setup.root.position.set(fpLive.x, fpLive.y, fpLive.z);
+      _bodyE.set(0, fpLive.yaw + Math.PI, 0, "YXZ");
+      setup.root.quaternion.setFromEuler(_bodyE);
+      setup.root.updateMatrixWorld(true);
+      setup.skeleton.setBodyLook?.(s.fpProne ? 0 : fpLive.pitch);
+      setup.skeleton.tickLocomotion(dt, {
+        mode: s.fpProne ? "prone" : s.fpCrouch ? "crouch" : "stand",
+        fwd: fpLive.moveFwd,
+        side: fpLive.moveSide,
+        mag: Math.min(1, Math.hypot(fpLive.moveFwd, fpLive.moveSide)),
+      });
+    } else {
+      setup.root.position.set(0, 0, 0);
+      setup.root.quaternion.identity();
+      setup.skeleton.clearBodyLook?.();
+      if (bodyWasOn.current) {
+        setup.skeleton.setPose(s.pose);
+        poseRef.current = s.pose;
+      }
+      if (isLocoPose(s.pose)) {
+        const spec = LOCO_POSES[s.pose]!;
+        setup.skeleton.tickLocomotion(dt, {
+          mode: spec.mode,
+          fwd: spec.fwd,
+          side: spec.side,
+          mag: 1,
+        });
+      }
+    }
+    bodyWasOn.current = bodyOn;
+    for (const mesh of setup.hideMeshes ?? []) mesh.visible = !bodyOn;
     if (s.handGestureL !== gestLRef.current) {
       gestLRef.current = s.handGestureL;
       setup.skeleton.setHandGesture("L", s.handGestureL);
@@ -1797,7 +1842,7 @@ function FittedFigure({
     _target.copy(camera.position);
     setup.root.worldToLocal(_target);
     setup.skeleton.setViewPoint(_target);
-    if (s.gazeFollow) {
+    if (s.gazeFollow && !bodyOn) {
       setup.skeleton.setGazeTarget(_target);
     } else {
       setup.skeleton.setGazeTarget(null);
@@ -1960,6 +2005,23 @@ function FittedFigure({
 
     energyTick.current += 1;
     writeBindings();
+    if (bodyOn) {
+      setup.skeleton.fpEyeLocal(_eye);
+      setup.root.localToWorld(_eye);
+      fpLive.eyeX = _eye.x;
+      fpLive.eyeY = _eye.y;
+      fpLive.eyeZ = _eye.z;
+      if (typeof setup.skeleton.fpChestLocal === "function") setup.skeleton.fpChestLocal(_eye);
+      else {
+        _eye.copy(setup.navel);
+        _eye.y += 0.08;
+      }
+      setup.root.localToWorld(_eye);
+      fpLive.chestX = _eye.x;
+      fpLive.chestY = _eye.y;
+      fpLive.chestZ = _eye.z;
+      fpLive.headReady = true;
+    }
     if (energyTick.current % 8 === 0) s.setEnergy(setup.skeleton.energy);
     const deforming =
       Boolean(grab.current?.active) ||
@@ -2136,6 +2198,76 @@ function FittedFigure({
       vela.setFirstPerson = (on: boolean) => {
         useStudio.getState().setFirstPerson(on);
         return useStudio.getState().firstPerson;
+      };
+      vela.setFpView = (view: "observe" | "body") => {
+        useStudio.getState().setFpView(view);
+        return { fp: useStudio.getState().firstPerson, view: useStudio.getState().fpView };
+      };
+      vela.setFpCrouch = (on: boolean) => {
+        useStudio.getState().setFpCrouch(on);
+        if (on) useStudio.getState().setFpProne(false);
+        return useStudio.getState().fpCrouch;
+      };
+      vela.setFpProne = (on: boolean) => {
+        useStudio.getState().setFpProne(on);
+        return useStudio.getState().fpProne;
+      };
+      vela.bodyDebug = () => {
+        const hi = setup.headBone;
+        const rest = hi >= 0
+          ? [setup.skeleton.rest[hi * 3], setup.skeleton.rest[hi * 3 + 1], setup.skeleton.rest[hi * 3 + 2]]
+          : null;
+        const box = new THREE.Box3();
+        for (const m of setup.torsoMeshes) box.expandByObject(m);
+        const st = useStudio.getState();
+        return {
+          view: st.fpView,
+          fp: st.firstPerson,
+          crouch: st.fpCrouch,
+          prone: st.fpProne,
+          lookSpeed: st.fpLookSpeed,
+          hide: setup.hideMeshes.filter((m) => !m.visible).map((m) => m.name || meshKey(m)),
+          hideCount: setup.hideMeshes.length,
+          root: setup.root.position.toArray(),
+          rotY: setup.root.rotation.y,
+          cam: camera.position.toArray(),
+          eye: [fpLive.eyeX, fpLive.eyeY, fpLive.eyeZ],
+          chest: [fpLive.chestX, fpLive.chestY, fpLive.chestZ],
+          headReady: fpLive.headReady,
+          move: [fpLive.moveFwd, fpLive.moveSide],
+          loco: setup.skeleton.dumpLoco(),
+          restHead: rest,
+          navel: setup.navel.toArray(),
+          torso: {
+            min: box.min.toArray().map((n) => +n.toFixed(3)),
+            max: box.max.toArray().map((n) => +n.toFixed(3)),
+          },
+        };
+      };
+      vela.frameFigure = (mode?: string) => {
+        if (mode === "crawl") {
+          camera.position.set(1.35, 0.72, 1.15);
+          camera.lookAt(0, 0.22, 0.45);
+          if (controlsRef.current) controlsRef.current.target.set(0, 0.22, 0.45);
+        } else if (mode === "crouch" || mode === "side") {
+          camera.position.set(1.45, 0.95, 1.35);
+          camera.lookAt(0, 0.7, 0.08);
+          if (controlsRef.current) controlsRef.current.target.set(0, 0.7, 0.08);
+        } else if (mode === "strafe") {
+          camera.position.set(0.12, 1.1, 2.55);
+          camera.lookAt(0, 0.9, 0.05);
+          if (controlsRef.current) controlsRef.current.target.set(0, 0.9, 0.05);
+        } else if (mode === "walk") {
+          camera.position.set(1.55, 1.02, 1.25);
+          camera.lookAt(0, 0.88, 0.08);
+          if (controlsRef.current) controlsRef.current.target.set(0, 0.88, 0.08);
+        } else {
+          camera.position.set(1.2, 1.08, 1.85);
+          camera.lookAt(0, 0.9, 0.06);
+          if (controlsRef.current) controlsRef.current.target.set(0, 0.9, 0.06);
+        }
+        if (controlsRef.current) controlsRef.current.update();
+        return camera.position.toArray();
       };
       vela.setNavelInsert = (t: number) => {
         useStudio.getState().setNavelInsert(t);

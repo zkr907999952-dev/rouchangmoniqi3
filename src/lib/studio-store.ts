@@ -1,5 +1,6 @@
 import { create } from "zustand";
 import type { ExpressionId, HandGesture, HandSide, PoseId } from "@/lib/softbody/soft-skeleton";
+import type { FpViewMode } from "@/lib/fp-pose";
 
 export type PresetId = "soft" | "firm" | "jelly" | "athletic";
 export type InteractMode = "drag" | "pose" | "strike" | "fist" | "bayonet" | "navel";
@@ -83,6 +84,9 @@ export const NAVEL_CONTACT_T = 0.5;
 export const FP_FOV_MIN = 28;
 export const FP_FOV_MAX = 100;
 export const FP_FOV_DEFAULT = 62;
+export const FP_LOOK_SPEED_MIN = 0.25;
+export const FP_LOOK_SPEED_MAX = 2;
+export const FP_LOOK_SPEED_DEFAULT = 0.9;
 export const NAVEL_DEPTH_BASE = 0.06;
 export const NAVEL_DIA_BASE = 0.42;
 export const NAVEL_DEPTH_RATIO_DEFAULT = 0.7;
@@ -371,6 +375,7 @@ type StudioState = StudioParams & {
   camFocus: CamFocus | null;
   camCmd: CamCmd | null;
   firstPerson: boolean;
+  fpView: FpViewMode;
   fpLookLocked: boolean;
   fpCrouch: boolean;
   fpProne: boolean;
@@ -380,6 +385,7 @@ type StudioState = StudioParams & {
   fpJumpNonce: number;
   fpInteractNonce: number;
   fpFov: number;
+  fpLookSpeed: number;
   setParam: <K extends keyof StudioParams>(key: K, value: StudioParams[K]) => void;
   applyPreset: (id: PresetId) => void;
   setInteractMode: (mode: InteractMode) => void;
@@ -417,7 +423,8 @@ type StudioState = StudioParams & {
   setCamFocus: (focus: CamFocus) => void;
   setCameraZoom: (dist: number) => void;
   panCamera: (dx: number, dy: number, dz: number) => void;
-  setFirstPerson: (v: boolean) => void;
+  setFirstPerson: (v: boolean, view?: FpViewMode) => void;
+  setFpView: (v: FpViewMode) => void;
   setFpLookLocked: (v: boolean) => void;
   setFpCrouch: (v: boolean) => void;
   setFpProne: (v: boolean) => void;
@@ -426,6 +433,7 @@ type StudioState = StudioParams & {
   tapFpJump: () => void;
   tapFpInteract: () => void;
   setFpFov: (v: number) => void;
+  setFpLookSpeed: (v: number) => void;
   shake: () => void;
   fireStrike: (point?: [number, number, number] | null) => void;
   resetSim: () => void;
@@ -479,6 +487,7 @@ export const useStudio = create<StudioState>((set) => ({
   camFocus: null,
   camCmd: null,
   firstPerson: false,
+  fpView: "observe",
   fpLookLocked: false,
   fpCrouch: false,
   fpProne: false,
@@ -488,6 +497,7 @@ export const useStudio = create<StudioState>((set) => ({
   fpJumpNonce: 0,
   fpInteractNonce: 0,
   fpFov: FP_FOV_DEFAULT,
+  fpLookSpeed: FP_LOOK_SPEED_DEFAULT,
   setParam: (key, value) =>
     set((s) => ({
       ...s,
@@ -588,6 +598,12 @@ export const useStudio = create<StudioState>((set) => ({
       disdain: { expression: "disgust", handGestureL: "rest", handGestureR: "middle" },
       ahegaoPose: { expression: "ahegao", handGestureL: "peace", handGestureR: "peace" },
       squat: { expression: "rest", handGestureL: "rest", handGestureR: "rest" },
+      walk: { expression: "rest", handGestureL: "rest", handGestureR: "rest" },
+      walkBack: { expression: "rest", handGestureL: "rest", handGestureR: "rest" },
+      walkLeft: { expression: "rest", handGestureL: "rest", handGestureR: "rest" },
+      walkRight: { expression: "rest", handGestureL: "rest", handGestureR: "rest" },
+      crouchWalk: { expression: "rest", handGestureL: "rest", handGestureR: "rest" },
+      crawl: { expression: "rest", handGestureL: "rest", handGestureR: "rest" },
       splits: { expression: "rest", handGestureL: "rest", handGestureR: "rest" },
       backbend: { expression: "rest", handGestureL: "rest", handGestureR: "rest" },
       inspectNavel: { expression: "rest", handGestureL: "rest", handGestureR: "two" },
@@ -606,7 +622,13 @@ export const useStudio = create<StudioState>((set) => ({
       const bodyCam: Partial<Record<PoseId, CamSnap>> = {
         ahegaoPose: { px: 0.02, py: 1.42, pz: 1.7, tx: 0, ty: 1.32, tz: 0.04 },
         splits: { px: 0.35, py: 1.05, pz: 4.1, tx: -0.04, ty: 0.92, tz: 0.04 },
-        squat: { px: 0.2, py: 0.95, pz: 3.5, tx: 0, ty: 0.82, tz: 0.04 },
+        squat: { px: 0.35, py: 0.85, pz: 2.6, tx: 0, ty: 0.62, tz: 0.04 },
+        walk: { px: 0.5, py: 1.12, pz: 2.4, tx: 0, ty: 0.92, tz: 0.05 },
+        walkBack: { px: 0.5, py: 1.12, pz: 2.4, tx: 0, ty: 0.92, tz: 0.05 },
+        walkLeft: { px: 0.15, py: 1.12, pz: 2.55, tx: 0, ty: 0.92, tz: 0.04 },
+        walkRight: { px: 0.15, py: 1.12, pz: 2.55, tx: 0, ty: 0.92, tz: 0.04 },
+        crouchWalk: { px: 0.5, py: 0.88, pz: 2.2, tx: 0, ty: 0.6, tz: 0.08 },
+        crawl: { px: 0.85, py: 0.78, pz: 1.7, tx: 0, ty: 0.2, tz: 0.4 },
         backbend: { px: 0.25, py: 0.98, pz: 3.8, tx: 0, ty: 0.88, tz: -0.05 },
         inspectNavel: { px: 0.1, py: 1.08, pz: 0.78, tx: 0, ty: 1.055, tz: 0.1 },
         navelPoke: { px: 0.08, py: 1.08, pz: 0.72, tx: 0, ty: 1.055, tz: 0.1 },
@@ -702,9 +724,10 @@ export const useStudio = create<StudioState>((set) => ({
     set((s) => ({
       camCmd: { nonce: (s.camCmd?.nonce ?? 0) + 1, kind: "pan", dx, dy, dz },
     })),
-  setFirstPerson: (firstPerson) =>
+  setFirstPerson: (firstPerson, view) =>
     set((s) => ({
       firstPerson,
+      fpView: view ?? s.fpView,
       fpLookLocked: firstPerson ? s.fpLookLocked : false,
       fpCrouch: firstPerson ? s.fpCrouch : false,
       fpProne: firstPerson ? s.fpProne : false,
@@ -714,6 +737,30 @@ export const useStudio = create<StudioState>((set) => ({
       autoRotate: firstPerson ? false : s.autoRotate,
       uiHidden: firstPerson ? true : false,
     })),
+  setFpView: (fpView) =>
+    set((s) => {
+      const turningOff = s.firstPerson && s.fpView === fpView;
+      if (turningOff) {
+        return {
+          firstPerson: false,
+          fpLookLocked: false,
+          fpCrouchHeld: false,
+          fpStickX: 0,
+          fpStickY: 0,
+          autoRotate: s.autoRotate,
+          uiHidden: false,
+        };
+      }
+      return {
+        firstPerson: true,
+        fpView,
+        fpCrouchHeld: false,
+        fpStickX: 0,
+        fpStickY: 0,
+        autoRotate: false,
+        uiHidden: true,
+      };
+    }),
   setFpLookLocked: (fpLookLocked) => set({ fpLookLocked }),
   setFpCrouch: (fpCrouch) => set({ fpCrouch }),
   setFpProne: (fpProne) => set({ fpProne }),
@@ -724,6 +771,10 @@ export const useStudio = create<StudioState>((set) => ({
   setFpFov: (fpFov) =>
     set({
       fpFov: Math.max(FP_FOV_MIN, Math.min(FP_FOV_MAX, fpFov)),
+    }),
+  setFpLookSpeed: (fpLookSpeed) =>
+    set({
+      fpLookSpeed: Math.max(FP_LOOK_SPEED_MIN, Math.min(FP_LOOK_SPEED_MAX, fpLookSpeed)),
     }),
   shake: () => set((s) => ({ shakeNonce: s.shakeNonce + 1 })),
   fireStrike: (point = null) =>

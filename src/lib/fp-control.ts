@@ -236,6 +236,11 @@ declare global {
   interface Window {
     __controlsTest?: {
       getYaw: () => number;
+      getPitch?: () => number;
+      setPitch?: (v: number) => void;
+      setLook?: (yaw: number, pitch: number) => void;
+      getLookSpeed?: () => number;
+      applyLook?: (dx: number, dy: number) => void;
       getSpeed: () => number;
       getPos?: () => [number, number, number];
       getEye?: () => number;
