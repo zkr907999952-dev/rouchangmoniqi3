@@ -1711,13 +1711,13 @@ function FittedFigure({
         setup.skeleton.setPose(s.pose);
         poseRef.current = s.pose;
       }
-      if (isLocoPose(s.pose)) {
-        const spec = LOCO_POSES[s.pose]!;
+      if (isLocoPose(s.pose) || s.pose === "squat") {
+        const spec = s.pose === "squat" ? { mode: "crouch" as const, fwd: 0, side: 0 } : LOCO_POSES[s.pose]!;
         setup.skeleton.tickLocomotion(dt, {
           mode: spec.mode,
           fwd: spec.fwd,
           side: spec.side,
-          mag: 1,
+          mag: s.pose === "squat" ? 0 : 1,
         });
       }
     }

@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import type { NativeBone } from "./native-types";
+import locoPack from "./loco-clips.json";
 
 export type SkelParams = {
   stiffness: number;
@@ -152,6 +153,8 @@ const LOCO_BONES = [
   "C_Hip_a",
   "C_Spine_a",
   "C_Spine_b",
+  "C_Spine_c",
+  "C_Spine_d",
   "C_Neck_a",
   "L_UpperLeg_a",
   "R_UpperLeg_a",
@@ -165,7 +168,47 @@ const LOCO_BONES = [
   "R_UpperArm_a",
   "L_Forearm_a",
   "R_Forearm_a",
+  "L_Hand_a",
+  "R_Hand_a",
 ] as const;
+
+type LocoClip = { dur: number; n: number; hipY: number[]; bones: Record<string, number[][]> };
+const LOCO_CLIPS = (locoPack as { clips: Record<string, LocoClip> }).clips;
+
+function pickLocoClip(mode: LocoMode, fwd: number, side: number, mag: number) {
+  const moving = mag > 0.07;
+  const af = Math.abs(fwd);
+  const as = Math.abs(side);
+  if (mode === "prone") return moving ? "crawl" : "proneIdle";
+  if (mode === "crouch") {
+    if (!moving) return "crouchIdle";
+    if (af >= as) return fwd >= 0 ? "crouchWalk" : "crouchBack";
+    return side >= 0 ? "crouchRight" : "crouchLeft";
+  }
+  if (!moving) return null;
+  if (af >= as) return fwd >= 0 ? "walk" : "walkBack";
+  return side >= 0 ? "walkRight" : "walkLeft";
+}
+
+function sampleLocoClip(clip: LocoClip, u: number) {
+  const n = clip.n;
+  const x = (((u % 1) + 1) % 1) * n;
+  const i = Math.floor(x) % n;
+  const j = (i + 1) % n;
+  const t = x - Math.floor(x);
+  const hipY = clip.hipY[i]! + (clip.hipY[j]! - clip.hipY[i]!) * t;
+  const pose: Record<string, [number, number, number]> = {};
+  for (const [name, frames] of Object.entries(clip.bones)) {
+    const a = frames[i]!;
+    const b = frames[j]!;
+    pose[name] = [
+      a[0]! + (b[0]! - a[0]!) * t,
+      a[1]! + (b[1]! - a[1]!) * t,
+      a[2]! + (b[2]! - a[2]!) * t,
+    ];
+  }
+  return { hipY, pose };
+}
 
 type Group = "body" | "face" | "hair" | "foot";
 
@@ -1156,8 +1199,10 @@ export class SoftSkeleton {
     opts: { mode: LocoMode; fwd: number; side: number; mag: number },
   ) {
     const mag = THREE.MathUtils.clamp(opts.mag, 0, 1);
-    const cadence = opts.mode === "prone" ? 6.4 : opts.mode === "crouch" ? 7.6 : 9.8;
-    if (mag > 0.05) this.locoPhase += dt * cadence * (0.5 + mag * 0.72);
+    const clipName = pickLocoClip(opts.mode, opts.fwd, opts.side, mag);
+    const clip = clipName ? LOCO_CLIPS[clipName] : undefined;
+    const dur = clip?.dur ?? 1.2;
+    if (mag > 0.05) this.locoPhase += dt / dur;
     else this.locoPhase += dt * 0.08;
     this.applyLocomotion(opts.mode, opts.fwd, opts.side, mag, this.locoPhase);
     for (const name of LOCO_BONES) {
@@ -1169,27 +1214,20 @@ export class SoftSkeleton {
   }
 
   applyLocomotion(mode: LocoMode, fwd: number, side: number, mag: number, phase: number) {
-    const f = THREE.MathUtils.clamp(fwd, -1, 1);
-    const s = THREE.MathUtils.clamp(side, -1, 1);
-    const k = THREE.MathUtils.smoothstep(THREE.MathUtils.clamp(mag, 0, 1), 0.03, 0.28);
-    const wF = k * Math.max(0, f);
-    const wB = k * Math.max(0, -f);
-    const wR = k * Math.max(0, s);
-    const wL = k * Math.max(0, -s);
-    const fAmt = k * f;
-    const sAmt = k * s;
-    const absF = Math.abs(fAmt);
-    const absS = Math.abs(sAmt);
-    const sn = Math.sin(phase);
-    const cs = Math.cos(phase);
-    const liftF = Math.max(0, -sn);
-    const liftR = Math.max(0, sn);
     for (const name of LOCO_BONES) {
       const i = this.byName[name];
       if (i === undefined) continue;
       this.poseQ[i]!.identity();
       this.poseOff[i]!.set(0, 0, 0);
     }
+    const clipName = pickLocoClip(mode, fwd, side, mag);
+    const clip = clipName ? LOCO_CLIPS[clipName] : undefined;
+    const stanceName = mode === "crouch" ? "crouchIdle" : mode === "prone" ? "proneIdle" : null;
+    const stance = stanceName ? LOCO_CLIPS[stanceName] : undefined;
+    const k = THREE.MathUtils.smoothstep(THREE.MathUtils.clamp(mag, 0, 1), 0.04, 0.22);
+    const u = ((phase % 1) + 1) % 1;
+    const move = clip ? sampleLocoClip(clip, u) : null;
+    const rest = stance ? sampleLocoClip(stance, u) : null;
     const set = (name: string, ex: number, ey: number, ez: number, ox = 0, oy = 0, oz = 0) => {
       const i = this.byName[name];
       if (i === undefined) return;
@@ -1198,113 +1236,23 @@ export class SoftSkeleton {
       this.maxAng[i] = Math.max(this.maxAng[i]!, Math.hypot(ex, ey, ez) + 0.3);
     };
     this.poseSnap = 1;
-    this.locoLast = { mode, fwd: f, side: s, mag: k };
-    if (mode === "stand") {
-      const swing = 0.88;
-      set(
-        "C_Hip_a",
-        0.05 * k + 0.12 * wB - 0.03 * wF,
-        0.18 * sn * sAmt,
-        0.1 * sn * fAmt + 0.12 * sAmt,
-        -0.07 * sAmt,
-        -0.025 * k + 0.03 * Math.abs(cs) * k,
-        0.03 * wB,
-      );
-      set("C_Spine_a", 0.06 * wF + 0.14 * wB, -0.1 * sn * fAmt + 0.1 * sAmt, 0.12 * sn * sAmt + 0.1 * sAmt);
-      set("C_Spine_b", 0.03 * k, -0.05 * sn * fAmt, 0.06 * sn * sAmt);
-      set(
-        "L_UpperLeg_a",
-        -0.12 - swing * sn * fAmt + 0.28 * wB,
-        0.08 * sn * sAmt,
-        0.78 * sn * sAmt + 0.42 * wL - 0.18 * wR,
-      );
-      set(
-        "R_UpperLeg_a",
-        -0.12 + swing * sn * fAmt + 0.28 * wB,
-        -0.08 * sn * sAmt,
-        -0.78 * sn * sAmt - 0.42 * wR + 0.18 * wL,
-      );
-      set("L_Foreleg_a", 0.16 + 0.78 * liftF * absF + 0.5 * liftR * absS, 0, 0);
-      set("R_Foreleg_a", 0.16 + 0.78 * liftR * absF + 0.5 * liftF * absS, 0, 0);
-      set("L_Foot_a", 0.24 * sn * fAmt, 0, 0.12 * sAmt);
-      set("R_Foot_a", -0.24 * sn * fAmt, 0, -0.12 * sAmt);
-      set("L_Shoulder_a", 0.06 * k, 0.05 * sAmt, 0.12 * k + 0.22 * wL + 0.08 * wR);
-      set("R_Shoulder_a", 0.06 * k, -0.05 * sAmt, -0.12 * k - 0.22 * wR - 0.08 * wL);
-      set("L_UpperArm_a", 0.7 * sn * fAmt + 0.12 * absS, 0.12 * sAmt, 0.16 * k + 0.32 * wL);
-      set("R_UpperArm_a", -0.7 * sn * fAmt + 0.12 * absS, -0.12 * sAmt, -0.16 * k - 0.32 * wR);
-      set("L_Forearm_a", 0.24 * k + 0.16 * wB, 0, 0);
-      set("R_Forearm_a", 0.24 * k + 0.16 * wB, 0, 0);
-    } else if (mode === "crouch") {
-      const swing = 0.38;
-      set(
-        "C_Hip_a",
-        0.16,
-        0.1 * sn * sAmt,
-        0.08 * sn * fAmt,
-        -0.03 * sAmt,
-        -0.64 + 0.025 * Math.abs(cs) * k,
-        -0.05 + 0.03 * wB,
-      );
-      set("C_Spine_a", 0.18 + 0.06 * wB, -0.08 * sn * fAmt, 0.07 * sn * sAmt);
-      set("C_Spine_b", 0.1, 0, 0.04 * sAmt);
-      set(
-        "L_UpperLeg_a",
-        -1.12 - swing * sn * fAmt,
-        0.04 * sn * sAmt,
-        0.36 * sn * sAmt + 0.22 * wL - 0.1 * wR,
-      );
-      set(
-        "R_UpperLeg_a",
-        -1.12 + swing * sn * fAmt,
-        -0.04 * sn * sAmt,
-        -0.36 * sn * sAmt - 0.22 * wR + 0.1 * wL,
-      );
-      set("L_Foreleg_a", 1.72 + 0.28 * liftF * k, 0, 0);
-      set("R_Foreleg_a", 1.72 + 0.28 * liftR * k, 0, 0);
-      set("L_Foot_a", 0.34 + 0.14 * sn * fAmt, 0, 0.08 * sAmt);
-      set("R_Foot_a", 0.34 - 0.14 * sn * fAmt, 0, -0.08 * sAmt);
-      set("L_Shoulder_a", 0.16, 0.08, 0.24 + 0.16 * wL);
-      set("R_Shoulder_a", 0.16, -0.08, -0.24 - 0.16 * wR);
-      set("L_UpperArm_a", 0.34 * sn * fAmt - 0.2, 0.14 * sAmt, 0.24 + 0.2 * wL);
-      set("R_UpperArm_a", -0.34 * sn * fAmt - 0.2, -0.14 * sAmt, -0.24 - 0.2 * wR);
-      set("L_Forearm_a", 0.52, 0, 0);
-      set("R_Forearm_a", 0.52, 0, 0);
-    } else {
-      const reach = 0.55;
-      set(
-        "C_Hip_a",
-        1.32,
-        0.12 * sn * sAmt,
-        0.08 * sn * fAmt,
-        0.03 * sAmt,
-        -0.72 + 0.035 * Math.abs(cs) * k,
-        0.14 + 0.05 * Math.abs(sn) * absF,
-      );
-      set("C_Spine_a", 0.14, -0.08 * sn * fAmt, 0.1 * sn * sAmt);
-      set("C_Spine_b", 0.1, 0, 0.05 * sAmt);
-      set("C_Neck_a", -0.55, 0.06 * sn * sAmt, 0);
-      set(
-        "L_UpperLeg_a",
-        -0.28 - reach * 0.45 * sn * fAmt,
-        0,
-        0.16 + 0.34 * sn * sAmt + 0.2 * wL - 0.1 * wR,
-      );
-      set(
-        "R_UpperLeg_a",
-        -0.28 + reach * 0.45 * sn * fAmt,
-        0,
-        -0.16 - 0.34 * sn * sAmt - 0.2 * wR + 0.1 * wL,
-      );
-      set("L_Foreleg_a", 0.58 + 0.32 * liftF * k, 0, 0);
-      set("R_Foreleg_a", 0.58 + 0.32 * liftR * k, 0, 0);
-      set("L_Foot_a", 0.22, 0, 0.08 * sAmt);
-      set("R_Foot_a", 0.22, 0, -0.08 * sAmt);
-      set("L_Shoulder_a", 0.32, 0.18, 0.52 + 0.16 * wL);
-      set("R_Shoulder_a", 0.32, -0.18, -0.52 - 0.16 * wR);
-      set("L_UpperArm_a", -0.82 - reach * sn * fAmt + 0.2 * wL, 0.24 + 0.22 * sAmt, 0.4);
-      set("R_UpperArm_a", -0.82 + reach * sn * fAmt + 0.2 * wR, -0.24 - 0.22 * sAmt, -0.4);
-      set("L_Forearm_a", 0.64 + 0.32 * liftR * k, 0, 0);
-      set("R_Forearm_a", 0.64 + 0.32 * liftF * k, 0, 0);
+    this.locoLast = { mode, fwd, side, mag: k };
+    const names = new Set<string>([
+      ...Object.keys(move?.pose ?? {}),
+      ...Object.keys(rest?.pose ?? {}),
+    ]);
+    for (const name of names) {
+      const a = rest?.pose[name] ?? [0, 0, 0];
+      const b = move?.pose[name] ?? a;
+      const t = clip && rest && clipName !== stanceName ? k : move ? 1 : rest ? 1 : 0;
+      set(name, a[0]! + (b[0]! - a[0]!) * t, a[1]! + (b[1]! - a[1]!) * t, a[2]! + (b[2]! - a[2]!) * t);
+    }
+    const hipY0 = rest?.hipY ?? 0;
+    const hipY1 = move?.hipY ?? hipY0;
+    const t = clip && rest && clipName !== stanceName ? k : move ? 1 : rest ? 1 : 0;
+    const hipI = this.byName["C_Hip_a"];
+    if (hipI !== undefined) {
+      this.poseOff[hipI]!.y = hipY0 + (hipY1 - hipY0) * t;
     }
   }
 
@@ -1614,13 +1562,7 @@ export class SoftSkeleton {
       twistAlong("R_Forearm_a", "R_Hand_a", -0.35);
       twistAlong("R_Hand_a", "R_Middle_a", -0.5);
     } else if (id === "squat") {
-      set("C_Hip_a", 0.12, 0, 0, 0, -0.55, -0.06);
-      set("L_UpperLeg_a", -1.05, 0, 0);
-      set("L_Foreleg_a", 1.7, 0, 0);
-      set("L_Foot_a", 0.32, 0, 0);
-      set("R_UpperLeg_a", -1.05, 0, 0);
-      set("R_Foreleg_a", 1.7, 0, 0);
-      set("R_Foot_a", 0.32, 0, 0);
+      this.applyLocomotion("crouch", 0, 0, 0, 0);
     } else if (id === "splits") {
       set("C_Hip_a", 0.05, 0.1, -0.5);
       set("C_Spine_a", 0.06, 0.05, 0.34);
@@ -1665,7 +1607,7 @@ export class SoftSkeleton {
       twistAlong("R_Hand_a", "R_Middle_a", -0.32);
     } else if (LOCO_POSES[id]) {
       const spec = LOCO_POSES[id]!;
-      this.applyLocomotion(spec.mode, spec.fwd, spec.side, 1, Math.PI * 0.35);
+      this.applyLocomotion(spec.mode, spec.fwd, spec.side, 1, 0.35);
     } else if (id === "navelPoke") {
       // Parked: index along world -Z, tip ~5 cm in front of the navel.
       // Inserted: same pointing, driven by shoulder/elbow/wrist/knuckle FK — never wrist translate.
