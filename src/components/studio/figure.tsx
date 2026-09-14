@@ -27,6 +27,10 @@ const _size = new THREE.Vector3();
 const _center = new THREE.Vector3();
 const _local = new THREE.Vector3();
 const _eye = new THREE.Vector3();
+const _navelW = new THREE.Vector3();
+const _abRight = new THREE.Vector3();
+const _abUp = new THREE.Vector3();
+const _abFwd = new THREE.Vector3();
 const _bodyE = new THREE.Euler();
 const BODY_LOOK_DEAD = Math.PI / 3;
 
@@ -1054,12 +1058,23 @@ function polishOrgans(root: THREE.Object3D, kind: "gut" | "pelvis") {
   });
 }
 
-function injectXray(shader: THREE.WebGLProgramParametersWithUniforms, y0: number, y1: number, xMax: number, zFront: number) {
+function injectXray(
+  shader: THREE.WebGLProgramParametersWithUniforms,
+  y0: number,
+  y1: number,
+  xMax: number,
+  zFront: number,
+  navel: THREE.Vector3,
+) {
   shader.uniforms.uXray = { value: 0 };
   shader.uniforms.uY0 = { value: y0 };
   shader.uniforms.uY1 = { value: y1 };
   shader.uniforms.uXMax = { value: xMax };
   shader.uniforms.uZFront = { value: zFront };
+  shader.uniforms.uNavelW = { value: navel.clone() };
+  shader.uniforms.uAbRight = { value: new THREE.Vector3(1, 0, 0) };
+  shader.uniforms.uAbUp = { value: new THREE.Vector3(0, 1, 0) };
+  shader.uniforms.uAbFwd = { value: new THREE.Vector3(0, 0, 1) };
   shader.vertexShader = shader.vertexShader
     .replace("#include <common>", "#include <common>\nvarying vec3 vBodyW;")
     .replace(
@@ -1070,11 +1085,16 @@ function injectXray(shader: THREE.WebGLProgramParametersWithUniforms, y0: number
     "#include <common>",
     `#include <common>
 uniform float uXray; uniform float uY0; uniform float uY1; uniform float uXMax; uniform float uZFront;
+uniform vec3 uNavelW; uniform vec3 uAbRight; uniform vec3 uAbUp; uniform vec3 uAbFwd;
 varying vec3 vBodyW;
 float xrayHole() {
-  float band = smoothstep(uY0, uY0 + 0.08, vBodyW.y) * (1.0 - smoothstep(uY1 - 0.04, uY1, vBodyW.y));
-  float torso = 1.0 - smoothstep(uXMax * 0.65, uXMax + 0.1, abs(vBodyW.x));
-  float front = smoothstep(uZFront - 0.16, uZFront + 0.04, vBodyW.z);
+  vec3 d = vBodyW - uNavelW;
+  float lx = dot(d, uAbRight);
+  float ly = dot(d, uAbUp);
+  float lz = dot(d, uAbFwd);
+  float band = smoothstep(uY0, uY0 + 0.08, ly) * (1.0 - smoothstep(uY1 - 0.04, uY1, ly));
+  float torso = 1.0 - smoothstep(uXMax * 0.65, uXMax + 0.1, abs(lx));
+  float front = smoothstep(uZFront - 0.16, uZFront + 0.04, lz);
   return clamp(band * torso * front * uXray, 0.0, 1.0);
 }`,
   );
@@ -1086,6 +1106,7 @@ function attachXray(
   y1: number,
   xMax: number,
   zFront: number,
+  navel: THREE.Vector3,
   list: THREE.Material[],
   overlays: THREE.Mesh[],
 ) {
@@ -1099,7 +1120,7 @@ function attachXray(
     punch.depthWrite = true;
     punch.depthTest = true;
     punch.onBeforeCompile = (shader) => {
-      injectXray(shader, y0, y1, xMax, zFront);
+      injectXray(shader, y0, y1, xMax, zFront, navel);
       shader.fragmentShader = shader.fragmentShader.replace(
         "#include <dithering_fragment>",
         `if (!gl_FrontFacing) discard;
@@ -1124,7 +1145,7 @@ function attachXray(
     fade.depthTest = true;
     fade.side = THREE.FrontSide;
     fade.onBeforeCompile = (shader) => {
-      injectXray(shader, y0, y1, xMax, zFront);
+      injectXray(shader, y0, y1, xMax, zFront, navel);
       shader.fragmentShader = shader.fragmentShader.replace(
         "#include <dithering_fragment>",
         `if (!gl_FrontFacing) discard;
@@ -1389,7 +1410,16 @@ function FittedFigure({
       bindMesh(mesh);
       if (isTorsoMesh(mesh)) {
         torsoMeshes.push(mesh);
-        const overlay = attachXray(mesh, yX0, yX1, 0.12, skinZ - 0.01, xrayList, xrayOverlays);
+        const overlay = attachXray(
+          mesh,
+          yX0 - navel.y,
+          yX1 - navel.y,
+          0.12,
+          skinZ - 0.01 - navel.z,
+          navel,
+          xrayList,
+          xrayOverlays,
+        );
         if (overlay) xrayHosts.push(mesh);
       }
     });
@@ -1413,7 +1443,12 @@ function FittedFigure({
     root.add(fist.root);
     const knife = new BayonetPlay();
     knife.attach(bayonet, peristalsis.getTubes(), bayonetLong);
-    knife.setSkin(torsoMeshes, { y0: yX0, y1: yX1, xMax: 0.12, zFront: skinZ - 0.01 });
+    knife.setSkin(torsoMeshes, {
+      y0: yX0 - navel.y,
+      y1: yX1 - navel.y,
+      xMax: 0.12,
+      zFront: skinZ - 0.01 - navel.z,
+    });
     const navelMorph = buildNavelMorph(torsoBinds, navel);
     root.add(knife.root);
     root.add(knife.wounds);
@@ -1770,6 +1805,15 @@ function FittedFigure({
           jumpU: s.pose === "jump" ? (jumpMenuT.current % 2.17) / 2.17 : undefined,
           clip: s.pose === "crawl" ? "crawl" : undefined,
         });
+      } else if (s.pose === "idle") {
+        setup.skeleton.tickLocomotion(dt, {
+          mode: "stand",
+          fwd: 0,
+          side: 0,
+          mag: 0,
+          clip: "standIdle",
+          timeLoop: true,
+        });
       }
     }
     bodyWasOn.current = bodyOn;
@@ -2092,9 +2136,35 @@ function FittedFigure({
     }
 
     const xray = s.abdomenXray;
+    setup.skeleton.posedNavel(setup.navel, _navelW);
+    setup.skeleton.abdomenAxes(_abRight, _abUp, _abFwd);
+    setup.bellyLight.position.copy(_navelW);
+    _abRight.transformDirection(setup.root.matrixWorld).normalize();
+    _abUp.transformDirection(setup.root.matrixWorld).normalize();
+    _abFwd.transformDirection(setup.root.matrixWorld).normalize();
+    setup.root.localToWorld(_navelW);
+    const writeXrayFrame = (mat: THREE.Material) => {
+      const shader = mat.userData.shader as
+        | {
+            uniforms?: {
+              uXray?: { value: number };
+              uNavelW?: { value: THREE.Vector3 };
+              uAbRight?: { value: THREE.Vector3 };
+              uAbUp?: { value: THREE.Vector3 };
+              uAbFwd?: { value: THREE.Vector3 };
+            };
+          }
+        | undefined;
+      const u = shader?.uniforms;
+      if (!u) return;
+      if (u.uXray) u.uXray.value = xray;
+      u.uNavelW?.value.copy(_navelW);
+      u.uAbRight?.value.copy(_abRight);
+      u.uAbUp?.value.copy(_abUp);
+      u.uAbFwd?.value.copy(_abFwd);
+    };
     for (const mat of setup.xrayList) {
-      const shader = mat.userData.shader as { uniforms?: { uXray?: { value: number } } } | undefined;
-      if (shader?.uniforms?.uXray) shader.uniforms.uXray.value = xray;
+      writeXrayFrame(mat);
       if (mat.transparent) {
         mat.depthWrite = false;
         mat.depthTest = true;
@@ -2106,6 +2176,12 @@ function FittedFigure({
         mat.side = THREE.FrontSide;
       }
     }
+    setup.knife.wounds.traverse((obj) => {
+      const mesh = obj as THREE.Mesh;
+      if (!mesh.isMesh) return;
+      const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+      for (const mat of mats) if (mat) writeXrayFrame(mat);
+    });
     for (const ov of setup.xrayOverlays) ov.visible = xray > 0.03 && !s.showWeights;
     setup.gutRoot.visible = s.showOrgans;
     setup.pelvisRoot.visible = s.showOrgans;

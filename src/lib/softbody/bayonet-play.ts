@@ -543,6 +543,10 @@ export class BayonetPlay {
       shader.uniforms.uY1 = { value: y1 };
       shader.uniforms.uXMax = { value: xMax };
       shader.uniforms.uZFront = { value: zFront };
+      shader.uniforms.uNavelW = { value: new THREE.Vector3(0, (y0 + y1) * 0.5, 0) };
+      shader.uniforms.uAbRight = { value: new THREE.Vector3(1, 0, 0) };
+      shader.uniforms.uAbUp = { value: new THREE.Vector3(0, 1, 0) };
+      shader.uniforms.uAbFwd = { value: new THREE.Vector3(0, 0, 1) };
       shader.uniforms.uTile = { value: new THREE.Vector4(u0, v0, uSpan, vSpan) };
       shader.vertexShader = shader.vertexShader
         .replace("#include <common>", "#include <common>\nvarying vec3 vBodyW;")
@@ -555,12 +559,17 @@ export class BayonetPlay {
           "#include <common>",
           `#include <common>
 uniform float uXray; uniform float uY0; uniform float uY1; uniform float uXMax; uniform float uZFront;
+uniform vec3 uNavelW; uniform vec3 uAbRight; uniform vec3 uAbUp; uniform vec3 uAbFwd;
 uniform vec4 uTile;
 varying vec3 vBodyW;
 float xrayHole() {
-  float band = smoothstep(uY0, uY0 + 0.08, vBodyW.y) * (1.0 - smoothstep(uY1 - 0.04, uY1, vBodyW.y));
-  float torso = 1.0 - smoothstep(uXMax * 0.65, uXMax + 0.1, abs(vBodyW.x));
-  float front = smoothstep(uZFront - 0.16, uZFront + 0.04, vBodyW.z);
+  vec3 d = vBodyW - uNavelW;
+  float lx = dot(d, uAbRight);
+  float ly = dot(d, uAbUp);
+  float lz = dot(d, uAbFwd);
+  float band = smoothstep(uY0, uY0 + 0.08, ly) * (1.0 - smoothstep(uY1 - 0.04, uY1, ly));
+  float torso = 1.0 - smoothstep(uXMax * 0.65, uXMax + 0.1, abs(lx));
+  float front = smoothstep(uZFront - 0.16, uZFront + 0.04, lz);
   return clamp(band * torso * front * uXray, 0.0, 1.0);
 }`,
         )

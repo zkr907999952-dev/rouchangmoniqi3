@@ -33,6 +33,7 @@ const FILES = {
   proneIdle: "Prone_Idle.fbx",
   proneWalk: "Prone_Forward.fbx",
   jump: "Jump.fbx",
+  standIdle: "Breathing_Idle.fbx",
 };
 
 const CHAINS = [
@@ -288,13 +289,21 @@ function qFlip(q) {
 }
 
 function chainsFor(name) {
-  if (!DANCE.has(name)) return CHAINS;
-  return [
-    ...CHAINS.slice(0, 4),
-    ...DANCE_CHAINS.filter((c) => /Shoulder/.test(c.ours)),
-    ...CHAINS.slice(4),
-    ...DANCE_CHAINS.filter((c) => !/Shoulder/.test(c.ours)),
-  ];
+  if (DANCE.has(name)) {
+    return [
+      ...CHAINS.slice(0, 4),
+      ...DANCE_CHAINS.filter((c) => /Shoulder/.test(c.ours)),
+      ...CHAINS.slice(4),
+      ...DANCE_CHAINS.filter((c) => !/Shoulder/.test(c.ours)),
+    ];
+  }
+  if (name === "standIdle") {
+    return [
+      ...CHAINS,
+      ...DANCE_CHAINS.filter((c) => /Neck|Hand/.test(c.ours)),
+    ];
+  }
+  return CHAINS;
 }
 
 const restAim = {};
@@ -313,9 +322,11 @@ function bakeOne(name, file) {
   const bindY = name === "jump" ? 99 : 98;
   const nFrames = isDance
     ? Math.max(24, Math.round(dur * 8))
-    : name === "jump" || name === "proneWalk"
-      ? 16
-      : FRAMES;
+    : name === "standIdle"
+      ? Math.max(16, Math.round(dur * 6))
+      : name === "jump" || name === "proneWalk"
+        ? 16
+        : FRAMES;
   const chainList = chainsFor(name);
   poseAt(obj, 0);
   const theta0 = hipFacingTheta(obj);
@@ -359,7 +370,7 @@ function bakeOne(name, file) {
         else if (name === "proneWalk") x = Math.max(x, 1.05);
         else x = Math.max(x, 0.88);
       }
-      if (/UpperArm/.test(chain.ours) && name !== "jump" && !isDance) {
+      if (/UpperArm/.test(chain.ours) && name !== "jump" && !isDance && name !== "standIdle") {
         y = THREE.MathUtils.clamp(y, -0.22, 0.22);
         z = THREE.MathUtils.clamp(z, -0.42, 0.42);
       }
@@ -380,7 +391,7 @@ function bakeOne(name, file) {
     const p1 = hipTrack.createInterpolant().evaluate(dur * 0.99);
     stride = Math.hypot((p1[0] ?? 0) - (p0[0] ?? 0), (p1[2] ?? 0) - (p0[2] ?? 0)) * 0.01;
   }
-  if (isDance) stride = 0;
+  if (isDance || name === "standIdle") stride = 0;
   else if (stride < 0.28) {
     stride =
       name === "proneWalk" || name === "proneIdle" || name === "crawl"
@@ -423,11 +434,17 @@ function bakeOne(name, file) {
   );
 }
 
-const clips = ONLY_DANCE && fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, "utf8")).clips : {};
-if (!ONLY_DANCE) {
-  for (const [name, file] of Object.entries(FILES)) bakeOne(name, file);
+const ONLY_IDLE = process.argv.includes("standIdle");
+const clips =
+  (ONLY_DANCE || ONLY_IDLE) && fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, "utf8")).clips : {};
+if (ONLY_IDLE) {
+  bakeOne("standIdle", FILES.standIdle);
+} else {
+  if (!ONLY_DANCE) {
+    for (const [name, file] of Object.entries(FILES)) bakeOne(name, file);
+  }
+  for (const [name, file] of Object.entries(DANCE_FILES)) bakeOne(name, file);
 }
-for (const [name, file] of Object.entries(DANCE_FILES)) bakeOne(name, file);
 
 fs.writeFileSync(
   OUT,
