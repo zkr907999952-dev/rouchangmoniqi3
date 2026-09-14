@@ -15,22 +15,15 @@ const STAND_HIP_Y = 98;
 const FILES = {
   walk: "Walking.fbx",
   walkBack: "Walking_Backwards.fbx",
-  walkLeft: "Walking.fbx",
-  walkRight: "Walking.fbx",
+  walkLeft: "Walk_Strafe_Left.fbx",
+  walkRight: "Walk_Strafe_Right.fbx",
   crouchIdle: "Crouch_Idle.fbx",
   crouchWalk: "Crouch_Walk_Forward.fbx",
   crouchBack: "Crouch_Walk_Back.fbx",
-  crouchLeft: "Crouch_Walk_Forward.fbx",
-  crouchRight: "Crouch_Walk_Forward.fbx",
+  crouchLeft: "Crouch_Walk_Strafe_Left.fbx",
+  crouchRight: "Crouch_Walk_Strafe_Right.fbx",
   crawl: "Crawling.fbx",
   proneIdle: "Prone_Idle.fbx",
-};
-
-const AIM_SPIN = {
-  walkLeft: Math.PI / 2,
-  walkRight: -Math.PI / 2,
-  crouchLeft: Math.PI / 2,
-  crouchRight: -Math.PI / 2,
 };
 
 const CHAINS = [
@@ -48,8 +41,6 @@ const CHAINS = [
   { mix: ["mixamorigRightArm", "mixamorigRightForeArm"], ours: "R_UpperArm_a", child: "R_Forearm_a" },
   { mix: ["mixamorigLeftForeArm", "mixamorigLeftHand"], ours: "L_Forearm_a", child: "L_Hand_a" },
   { mix: ["mixamorigRightForeArm", "mixamorigRightHand"], ours: "R_Forearm_a", child: "R_Hand_a" },
-  { mix: ["mixamorigLeftHand", "mixamorigLeftHandMiddle1"], ours: "L_Hand_a", child: "L_Middle_a" },
-  { mix: ["mixamorigRightHand", "mixamorigRightHandMiddle1"], ours: "R_Hand_a", child: "R_Middle_a" },
 ];
 
 const PARENT = {
@@ -74,7 +65,7 @@ const PARENT = {
   R_Hand_a: "R_Forearm_a",
 };
 
-const TWIST_BONES = new Set(["L_Forearm_a", "R_Forearm_a", "L_Hand_a", "R_Hand_a"]);
+const TWIST_BONES = new Set(["L_Forearm_a", "R_Forearm_a"]);
 
 const native = JSON.parse(fs.readFileSync("src/lib/softbody/nude-rig-data.json", "utf8")).bones;
 const restPos = Object.fromEntries(native.map((b) => [b.name, new THREE.Vector3(b.x, b.y, b.z)]));
@@ -236,11 +227,6 @@ for (const [name, file] of Object.entries(FILES)) {
       const targetAim = mixDir(obj, chain.mix[0], chain.mix[1], yaw);
       if (!targetAim) continue;
       const targetLat = mixSide(obj, chain.mix[0], targetAim, yaw);
-      const spin = AIM_SPIN[name] || 0;
-      if (spin) {
-        targetAim.applyAxisAngle(Y_UP, spin);
-        if (targetLat) targetLat.applyAxisAngle(Y_UP, spin);
-      }
       const R = swingTwist(
         restAim[chain.ours],
         restLat[chain.ours],
@@ -256,6 +242,10 @@ for (const [name, file] of Object.entries(FILES)) {
       let y = _e.y;
       let z = _e.z;
       if (chain.ours === "C_Hip_a") y = 0;
+      if (/UpperArm/.test(chain.ours)) {
+        y = THREE.MathUtils.clamp(y, -0.22, 0.22);
+        z = THREE.MathUtils.clamp(z, -0.42, 0.42);
+      }
       if (!bones[chain.ours]) bones[chain.ours] = [];
       bones[chain.ours].push([+x.toFixed(3), +y.toFixed(3), +z.toFixed(3)]);
     }
