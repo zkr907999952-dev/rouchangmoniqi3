@@ -1140,9 +1140,10 @@ export class SoftSkeleton {
   /** Stable eye in root-local space. Stance height only — no head nod, look pitch, or walk bob. */
   fpEyeLocal(out: THREE.Vector3) {
     const mode = this.locoLast.mode;
-    if (mode === "prone") out.set(0, 0.24, 0.56);
-    else if (mode === "crouch") out.set(0, 0.94, 0.14);
-    else out.set(0, 1.5, 0.12);
+    // Sit in front of the (hidden) face so crouch-lean / prone never swallows the camera.
+    if (mode === "prone") out.set(0, 0.30, 0.74);
+    else if (mode === "crouch") out.set(0, 1.06, 0.50);
+    else out.set(0, 1.52, 0.20);
     return out;
   }
 
@@ -1202,7 +1203,7 @@ export class SoftSkeleton {
       if (opts.jumpU != null) {
         this.locoPhase = THREE.MathUtils.clamp(opts.jumpU, 0, 0.999);
       } else {
-        const t = THREE.MathUtils.clamp((opts.airTime ?? 0) / 0.48, 0, 1);
+        const t = THREE.MathUtils.clamp((opts.airTime ?? 0) / 0.78, 0, 1);
         this.locoPhase = 0.28 + t * 0.3;
       }
     } else {

@@ -1700,7 +1700,8 @@ function FittedFigure({
       _bodyE.set(0, fpLive.yaw + Math.PI, 0, "YXZ");
       setup.root.quaternion.setFromEuler(_bodyE);
       setup.root.updateMatrixWorld(true);
-      setup.skeleton.setBodyLook?.(s.fpProne ? 0 : fpLive.pitch);
+      setup.skeleton.clearBodyLook?.();
+      setup.skeleton.setGazeTarget(null);
       setup.skeleton.tickLocomotion(dt, {
         mode: s.fpProne ? "prone" : s.fpCrouch ? "crouch" : "stand",
         fwd: fpLive.moveFwd,
@@ -1914,10 +1915,12 @@ function FittedFigure({
       stirRadius: s.fistStirRadius,
     });
     const fistBelly = setup.fist.belly();
+    const jumping = (bodyOn && !fpLive.grounded) || s.pose === "jump";
+    const breastLock = jumping ? 0.14 : 1;
     setup.skeleton.step(dt, {
       stiffness: s.stiffness,
       damping: s.damping,
-      jiggle: s.jiggle,
+      jiggle: jumping ? s.jiggle * 0.18 : s.jiggle,
       gravity: s.gravity,
       wind: s.wind,
       time: state.clock.elapsedTime,
@@ -1938,11 +1941,11 @@ function FittedFigure({
       fistSpread: s.fistSpread,
       fistLever: s.fistLever,
       fistRise: s.fistRise,
-      breastSoft: s.breastSoft,
-      breastDamp: s.breastDamp,
+      breastSoft: s.breastSoft * breastLock,
+      breastDamp: jumping ? Math.min(1, 0.88 + s.breastDamp * 0.12) : s.breastDamp,
       hairDamp: s.hairDamp,
-      breastInertia: s.breastInertia,
-      hairInertia: s.hairInertia,
+      breastInertia: s.breastInertia * breastLock,
+      hairInertia: jumping ? s.hairInertia * 0.35 : s.hairInertia,
       blinkEnabled: s.blinkEnabled,
       eyeOpenL: s.eyeOpenL,
       eyeOpenR: s.eyeOpenR,

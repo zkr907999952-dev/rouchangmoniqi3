@@ -486,19 +486,18 @@ const FP_STAND = 1.58;
 const FP_CROUCH = 0.86;
 const FP_PRONE = 0.28;
 const FP_WALK = 1.65;
-const FP_AIR = 1.15;
-const FP_JUMP = 3.15;
-const FP_GRAV = 14;
+const FP_AIR = 1.35;
+const FP_JUMP = 5.2;
+const FP_GRAV = 13;
 const FP_SENS = 0.0017;
 const FP_TOUCH_SENS = 0.00305;
-const FP_PITCH_LIM = 1.18;
+const FP_PITCH_LIM = Math.PI / 2 - 0.02;
 const FP_BOUNDS = { x: 1.85, zMin: -1.55, zMax: 2.85, bodyR: 0.28 };
 const ORBIT_HOME = { px: 0.28, py: 1.18, pz: 2.35, tx: 0, ty: 1.06, tz: 0.1, fov: 34 };
 const _fpRight = new THREE.Vector3();
 const _fpFwd = new THREE.Vector3();
 const _fpUp = new THREE.Vector3();
 const _fpZ = new THREE.Vector3();
-const _fpAim = new THREE.Vector3();
 const _fpMat = new THREE.Matrix4();
 
 function lookDirFromYawPitch(yaw: number, pitch: number, out: THREE.Vector3) {
@@ -971,19 +970,7 @@ function FirstPersonRig({
     const fz = -Math.cos(yaw.current);
     if (body) {
       camera.position.set(fpLive.eyeX, fpLive.eyeY, fpLive.eyeZ);
-      lookDirFromYawPitch(yaw.current, pitch.current, _fpFwd);
-      const down = THREE.MathUtils.clamp(-pitch.current, 0, FP_PITCH_LIM);
-      const t = THREE.MathUtils.smoothstep(down, 0.12, 0.7);
-      _fpAim.set(
-        fpLive.chestX - camera.position.x,
-        fpLive.chestY - camera.position.y,
-        fpLive.chestZ - camera.position.z,
-      );
-      if (_fpAim.lengthSq() > 1e-8) {
-        _fpAim.normalize();
-        _fpFwd.lerp(_fpAim, t).normalize();
-      }
-      applyLookDir(camera, _fpFwd, yaw.current);
+      applyFpLook(camera, yaw.current, pitch.current);
     } else {
       const lookY = pos.current.y + eye.current + bob.current;
       camera.position.set(pos.current.x, lookY, pos.current.z);
