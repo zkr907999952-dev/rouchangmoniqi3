@@ -37,7 +37,7 @@ import {
 import * as Slider from "@radix-ui/react-slider";
 import { cn } from "@/lib/utils";
 import { PRESETS, useStudio, type CamFocus, type PresetId, type StudioParams, FP_FOV_MIN, FP_FOV_MAX, FP_LOOK_SPEED_MIN, FP_LOOK_SPEED_MAX } from "@/lib/studio-store";
-import { EXPRESSIONS, HAND_GESTURES, POSES } from "@/lib/softbody/soft-skeleton";
+import { ANIMATIONS, EXPRESSIONS, HAND_GESTURES, POSES } from "@/lib/softbody/soft-skeleton";
 
 const SLIDERS: {
   id: keyof Pick<
@@ -1288,24 +1288,31 @@ export function Overlay() {
                   </button>
                 ))}
               </div>
-              <p className="mt-3 mb-1.5 text-xs text-muted">动作</p>
-              <div className="grid grid-cols-3 gap-1">
-                {POSES.map((item) => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => setPose(item.id)}
-                    className={cn(
-                      "h-9 rounded-md border text-[11px] font-medium",
-                      pose === item.id
-                        ? "border-accent bg-accent text-accent-fg"
-                        : "border-border bg-surface-2 text-muted hover:text-fg",
-                    )}
-                  >
-                    {item.label}
-                  </button>
-                ))}
-              </div>
+              {[
+                { title: "动作", items: POSES },
+                { title: "动画", items: ANIMATIONS },
+              ].map((sec) => (
+                <div key={sec.title}>
+                  <p className="mt-3 mb-1.5 text-xs text-muted">{sec.title}</p>
+                  <div className="grid grid-cols-3 gap-1">
+                    {sec.items.map((item) => (
+                      <button
+                        key={item.id}
+                        type="button"
+                        onClick={() => setPose(item.id)}
+                        className={cn(
+                          "h-9 rounded-md border text-[11px] font-medium",
+                          pose === item.id
+                            ? "border-accent bg-accent text-accent-fg"
+                            : "border-border bg-surface-2 text-muted hover:text-fg",
+                        )}
+                      >
+                        {item.label}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              ))}
               <p className="mt-3 mb-1.5 text-xs text-muted">手势</p>
               <div className="grid grid-cols-2 gap-1">
                 {(

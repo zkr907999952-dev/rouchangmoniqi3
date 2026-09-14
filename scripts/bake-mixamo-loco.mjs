@@ -64,10 +64,33 @@ const PARENT = {
   R_Forearm_a: "R_UpperArm_a",
   L_Hand_a: "L_Forearm_a",
   R_Hand_a: "R_Forearm_a",
+  C_Neck_a: "C_Spine_d",
 };
+
+const DANCE_FILES = {
+  dance1: "Dancing_Twerk.fbx",
+  dance2: "Samba_Dancing.fbx",
+  dance3: "Jazz_Dancing.fbx",
+  dance4: "Dancing_Maraschino_Step.fbx",
+  dance5: "Snake_Hip_Hop_Dance.fbx",
+  dance6: "Breakdance_Footwork_1.fbx",
+  dance7: "Northern_Soul_Spin_Combo.fbx",
+  dance8: "Breakdance_Footwork_To_Idle.fbx",
+};
+const DANCE = new Set(Object.keys(DANCE_FILES));
+const ONLY_DANCE = process.argv.includes("dance");
+
+const DANCE_CHAINS = [
+  { mix: ["mixamorigLeftShoulder", "mixamorigLeftArm"], ours: "L_Shoulder_a", child: "L_UpperArm_a" },
+  { mix: ["mixamorigRightShoulder", "mixamorigRightArm"], ours: "R_Shoulder_a", child: "R_UpperArm_a" },
+  { mix: ["mixamorigNeck", "mixamorigHead"], ours: "C_Neck_a", child: "C_Head_a" },
+  { mix: ["mixamorigLeftHand", "mixamorigLeftHandMiddle1"], ours: "L_Hand_a", child: "L_Middle_a" },
+  { mix: ["mixamorigRightHand", "mixamorigRightHandMiddle1"], ours: "R_Hand_a", child: "R_Middle_a" },
+];
 
 const TWIST_BONES = new Set(["L_Forearm_a", "R_Forearm_a"]);
 const RECUMBENT = new Set(["proneIdle", "proneWalk", "crawl"]);
+
 
 const native = JSON.parse(fs.readFileSync("src/lib/softbody/nude-rig-data.json", "utf8")).bones;
 const restPos = Object.fromEntries(native.map((b) => [b.name, new THREE.Vector3(b.x, b.y, b.z)]));
@@ -228,34 +251,71 @@ function ancestorWorld(name, worldQ) {
   return new THREE.Quaternion();
 }
 
+function hipFacingTheta(obj) {
+  const hips = obj.getObjectByName("mixamorigHips");
+  if (!hips) return 0;
+  hips.getWorldQuaternion(_q);
+  _f.set(0, 0, 1).applyQuaternion(_q);
+  _f.y = 0;
+  if (_f.lengthSq() < 1e-8) return 0;
+  _f.normalize();
+  return Math.atan2(_f.x, _f.z);
+}
+
+function unwrapYaw(prev, now) {
+  let d = now - prev;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return prev + d;
+}
+
+function chainsFor(name) {
+  if (!DANCE.has(name)) return CHAINS;
+  return [
+    ...CHAINS.slice(0, 4),
+    ...DANCE_CHAINS.filter((c) => /Shoulder/.test(c.ours)),
+    ...CHAINS.slice(4),
+    ...DANCE_CHAINS.filter((c) => !/Shoulder/.test(c.ours)),
+  ];
+}
+
 const restAim = {};
 const restLat = {};
-for (const c of CHAINS) {
+for (const c of [...CHAINS, ...DANCE_CHAINS]) {
   restAim[c.ours] = restDir(c.ours, c.child);
   restLat[c.ours] = restSide(restAim[c.ours]);
 }
 
-const clips = {};
-for (const [name, file] of Object.entries(FILES)) {
+function bakeOne(name, file) {
   const obj = parseFbx(file);
   const clip = obj.animations[0];
   const hipTrack = clip.tracks.find((t) => t.name === "mixamorigHips.position");
   const dur = clip.duration;
+  const isDance = DANCE.has(name);
   const bindY = name === "jump" ? 99 : 98;
-  const nFrames = name === "jump" || name === "proneWalk" ? 16 : FRAMES;
+  const nFrames = isDance
+    ? Math.max(24, Math.round(dur * 8))
+    : name === "jump" || name === "proneWalk"
+      ? 16
+      : FRAMES;
+  const chainList = chainsFor(name);
+  poseAt(obj, 0);
+  const theta0 = hipFacingTheta(obj);
+  let yawAcc = 0;
   const bones = {};
   const hipY = [];
   for (let i = 0; i < nFrames; i++) {
     const t = (i / nFrames) * dur;
     poseAt(obj, t);
-    const yaw = facingCancel(obj, hipTrack, dur, name);
+    const yaw = isDance ? -theta0 : facingCancel(obj, hipTrack, dur, name);
+    if (isDance) yawAcc = unwrapYaw(yawAcc, hipFacingTheta(obj) - theta0);
     const hip = hipTrack ? hipTrack.createInterpolant().evaluate(t) : [0, bindY, 0];
     let hy = ((hip[1] ?? bindY) - bindY) * 0.01;
     if (name === "jump") hy = Math.min(0, hy);
     hipY.push(+hy.toFixed(4));
 
     const worldQ = {};
-    for (const chain of CHAINS) {
+    for (const chain of chainList) {
       const targetAim = mixDir(obj, chain.mix[0], chain.mix[1], yaw);
       if (!targetAim) continue;
       const targetLat = mixSide(obj, chain.mix[0], targetAim, yaw);
@@ -273,14 +333,14 @@ for (const [name, file] of Object.entries(FILES)) {
       let x = _e.x;
       let y = _e.y;
       let z = _e.z;
-      if (chain.ours === "C_Hip_a") y = 0;
+      if (chain.ours === "C_Hip_a") y = isDance ? yawAcc : 0;
       if (RECUMBENT.has(name) && chain.ours === "C_Hip_a") {
         x = Math.abs(x);
         if (name === "proneIdle") x = Math.max(x, 1.2);
         else if (name === "proneWalk") x = Math.max(x, 1.05);
         else x = Math.max(x, 0.88);
       }
-      if (/UpperArm/.test(chain.ours) && name !== "jump") {
+      if (/UpperArm/.test(chain.ours) && name !== "jump" && !isDance) {
         y = THREE.MathUtils.clamp(y, -0.22, 0.22);
         z = THREE.MathUtils.clamp(z, -0.42, 0.42);
       }
@@ -294,7 +354,8 @@ for (const [name, file] of Object.entries(FILES)) {
     const p1 = hipTrack.createInterpolant().evaluate(dur * 0.99);
     stride = Math.hypot((p1[0] ?? 0) - (p0[0] ?? 0), (p1[2] ?? 0) - (p0[2] ?? 0)) * 0.01;
   }
-  if (stride < 0.28) {
+  if (isDance) stride = 0;
+  else if (stride < 0.28) {
     stride =
       name === "proneWalk" || name === "proneIdle" || name === "crawl"
         ? 0.7
@@ -314,6 +375,8 @@ for (const [name, file] of Object.entries(FILES)) {
     name.padEnd(12),
     "dur",
     dur.toFixed(2),
+    "n",
+    nFrames,
     "stride",
     stride.toFixed(3),
     "hipY0",
@@ -327,11 +390,18 @@ for (const [name, file] of Object.entries(FILES)) {
   );
 }
 
+const clips = ONLY_DANCE && fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, "utf8")).clips : {};
+if (!ONLY_DANCE) {
+  for (const [name, file] of Object.entries(FILES)) bakeOne(name, file);
+}
+for (const [name, file] of Object.entries(DANCE_FILES)) bakeOne(name, file);
+
 fs.writeFileSync(
   OUT,
   JSON.stringify({
-    source: "Mixamo aim-retarget (Walking, Crouch, Strafe, Crawling, Prone Idle/Forward, Jump)",
-    bind: "character-space child-from-parent directions, hip yaw cancelled, mesh faces +Z; recumbent facing = hips→head",
+    source:
+      "Mixamo aim-retarget (Walking, Crouch, Strafe, Crawling, Prone Idle/Forward, Jump, Dance 1-8)",
+    bind: "character-space child-from-parent directions, hip yaw cancelled, mesh faces +Z; recumbent facing = hips→head; dance keeps hip yaw + unclamped arms",
     clips,
   }),
 );

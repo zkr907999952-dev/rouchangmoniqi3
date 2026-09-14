@@ -3,7 +3,7 @@ import { useFrame, useThree, type ThreeEvent } from "@react-three/fiber";
 import * as THREE from "three";
 import { SkeletonUtils } from "three-stdlib";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
-import { SoftSkeleton, type PoseId, type SkinBinding, isLocoPose, LOCO_POSES } from "@/lib/softbody/soft-skeleton";
+import { SoftSkeleton, type PoseId, type SkinBinding, isDancePose, isLocoPose, LOCO_POSES } from "@/lib/softbody/soft-skeleton";
 import { meshMatKey, nudeBones, nudeMapFor } from "@/lib/softbody/nude-rig";
 import { GutPeristalsis } from "@/lib/softbody/peristalsis";
 import { BellyStrike } from "@/lib/softbody/belly-strike";
@@ -1722,7 +1722,16 @@ function FittedFigure({
         jumpMenuT.current = 0;
       }
       if (s.pose === "jump") jumpMenuT.current += dt;
-      if (isLocoPose(s.pose) || s.pose === "squat" || s.pose === "jump") {
+      if (isDancePose(s.pose)) {
+        setup.skeleton.tickLocomotion(dt, {
+          mode: "stand",
+          fwd: 0,
+          side: 0,
+          mag: 1,
+          clip: s.pose,
+          timeLoop: true,
+        });
+      } else if (isLocoPose(s.pose) || s.pose === "squat" || s.pose === "jump") {
         const spec =
           s.pose === "squat"
             ? { mode: "crouch" as const, fwd: 0, side: 0 }
@@ -2244,6 +2253,7 @@ function FittedFigure({
         jumpU?: number;
         clip?: string | null;
         phase?: number;
+        timeLoop?: boolean;
       }) => {
         if (opts.phase != null) setup.skeleton.locoPhase = opts.phase;
         setup.skeleton.tickLocomotion(0.016, {
@@ -2255,6 +2265,7 @@ function FittedFigure({
           airTime: opts.airTime,
           jumpU: opts.jumpU,
           clip: opts.clip,
+          timeLoop: opts.timeLoop,
         });
         return setup.skeleton.dumpLoco();
       };
@@ -2311,6 +2322,10 @@ function FittedFigure({
           camera.position.set(1.55, 1.15, 1.45);
           camera.lookAt(0, 0.95, 0.08);
           if (controlsRef.current) controlsRef.current.target.set(0, 0.95, 0.08);
+        } else if (mode === "dance") {
+          camera.position.set(1.85, 1.12, 2.35);
+          camera.lookAt(0, 0.82, 0.05);
+          if (controlsRef.current) controlsRef.current.target.set(0, 0.82, 0.05);
         } else {
           camera.position.set(1.2, 1.08, 1.85);
           camera.lookAt(0, 0.9, 0.06);

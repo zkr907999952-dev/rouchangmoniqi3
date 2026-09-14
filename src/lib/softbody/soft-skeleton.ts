@@ -61,7 +61,15 @@ export type PoseId =
   | "walkRight"
   | "crouchWalk"
   | "crawl"
-  | "jump";
+  | "jump"
+  | "dance1"
+  | "dance2"
+  | "dance3"
+  | "dance4"
+  | "dance5"
+  | "dance6"
+  | "dance7"
+  | "dance8";
 export type LocoMode = "stand" | "crouch" | "prone";
 export type HandGesture = "rest" | "fist" | "point" | "two" | "peace" | "middle";
 export type HandSide = "L" | "R";
@@ -80,6 +88,13 @@ export const POSES: { id: PoseId; label: string }[] = [
   { id: "disdain", label: "嫌弃" },
   { id: "ahegaoPose", label: "阿黑颜" },
   { id: "squat", label: "蹲下" },
+  { id: "splits", label: "一字马" },
+  { id: "backbend", label: "下腰" },
+  { id: "inspectNavel", label: "检查肚脐" },
+  { id: "navelPoke", label: "插肚脐" },
+];
+
+export const ANIMATIONS: { id: PoseId; label: string }[] = [
   { id: "walk", label: "行走" },
   { id: "walkBack", label: "后退" },
   { id: "walkLeft", label: "左走" },
@@ -87,10 +102,14 @@ export const POSES: { id: PoseId; label: string }[] = [
   { id: "crouchWalk", label: "蹲走" },
   { id: "crawl", label: "匍匐" },
   { id: "jump", label: "跳跃" },
-  { id: "splits", label: "一字马" },
-  { id: "backbend", label: "下腰" },
-  { id: "inspectNavel", label: "检查肚脐" },
-  { id: "navelPoke", label: "插肚脐" },
+  { id: "dance1", label: "舞蹈1" },
+  { id: "dance2", label: "舞蹈2" },
+  { id: "dance3", label: "舞蹈3" },
+  { id: "dance4", label: "舞蹈4" },
+  { id: "dance5", label: "舞蹈5" },
+  { id: "dance6", label: "舞蹈6" },
+  { id: "dance7", label: "舞蹈7" },
+  { id: "dance8", label: "舞蹈8" },
 ];
 
 export const HAND_GESTURES: { id: HandGesture; label: string }[] = [
@@ -113,6 +132,14 @@ export const LOCO_POSES: Record<string, { mode: LocoMode; fwd: number; side: num
 
 export function isLocoPose(id: PoseId) {
   return Boolean(LOCO_POSES[id]);
+}
+
+export function isDancePose(id: PoseId) {
+  return id.startsWith("dance");
+}
+
+export function isAnimPose(id: PoseId) {
+  return isLocoPose(id) || id === "jump" || isDancePose(id);
 }
 
 export type SkinBinding = {
@@ -193,6 +220,13 @@ function pickLocoClip(mode: LocoMode, fwd: number, side: number, mag: number, ai
   return side >= 0 ? "walkRight" : "walkLeft";
 }
 
+function lerpAng(a: number, b: number, t: number) {
+  let d = b - a;
+  while (d > Math.PI) d -= Math.PI * 2;
+  while (d < -Math.PI) d += Math.PI * 2;
+  return a + d * t;
+}
+
 function sampleLocoClip(clip: LocoClip, u: number, loop = true) {
   const n = clip.n;
   const wrapped = loop ? (((u % 1) + 1) % 1) : THREE.MathUtils.clamp(u, 0, 0.999);
@@ -207,7 +241,7 @@ function sampleLocoClip(clip: LocoClip, u: number, loop = true) {
     const b = frames[j]!;
     pose[name] = [
       a[0]! + (b[0]! - a[0]!) * t,
-      a[1]! + (b[1]! - a[1]!) * t,
+      lerpAng(a[1]!, b[1]!, t),
       a[2]! + (b[2]! - a[2]!) * t,
     ];
   }
@@ -1193,13 +1227,16 @@ export class SoftSkeleton {
       airTime?: number;
       jumpU?: number;
       clip?: string | null;
+      timeLoop?: boolean;
     },
   ) {
     const mag = THREE.MathUtils.clamp(opts.mag, 0, 1);
     const airborne = Boolean(opts.airborne);
     const clipName = opts.clip ?? pickLocoClip(opts.mode, opts.fwd, opts.side, mag, airborne);
     const clip = clipName ? LOCO_CLIPS[clipName] : undefined;
-    if (airborne) {
+    if (opts.timeLoop && clip) {
+      this.locoPhase += dt / Math.max(0.05, clip.dur);
+    } else if (airborne) {
       if (opts.jumpU != null) {
         this.locoPhase = THREE.MathUtils.clamp(opts.jumpU, 0, 0.999);
       } else {
@@ -1258,7 +1295,8 @@ export class SoftSkeleton {
       if (i === undefined) return;
       this.poseQ[i]!.setFromEuler(_e.set(ex, ey, ez, "XYZ"));
       this.poseOff[i]!.set(ox, oy, oz);
-      this.maxAng[i] = Math.max(this.maxAng[i]!, Math.hypot(ex, ey, ez) + 0.3);
+      const eyLim = Math.atan2(Math.sin(ey), Math.cos(ey));
+      this.maxAng[i] = Math.max(this.maxAng[i]!, Math.hypot(ex, eyLim, ez) + 0.3);
     };
     this.poseSnap = 1;
     this.locoLast = { mode, fwd, side, mag: k };
@@ -1635,6 +1673,9 @@ export class SoftSkeleton {
     } else if (LOCO_POSES[id]) {
       const spec = LOCO_POSES[id]!;
       this.applyLocomotion(spec.mode, spec.fwd, spec.side, 1, 0.35, false, id === "crawl" ? "crawl" : undefined);
+    } else if (isDancePose(id)) {
+      this.locoPhase = 0;
+      this.applyLocomotion("stand", 0, 0, 1, 0, false, id);
     } else if (id === "navelPoke") {
       // Parked: index along world -Z, tip ~5 cm in front of the navel.
       // Inserted: same pointing, driven by shoulder/elbow/wrist/knuckle FK — never wrist translate.
