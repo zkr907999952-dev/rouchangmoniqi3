@@ -2,6 +2,7 @@ import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
 import { Suspense, useEffect, useMemo, useRef, type RefObject } from "react";
 import * as THREE from "three";
+import { Reflector } from "three/examples/jsm/objects/Reflector.js";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Figure } from "./figure";
 import { useStudio, type CamFocus } from "@/lib/studio-store";
@@ -51,6 +52,7 @@ export default function Scene({
       >
         <Suspense fallback={null}>
           <Bedroom room={room} />
+          <WallMirror />
           <StudioLights />
           <BodyFillLight />
           <Figure
@@ -121,6 +123,88 @@ function Bedroom({ room }: { room: THREE.Object3D }) {
   }, [room]);
   applyBedStance(room, stance);
   return <primitive object={room} />;
+}
+
+const MIRROR_W = 2.42;
+const MIRROR_H = 2.18;
+const MIRROR_Y = 1.12;
+const MIRROR_Z = 0.948;
+const _mirrorFwd = new THREE.Vector3();
+
+function WallMirror() {
+  const on = useStudio((s) => s.firstPerson && s.fpView === "body");
+  const group = useMemo(() => {
+    const g = new THREE.Group();
+    const glass = new Reflector(new THREE.PlaneGeometry(MIRROR_W, MIRROR_H), {
+      clipBias: 0.003,
+      textureWidth: 640,
+      textureHeight: 640,
+      color: 0xe6ecf0,
+      multisample: 0,
+    });
+    glass.name = "WallMirror";
+    glass.frustumCulled = false;
+    const draw = glass.onBeforeRender.bind(glass);
+    glass.onBeforeRender = function (renderer, scene, camera, geometry, material, group) {
+      camera.getWorldDirection(_mirrorFwd);
+      if (_mirrorFwd.z < 0.08) return;
+      let hide = glass.userData.fpHide as THREE.Object3D[] | undefined;
+      if (!hide || hide.length === 0) {
+        hide = [];
+        scene.traverse((obj) => {
+          if (obj.userData.fpHide) hide!.push(obj);
+        });
+        glass.userData.fpHide = hide;
+      }
+      const shown: THREE.Object3D[] = [];
+      for (const obj of hide) {
+        if (!obj.visible) {
+          obj.visible = true;
+          shown.push(obj);
+        }
+      }
+      draw(renderer, scene, camera, geometry, material, group);
+      for (const obj of shown) obj.visible = false;
+    };
+    g.add(glass);
+
+    const frameMat = new THREE.MeshStandardMaterial({
+      color: 0x2c2622,
+      roughness: 0.48,
+      metalness: 0.32,
+    });
+    const t = 0.032;
+    const d = 0.022;
+    const hw = MIRROR_W * 0.5;
+    const hh = MIRROR_H * 0.5;
+    const bar = (w: number, h: number, x: number, y: number) => {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), frameMat);
+      mesh.position.set(x, y, -0.008);
+      g.add(mesh);
+    };
+    bar(MIRROR_W + t * 2, t, 0, hh + t * 0.5);
+    bar(MIRROR_W + t * 2, t, 0, -hh - t * 0.5);
+    bar(t, MIRROR_H, -hw - t * 0.5, 0);
+    bar(t, MIRROR_H, hw + t * 0.5, 0);
+
+    g.position.set(0, MIRROR_Y, MIRROR_Z);
+    g.rotation.y = Math.PI;
+    return g;
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      group.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (mesh.isMesh) mesh.geometry.dispose();
+        if ("dispose" in obj && typeof (obj as { dispose?: () => void }).dispose === "function") {
+          (obj as { dispose: () => void }).dispose();
+        }
+      });
+    };
+  }, [group]);
+
+  return <primitive object={group} visible={on} />;
 }
 
 function ControlsBridge({

@@ -1,18 +1,14 @@
 /**
  * Mixamo → VELA clip baker.
  *
- * Standard import (any new full-body clip, including dance):
- *  1. Sample Mixamo at ~24 Hz with a reused AnimationMixer.
- *  2. Retarget by matching an orthonormal AIM+TWIST frame
- *     (character-space child-from-parent), never Mixamo local eulers.
- *  3. Lock each bone's Mixamo lateral axis at t=0 so X/Z does not switch.
- *  4. Apply hip yaw to poseQ AND worldQ before children.
- *  5. Store unit quaternions with sign continuity (q·q_prev ≥ 0).
- *  6. Hands: wrist swing+twist plus proximal finger bones.
- *  7. Runtime slerps quaternions. Do not lerp Euler — overhead arms
- *     hit gimbal lock and twitch (dance 4/5 symptom).
- *
- * Locomotion clips stay Euler+swing for bind compatibility.
+ * Dance import rules — breaking these warped the whole body:
+ *  1. AIM SWING only (setFromUnitVectors). Forearm twist ±0.55 extra.
+ *     Do not match Mixamo's full orthonormal frame (adds bind roll).
+ *  2. Do not cap per-frame angular velocity.
+ *  3. Hip yaw is local on C_Hip_a only. Children worldQ uses pre-yaw hip.
+ *  4. Store dance as unit quaternions with sign continuity; runtime slerps.
+ *     Euler lerp on overhead arms is the dance 4/5 twitch.
+ *  5. Hands = wrist aim (Hand→Middle1). No extra finger chains.
  */
 import fs from "node:fs";
 import path from "node:path";
@@ -77,16 +73,6 @@ const PARENT = {
   L_Hand_a: "L_Forearm_a",
   R_Hand_a: "R_Forearm_a",
   C_Neck_a: "C_Spine_d",
-  L_Index_a: "L_Hand_a",
-  L_Middle_a: "L_Hand_a",
-  L_Ring_a: "L_Hand_a",
-  L_Pinky_a: "L_Hand_a",
-  L_Thumb_a: "L_Hand_a",
-  R_Index_a: "R_Hand_a",
-  R_Middle_a: "R_Hand_a",
-  R_Ring_a: "R_Hand_a",
-  R_Pinky_a: "R_Hand_a",
-  R_Thumb_a: "R_Hand_a",
 };
 
 const DANCE_FILES = {
@@ -110,22 +96,9 @@ const DANCE_CHAINS = [
   { mix: ["mixamorigRightHand", "mixamorigRightHandMiddle1"], ours: "R_Hand_a", child: "R_Middle_a" },
 ];
 
-const FINGER_CHAINS = [];
-for (const [side, o] of [
-  ["Left", "L"],
-  ["Right", "R"],
-]) {
-  for (const f of ["Index", "Middle", "Ring", "Pinky", "Thumb"]) {
-    FINGER_CHAINS.push({
-      mix: [`mixamorig${side}Hand${f}1`, `mixamorig${side}Hand${f}2`],
-      ours: `${o}_${f}_a`,
-      child: `${o}_${f}_b`,
-    });
-  }
-}
-
 const TWIST_BONES = new Set(["L_Forearm_a", "R_Forearm_a"]);
 const RECUMBENT = new Set(["proneIdle", "proneWalk", "crawl"]);
+
 
 const native = JSON.parse(fs.readFileSync("src/lib/softbody/nude-rig-data.json", "utf8")).bones;
 const restPos = Object.fromEntries(native.map((b) => [b.name, new THREE.Vector3(b.x, b.y, b.z)]));
@@ -167,10 +140,6 @@ const _my = new THREE.Vector3();
 const _mz = new THREE.Vector3();
 const _pa = new THREE.Vector3();
 const _pb = new THREE.Vector3();
-const _x = new THREE.Vector3();
-const _y = new THREE.Vector3();
-const _z = new THREE.Vector3();
-const _m = new THREE.Matrix4();
 
 function mixDirRaw(obj, from, to) {
   const a = obj.getObjectByName(from);
@@ -181,7 +150,17 @@ function mixDirRaw(obj, from, to) {
   return _pb.sub(_pa).normalize().clone();
 }
 
+function standHipY(obj) {
+  const clip = obj.animations[0];
+  const hipTrack = clip.tracks.find((t) => t.name === "mixamorigHips.position");
+  if (!hipTrack) return 98;
+  const y0 = hipTrack.createInterpolant().evaluate(0)[1] ?? 98;
+  return y0 > 70 ? y0 : 98;
+}
+
 function facingCancel(obj, hipTrack, dur, name) {
+  // Recumbent clips: thighs point toward the feet, so knee-average facing
+  // yaws the whole body ~180° and turns belly-down into a backbend.
   if (RECUMBENT.has(name)) {
     const hips = obj.getObjectByName("mixamorigHips");
     const head =
@@ -256,58 +235,6 @@ function mixSide(obj, from, aim, yaw) {
   return toOurSpace(best.clone().normalize(), yaw);
 }
 
-function makeLatPicker() {
-  const lock = {};
-  return function mixLat(obj, from, aim, yaw, ours) {
-    const bone = obj.getObjectByName(from);
-    if (!bone) return null;
-    bone.matrixWorld.extractBasis(_mx, _my, _mz);
-    const cands = [_mx, _mz];
-    if (!lock[ours]) {
-      let best = 0;
-      let score = -1;
-      for (let i = 0; i < 2; i++) {
-        const s = 1 - Math.abs(cands[i].dot(aim));
-        if (s > score) {
-          score = s;
-          best = i;
-        }
-      }
-      const v0 = toOurSpace(cands[best].clone().normalize(), yaw);
-      const rest = restLat[ours];
-      lock[ours] = { i: best, sign: rest && v0.dot(rest) < 0 ? -1 : 1 };
-    }
-    const spec = lock[ours];
-    const v = toOurSpace(cands[spec.i].clone().normalize(), yaw);
-    if (spec.sign < 0) v.negate();
-    return v;
-  };
-}
-
-function axesQuat(aim, lat, out) {
-  _z.copy(aim).normalize();
-  _x.copy(lat).addScaledVector(_z, -lat.dot(_z));
-  if (_x.lengthSq() < 1e-8) {
-    if (Math.abs(_z.y) < 0.9) _x.set(0, 1, 0);
-    else _x.set(1, 0, 0);
-    _x.addScaledVector(_z, -_x.dot(_z));
-  }
-  _x.normalize();
-  _y.crossVectors(_z, _x).normalize();
-  _x.crossVectors(_y, _z).normalize();
-  _m.makeBasis(_x, _y, _z);
-  return out.setFromRotationMatrix(_m);
-}
-
-const _qRest = new THREE.Quaternion();
-const _qTgt = new THREE.Quaternion();
-
-function frameRetarget(restAim, restLat, targetAim, targetLat) {
-  axesQuat(restAim, restLat, _qRest);
-  axesQuat(targetAim, targetLat, _qTgt);
-  return _qTgt.clone().multiply(_qRest.clone().invert());
-}
-
 function swingTwist(restAim, restLat, targetAim, targetLat, useTwist) {
   const swing = new THREE.Quaternion().setFromUnitVectors(restAim, targetAim);
   if (!useTwist || !targetLat || targetLat.lengthSq() < 1e-6) return swing;
@@ -360,10 +287,6 @@ function qFlip(q) {
   return q;
 }
 
-function qAng(a, b) {
-  return 2 * Math.acos(Math.min(1, Math.abs(a.dot(b))));
-}
-
 function chainsFor(name) {
   if (!DANCE.has(name)) return CHAINS;
   return [
@@ -371,13 +294,12 @@ function chainsFor(name) {
     ...DANCE_CHAINS.filter((c) => /Shoulder/.test(c.ours)),
     ...CHAINS.slice(4),
     ...DANCE_CHAINS.filter((c) => !/Shoulder/.test(c.ours)),
-    ...FINGER_CHAINS,
   ];
 }
 
 const restAim = {};
 const restLat = {};
-for (const c of [...CHAINS, ...DANCE_CHAINS, ...FINGER_CHAINS]) {
+for (const c of [...CHAINS, ...DANCE_CHAINS]) {
   restAim[c.ours] = restDir(c.ours, c.child);
   restLat[c.ours] = restSide(restAim[c.ours]);
 }
@@ -390,20 +312,17 @@ function bakeOne(name, file) {
   const isDance = DANCE.has(name);
   const bindY = name === "jump" ? 99 : 98;
   const nFrames = isDance
-    ? Math.min(360, Math.max(64, Math.round(dur * 24)))
+    ? Math.max(24, Math.round(dur * 8))
     : name === "jump" || name === "proneWalk"
       ? 16
       : FRAMES;
   const chainList = chainsFor(name);
-  const mixLat = isDance ? makeLatPicker() : null;
   poseAt(obj, 0);
   const theta0 = hipFacingTheta(obj);
   let yawAcc = 0;
   const bones = {};
   const hipY = [];
   const prevQ = {};
-  let maxJump = 0;
-  let jumpBone = "";
   for (let i = 0; i < nFrames; i++) {
     const t = (i / nFrames) * dur;
     poseAt(obj, t);
@@ -418,95 +337,40 @@ function bakeOne(name, file) {
     for (const chain of chainList) {
       const targetAim = mixDir(obj, chain.mix[0], chain.mix[1], yaw);
       if (!targetAim) continue;
-      const targetLat = isDance
-        ? mixLat(obj, chain.mix[0], targetAim, yaw, chain.ours)
-        : mixSide(obj, chain.mix[0], targetAim, yaw);
-      let R;
-      if (isDance) {
-        R = frameRetarget(restAim[chain.ours], restLat[chain.ours], targetAim, targetLat);
-      } else {
-        R = swingTwist(
-          restAim[chain.ours],
-          restLat[chain.ours],
-          targetAim,
-          targetLat,
-          TWIST_BONES.has(chain.ours),
-        );
-      }
+      const targetLat = mixSide(obj, chain.mix[0], targetAim, yaw);
+      const R = swingTwist(
+        restAim[chain.ours],
+        restLat[chain.ours],
+        targetAim,
+        targetLat,
+        TWIST_BONES.has(chain.ours),
+      );
       const Pw = ancestorWorld(chain.ours, worldQ);
-      let poseQ = Pw.clone().invert().multiply(R);
-
-      if (isDance && chain.ours === "C_Hip_a") {
-        _e.setFromQuaternion(poseQ, "XYZ");
-        poseQ = new THREE.Quaternion().setFromEuler(_e.set(_e.x, yawAcc, _e.z, "XYZ"));
-      } else if (!isDance && chain.ours === "C_Hip_a") {
-        _e.setFromQuaternion(poseQ, "XYZ");
-        poseQ = new THREE.Quaternion().setFromEuler(_e.set(_e.x, 0, _e.z, "XYZ"));
-      }
-
+      const poseQ = Pw.clone().invert().multiply(R);
+      worldQ[chain.ours] = Pw.clone().multiply(poseQ);
+      _e.setFromQuaternion(poseQ, "XYZ");
+      let x = _e.x;
+      let y = _e.y;
+      let z = _e.z;
+      if (chain.ours === "C_Hip_a") y = isDance ? yawAcc : 0;
       if (RECUMBENT.has(name) && chain.ours === "C_Hip_a") {
-        _e.setFromQuaternion(poseQ, "XYZ");
-        let x = Math.abs(_e.x);
+        x = Math.abs(x);
         if (name === "proneIdle") x = Math.max(x, 1.2);
         else if (name === "proneWalk") x = Math.max(x, 1.05);
         else x = Math.max(x, 0.88);
-        poseQ = new THREE.Quaternion().setFromEuler(_e.set(x, 0, _e.z, "XYZ"));
       }
-
-      if (!isDance && /UpperArm/.test(chain.ours) && name !== "jump") {
-        _e.setFromQuaternion(poseQ, "XYZ");
-        const y = THREE.MathUtils.clamp(_e.y, -0.22, 0.22);
-        const z = THREE.MathUtils.clamp(_e.z, -0.42, 0.42);
-        poseQ = new THREE.Quaternion().setFromEuler(_e.set(_e.x, y, z, "XYZ"));
+      if (/UpperArm/.test(chain.ours) && name !== "jump" && !isDance) {
+        y = THREE.MathUtils.clamp(y, -0.22, 0.22);
+        z = THREE.MathUtils.clamp(z, -0.42, 0.42);
       }
-
-      if (isDance && prevQ[chain.ours]) {
-        if (poseQ.dot(prevQ[chain.ours]) < 0) qFlip(poseQ);
-        let ang = qAng(poseQ, prevQ[chain.ours]);
-        if (ang > 1.05 && targetLat) {
-          const R2 = frameRetarget(
-            restAim[chain.ours],
-            restLat[chain.ours],
-            targetAim,
-            targetLat.clone().negate(),
-          );
-          let p2 = Pw.clone().invert().multiply(R2);
-          if (chain.ours === "C_Hip_a") {
-            _e.setFromQuaternion(p2, "XYZ");
-            p2 = new THREE.Quaternion().setFromEuler(_e.set(_e.x, yawAcc, _e.z, "XYZ"));
-          }
-          if (p2.dot(prevQ[chain.ours]) < 0) qFlip(p2);
-          const ang2 = qAng(p2, prevQ[chain.ours]);
-          if (ang2 < ang) {
-            poseQ = p2;
-            ang = ang2;
-          }
-        }
-        const armish = /Shoulder|UpperArm|Forearm|Hand|Index|Middle|Ring|Pinky|Thumb/.test(chain.ours);
-        const cap = armish ? 0.72 : 1.25;
-        if (ang > cap) {
-          poseQ.copy(prevQ[chain.ours]).slerp(poseQ, cap / ang);
-          if (poseQ.dot(prevQ[chain.ours]) < 0) qFlip(poseQ);
-        }
-        if (ang > maxJump) {
-          maxJump = ang;
-          jumpBone = chain.ours;
-        }
-      }
-      prevQ[chain.ours] = poseQ.clone();
-      worldQ[chain.ours] = Pw.clone().multiply(poseQ);
-
       if (!bones[chain.ours]) bones[chain.ours] = [];
       if (isDance) {
-        bones[chain.ours].push([
-          +poseQ.x.toFixed(4),
-          +poseQ.y.toFixed(4),
-          +poseQ.z.toFixed(4),
-          +poseQ.w.toFixed(4),
-        ]);
+        const q = new THREE.Quaternion().setFromEuler(_e.set(x, y, z, "XYZ"));
+        if (prevQ[chain.ours] && q.dot(prevQ[chain.ours]) < 0) qFlip(q);
+        prevQ[chain.ours] = q.clone();
+        bones[chain.ours].push([+q.x.toFixed(4), +q.y.toFixed(4), +q.z.toFixed(4), +q.w.toFixed(4)]);
       } else {
-        _e.setFromQuaternion(poseQ, "XYZ");
-        bones[chain.ours].push([+_e.x.toFixed(3), +_e.y.toFixed(3), +_e.z.toFixed(3)]);
+        bones[chain.ours].push([+x.toFixed(3), +y.toFixed(3), +z.toFixed(3)]);
       }
     }
   }
@@ -546,11 +410,16 @@ function bakeOne(name, file) {
     dur.toFixed(2),
     "n",
     nFrames,
-    isDance ? `maxJump ${(maxJump * 180) / Math.PI | 0}°@${jumpBone}` : "",
+    "stride",
+    stride.toFixed(3),
     "hipY0",
     hipY[0],
-    "bones",
-    Object.keys(bones).length,
+    "hipX0",
+    bones.C_Hip_a?.[0],
+    "Lleg",
+    bones.L_UpperLeg_a?.[0],
+    "Larm",
+    bones.L_UpperArm_a?.[0],
   );
 }
 
@@ -564,8 +433,8 @@ fs.writeFileSync(
   OUT,
   JSON.stringify({
     source:
-      "Mixamo aim+twist retarget; dance = unit quaternions + locked lateral + hands/fingers; loco = euler swing",
-    bind: "character-space child-from-parent frames, hip yaw in worldQ before children, mesh faces +Z",
+      "Mixamo aim-swing retarget; dance = unit quaternions of the same poses (runtime slerp); loco = euler swing",
+    bind: "character-space child-from-parent directions, hip yaw cancelled, mesh faces +Z; recumbent facing = hips→head; dance keeps hip yaw + unclamped arms",
     clips,
   }),
 );

@@ -1373,6 +1373,7 @@ function FittedFigure({
       const hint = bindHint(mesh);
       const k = meshKey(mesh);
       if (hint === "hair" || hint === "face" || hint === "eye" || hint === "mouth" || /charm|lash|头发|hair/.test(k)) {
+        mesh.userData.fpHide = true;
         hideMeshes.push(mesh);
       }
       if (!shouldBind(mesh)) {

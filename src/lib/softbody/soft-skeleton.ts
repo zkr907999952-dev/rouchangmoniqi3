@@ -234,13 +234,6 @@ function pickLocoClip(mode: LocoMode, fwd: number, side: number, mag: number, ai
   return side >= 0 ? "walkRight" : "walkLeft";
 }
 
-function lerpAng(a: number, b: number, t: number) {
-  let d = b - a;
-  while (d > Math.PI) d -= Math.PI * 2;
-  while (d < -Math.PI) d += Math.PI * 2;
-  return a + d * t;
-}
-
 function sampleLocoClip(clip: LocoClip, u: number, loop = true) {
   const n = clip.n;
   const wrapped = loop ? (((u % 1) + 1) % 1) : THREE.MathUtils.clamp(u, 0, 0.999);
@@ -257,15 +250,14 @@ function sampleLocoClip(clip: LocoClip, u: number, loop = true) {
     if (a.length >= 4 && b.length >= 4) {
       _qa.set(a[0]!, a[1]!, a[2]!, a[3]!);
       _qb.set(b[0]!, b[1]!, b[2]!, b[3]!);
-      if (_qa.dot(_qb) < 0) _qb.set(-_qb.x, -_qb.y, -_qb.z, -_qb.w);
-      poseQ[name] = new THREE.Quaternion().copy(_qa).slerp(_qb, t);
     } else {
-      pose[name] = [
-        a[0]! + (b[0]! - a[0]!) * t,
-        lerpAng(a[1]!, b[1]!, t),
-        a[2]! + (b[2]! - a[2]!) * t,
-      ];
+      _e.set(a[0]!, a[1]!, a[2]!, "XYZ");
+      _qa.setFromEuler(_e);
+      _e.set(b[0]!, b[1]!, b[2]!, "XYZ");
+      _qb.setFromEuler(_e);
     }
+    if (_qa.dot(_qb) < 0) _qb.set(-_qb.x, -_qb.y, -_qb.z, -_qb.w);
+    poseQ[name] = new THREE.Quaternion().copy(_qa).slerp(_qb, t);
   }
   return { hipY, pose, poseQ };
 }
