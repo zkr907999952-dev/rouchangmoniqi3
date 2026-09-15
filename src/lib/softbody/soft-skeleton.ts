@@ -1540,15 +1540,11 @@ export class SoftSkeleton {
     pull("R_UpperArm_a", "R_Forearm_a");
   }
 
-  /** FPS look. Yaw/pitch are relative to the body (camera − body). Head stays locked to the camera. */
+  /** FPS look. Quats are the desired neck/head WORLD rotation in skeleton space (camera lock). */
   setBodyLook(yaw: number, pitch = 0) {
     this.bodyLookOn = true;
-    const ny = yaw * 0.52;
-    const hy = yaw - ny;
-    const np = -pitch * 0.5;
-    const hp = -pitch - np;
-    this.bodyNeckQ.setFromEuler(_e.set(np, ny, 0, "YXZ"));
-    this.bodyHeadQ.setFromEuler(_e.set(hp, hy, 0, "YXZ"));
+    this.bodyNeckQ.setFromEuler(_e.set(-pitch * 0.5, yaw * 0.52, 0, "YXZ"));
+    this.bodyHeadQ.setFromEuler(_e.set(-pitch, yaw, 0, "YXZ"));
     this.bodySpineQ.identity();
   }
 
@@ -2343,10 +2339,20 @@ export class SoftSkeleton {
         }
       }
       if (!locked && this.bodyLookOn) {
-        const extra =
-          i === this.iNeck ? this.bodyNeckQ : i === this.iHead ? this.bodyHeadQ : null;
-        if (extra) {
-          _lookQ.copy(this.poseQ[i]!).multiply(extra);
+        if (i === this.iNeck) {
+          const p = this.parent[i];
+          if (p >= 0) {
+            _q.copy(this.wrot[p]!).invert();
+            _lookQ.copy(_q).multiply(this.bodyNeckQ);
+          } else {
+            _lookQ.copy(this.bodyNeckQ);
+          }
+          q.copy(_lookQ);
+          qv.set(0, 0, 0);
+          continue;
+        }
+        if (i === this.iHead) {
+          _lookQ.copy(this.bodyNeckQ).invert().multiply(this.bodyHeadQ);
           q.copy(_lookQ);
           qv.set(0, 0, 0);
           continue;
