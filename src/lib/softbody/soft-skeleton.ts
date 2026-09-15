@@ -266,6 +266,7 @@ function sampleLocoClip(clip: LocoClip, u: number, loop = true) {
 }
 
 const STAND_IDLE_MOTION = 0.18;
+const CROUCH_ARM_MOTION = 0.3;
 
 function dampenIdleMotion(
   live: { hipY: number; poseQ: Record<string, THREE.Quaternion> },
@@ -274,6 +275,22 @@ function dampenIdleMotion(
 ) {
   live.hipY = still.hipY + (live.hipY - still.hipY) * k;
   for (const name of Object.keys(live.poseQ)) {
+    const a = still.poseQ[name];
+    const b = live.poseQ[name];
+    if (!a || !b) continue;
+    _qa.copy(b);
+    if (a.dot(_qa) < 0) _qa.set(-_qa.x, -_qa.y, -_qa.z, -_qa.w);
+    b.copy(a).slerp(_qa, k);
+  }
+}
+
+function dampenArmMotion(
+  live: { poseQ: Record<string, THREE.Quaternion> },
+  still: { poseQ: Record<string, THREE.Quaternion> },
+  k: number,
+) {
+  for (const name of Object.keys(live.poseQ)) {
+    if (!/(UpperArm|Forearm|Hand|Shoulder)/.test(name)) continue;
     const a = still.poseQ[name];
     const b = live.poseQ[name];
     if (!a || !b) continue;
@@ -1444,6 +1461,9 @@ export class SoftSkeleton {
       const still = sampleLocoClip(idleClip, 0, true);
       if (move && clipName === "standIdle") dampenIdleMotion(move, still, STAND_IDLE_MOTION);
       if (rest && stanceName === "standIdle") dampenIdleMotion(rest, still, STAND_IDLE_MOTION);
+    }
+    if (move && rest && mode === "crouch" && clipName !== "crouchIdle") {
+      dampenArmMotion(move, rest, CROUCH_ARM_MOTION);
     }
     const tBlend = clip && rest && clipName !== stanceName ? k : move ? 1 : rest ? 1 : 0;
     const set = (name: string, ex: number, ey: number, ez: number, ox = 0, oy = 0, oz = 0) => {
