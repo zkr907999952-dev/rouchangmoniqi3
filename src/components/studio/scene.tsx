@@ -642,6 +642,9 @@ function FirstPersonRig({
   const coyote = useRef(0);
   const jumpBuf = useRef(0);
   const eye = useRef(FP_STAND);
+  const eyeFrom = useRef(FP_STAND);
+  const eyeTarget = useRef(FP_STAND);
+  const eyeBlend = useRef(1);
   const bob = useRef(0);
   const distWalk = useRef(0);
   const input = useRef(new FpInput());
@@ -727,6 +730,9 @@ function FirstPersonRig({
       }
       velY.current = 0;
       eye.current = FP_STAND;
+      eyeFrom.current = FP_STAND;
+      eyeTarget.current = FP_STAND;
+      eyeBlend.current = 1;
       grounded.current = true;
       persp.fov = useStudio.getState().fpFov;
       persp.near = body ? 0.04 : 0.08;
@@ -984,7 +990,19 @@ function FirstPersonRig({
     }
 
     const wantEye = prone ? FP_PRONE : crouched ? FP_CROUCH : FP_STAND;
-    eye.current += (wantEye - eye.current) * (1 - Math.exp(-10 * d));
+    if (wantEye !== eyeTarget.current) {
+      eyeFrom.current = eye.current;
+      eyeTarget.current = wantEye;
+      eyeBlend.current = 0;
+    }
+    if (eyeBlend.current < 1) {
+      eyeBlend.current = Math.min(1, eyeBlend.current + d / 1);
+      const t = eyeBlend.current;
+      const u = t * t * (3 - 2 * t);
+      eye.current = eyeFrom.current + (eyeTarget.current - eyeFrom.current) * u;
+    } else {
+      eye.current = wantEye;
+    }
 
     const fx = -Math.sin(yaw.current);
     const fz = -Math.cos(yaw.current);

@@ -180,6 +180,7 @@ const IDENTITY = new THREE.Quaternion();
 const _c = new THREE.Color();
 const _lookQ = new THREE.Quaternion();
 const LOCO_STOP_DUR = 0.7;
+const STANCE_BLEND_DUR = 1;
 
 const LOCO_BONES = [
   "C_Hip_a",
@@ -375,6 +376,9 @@ export class SoftSkeleton {
   private locoWasAir = false;
   private locoWasMoving = false;
   private locoSettle = 1;
+  private locoModeBlend = 1;
+  private readonly eyeFrom = new THREE.Vector3(0, 1.52, 0.2);
+  private readonly chestFrom = new THREE.Vector3(0, 1.08, 0.14);
   private readonly locoHoldQ: Record<string, THREE.Quaternion> = {};
   private readonly locoHoldOff: Record<string, THREE.Vector3> = {};
   private locoLast = { mode: "stand" as LocoMode, fwd: 0, side: 0, mag: 0 };
@@ -1231,21 +1235,35 @@ export class SoftSkeleton {
 
   /** Stable eye in root-local space. Stance height only — no head nod, look pitch, or walk bob. */
   fpEyeLocal(out: THREE.Vector3) {
-    const mode = this.locoLast.mode;
-    // Sit in front of the (hidden) face so crouch-lean / prone never swallows the camera.
-    if (mode === "prone") out.set(0, 0.30, 0.74);
-    else if (mode === "crouch") out.set(0, 1.06, 0.50);
-    else out.set(0, 1.52, 0.20);
+    this.stanceEye(this.locoLast.mode, out);
+    const u = this.stanceU();
+    if (u < 1) out.lerpVectors(this.eyeFrom, out, u);
     return out;
   }
 
   /** Stable chest aim so looking down sees the body without inheriting walk bob. */
   fpChestLocal(out: THREE.Vector3) {
-    const mode = this.locoLast.mode;
+    this.stanceChest(this.locoLast.mode, out);
+    const u = this.stanceU();
+    if (u < 1) out.lerpVectors(this.chestFrom, out, u);
+    return out;
+  }
+
+  private stanceU() {
+    const t = THREE.MathUtils.clamp(this.locoModeBlend, 0, 1);
+    return t * t * (3 - 2 * t);
+  }
+
+  private stanceEye(mode: LocoMode, out: THREE.Vector3) {
+    if (mode === "prone") out.set(0, 0.3, 0.74);
+    else if (mode === "crouch") out.set(0, 1.06, 0.5);
+    else out.set(0, 1.52, 0.2);
+  }
+
+  private stanceChest(mode: LocoMode, out: THREE.Vector3) {
     if (mode === "prone") out.set(0, 0.18, 0.28);
     else if (mode === "crouch") out.set(0, 0.7, 0.18);
     else out.set(0, 1.08, 0.14);
-    return out;
   }
 
   dumpLoco() {
@@ -1325,8 +1343,19 @@ export class SoftSkeleton {
       }
     }
     this.locoWasAir = airborne;
+    const prevMode = this.locoLast.mode;
+    if (opts.mode !== prevMode) {
+      this.fpEyeLocal(this.eyeFrom);
+      this.fpChestLocal(this.chestFrom);
+      this.captureLocoHold();
+      this.locoModeBlend = 0;
+      this.locoSettle = 1;
+    }
     this.applyLocomotion(opts.mode, opts.fwd, opts.side, mag, this.locoPhase, airborne, clipName);
-    if (!active && this.locoSettle < 1) {
+    if (this.locoModeBlend < 1) {
+      this.locoModeBlend = Math.min(1, this.locoModeBlend + dt / STANCE_BLEND_DUR);
+      this.applyLocoSettle(this.stanceU());
+    } else if (!active && this.locoSettle < 1) {
       this.locoSettle = Math.min(1, this.locoSettle + dt / LOCO_STOP_DUR);
       const u = this.locoSettle * this.locoSettle * (3 - 2 * this.locoSettle);
       this.applyLocoSettle(u);
@@ -1773,6 +1802,7 @@ export class SoftSkeleton {
     this.poseAimY = 0;
     this.poseSnap = 1;
     this.locoSettle = 1;
+    this.locoModeBlend = 1;
     this.locoWasMoving = false;
     for (let i = 0; i < this.count; i++) {
       this.poseQ[i]!.identity();
