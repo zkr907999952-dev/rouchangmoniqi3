@@ -456,6 +456,8 @@ export class SoftSkeleton {
   private neckY = 0;
   private navelY: number;
   private breathT = 0;
+  private breathIn = 0;
+  private breathChest = 0;
   private readonly hairDepth: Float32Array;
   private readonly hairIds: number[] = [];
   private hairLash: Uint8Array | undefined;
@@ -2209,6 +2211,9 @@ export class SoftSkeleton {
     }
     this.hairRootInit = false;
     this.yawF = this.pitchF = this.yawVel = this.pitchVel = 0;
+    this.breathT = 0;
+    this.breathIn = 0;
+    this.breathChest = 0;
     this.hold = null;
     this.dents.length = 0;
     this.setPose(this.pose);
@@ -2281,8 +2286,11 @@ export class SoftSkeleton {
     this.eyeOpenR = THREE.MathUtils.clamp(params.eyeOpenR, 0, 1);
     this.blinkRate = THREE.MathUtils.clamp(params.blinkRate, 4, 40);
     this.blinkSpeed = THREE.MathUtils.clamp(params.blinkSpeed, 0, 1);
+    this.updateBreath(d, params);
     this.mouthOpen = THREE.MathUtils.clamp(params.mouthOpen, 0, 1);
-    const mouthT = this.mouthOpen * this.mouthOpen * (3 - 2 * this.mouthOpen);
+    const breathLips = this.breathIn * 0.085 * (1 - this.mouthOpen * 0.7);
+    const mouthT =
+      this.mouthOpen * this.mouthOpen * (3 - 2 * this.mouthOpen) + breathLips;
     const followM = 1 - Math.exp(-7 * d);
     this.mouthU += (mouthT - this.mouthU) * followM;
     this.mouthAmpU += (THREE.MathUtils.clamp(params.mouthAmp, 0.3, 2) - this.mouthAmpU) * followM;
@@ -2291,7 +2299,8 @@ export class SoftSkeleton {
     this.mouthSmileU += (THREE.MathUtils.clamp(params.mouthSmile, -1, 1) - this.mouthSmileU) * followM;
     this.mouthPuckerU += (THREE.MathUtils.clamp(params.mouthPucker, 0, 1) - this.mouthPuckerU) * followM;
     this.mouthWidthU += (THREE.MathUtils.clamp(params.mouthWidth, -1, 1) - this.mouthWidthU) * followM;
-    if (this.mouthU < 0.0008) this.mouthU = 0;
+    this.mouthWidthU += this.breathIn * 0.04 * (1 - Math.abs(params.mouthWidth));
+    if (this.mouthU < 0.0008 && mouthT < 0.0008) this.mouthU = 0;
     this.updateGaze(d);
     this.updateBlink(d);
     this.closeAmtL = THREE.MathUtils.clamp(1 - this.eyeOpenL * (1 - this.blinkAmt), 0, 1);
@@ -2696,12 +2705,42 @@ export class SoftSkeleton {
     return s * s * (3 - 2 * s);
   }
 
-  private stepTissue(d: number, params: SkelParams) {
+  private breathWave(phase: number) {
+    let p = phase / (Math.PI * 2);
+    p = p - Math.floor(p);
+    if (p < 0) p += 1;
+    if (p < 0.36) {
+      const u = p / 0.36;
+      return u * u * (3 - 2 * u);
+    }
+    if (p < 0.44) return 1;
+    const u = (p - 0.44) / 0.56;
+    return 1 - u * u * (3 - 2 * u);
+  }
+
+  private breathAmpNow(params: SkelParams) {
     const boost = THREE.MathUtils.clamp(params.breathBoost, 0, 1);
-    const freq = (0.85 + params.breathSpeed * 1.9) * (1 + boost * 0.55);
-    const amp = (0.006 + params.breathAmp * 0.012) * (1 + boost * 0.4);
+    return (0.007 + params.breathAmp * 0.015) * (1 + boost * 0.4);
+  }
+
+  private updateBreath(d: number, params: SkelParams) {
+    const boost = THREE.MathUtils.clamp(params.breathBoost, 0, 1);
+    const freq = (0.72 + params.breathSpeed * 1.65) * (1 + boost * 0.5);
     this.breathT += d * freq;
-    const breath = params.breathing ? Math.sin(this.breathT) * amp : 0;
+    const follow = 1 - Math.exp(-10 * d);
+    if (!params.breathing) {
+      this.breathIn += (0 - this.breathIn) * follow;
+      this.breathChest += (0 - this.breathChest) * follow;
+      return;
+    }
+    this.breathIn += (this.breathWave(this.breathT) - this.breathIn) * follow;
+    this.breathChest += (this.breathWave(this.breathT - 0.72) - this.breathChest) * (1 - Math.exp(-8 * d));
+  }
+
+  private stepTissue(d: number, params: SkelParams) {
+    const amp = this.breathAmpNow(params);
+    const bellyW = amp * (0.12 + 0.88 * this.breathIn);
+    const chestW = amp * (0.12 + 0.88 * this.breathChest);
     const grab = this.hold?.kind === "tissue" ? this.hold : null;
     const k = 18 + params.stiffness * 26;
     const damp = Math.exp(-(4 + params.damping * 6) * d);
@@ -2731,7 +2770,15 @@ export class SoftSkeleton {
           (y < by + 0.035 ? smoother(Math.abs(y - by + 0.012), 0.078) : 0) *
           smoother(Math.abs(Math.abs(x) - 0.09), 0.052);
         const front = THREE.MathUtils.clamp((z + 0.01) / 0.11, 0, 1);
-        tz += breath * 0.72 * belly * front;
+        const ribs =
+          smoother(Math.abs(y - (by - 0.11)), 0.11) *
+          smoother(Math.abs(x), 0.068) *
+          (1 - chest * 0.92);
+        tz += bellyW * 0.82 * belly * front;
+        tz += chestW * 1.35 * ribs * front;
+        ty += chestW * 0.16 * ribs * front;
+        ty += bellyW * 0.1 * belly * front;
+        tx += Math.sign(x || 1) * chestW * 0.5 * ribs * front;
         if (params.fistDepth > 0.002) {
           const over = params.fistDepth;
           const bAmp = params.fistBulge;
@@ -2851,8 +2898,7 @@ export class SoftSkeleton {
       const tY =
         (-ay * mass * 0.72 * j - this.pitchF * 0.012 * j - this.pitchVel * 0.003 * j) * bi -
         drop -
-        0.006 * (0.3 + soft) +
-        Math.sin(this.breathT) * 0.004 * (0.4 + soft);
+        0.006 * (0.3 + soft);
       const tZ = (-az * mass * 0.5 * j + Math.abs(this.yawF) * 0.006 * j + Math.max(0, -ay) * mass * 0.28) * bi;
       const w1 = 11.2 - soft * 3.4;
       const z1 = 0.2 + bd * 0.32;
