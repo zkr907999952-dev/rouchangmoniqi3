@@ -87,6 +87,9 @@ export const FP_FOV_DEFAULT = 62;
 export const FP_LOOK_SPEED_MIN = 0.25;
 export const FP_LOOK_SPEED_MAX = 2;
 export const FP_LOOK_SPEED_DEFAULT = 0.9;
+export const MIRROR_RES_MIN = 256;
+export const MIRROR_RES_MAX = 1024;
+export const MIRROR_RES_DEFAULT = 640;
 export const NAVEL_DEPTH_BASE = 0.06;
 export const NAVEL_DIA_BASE = 0.42;
 export const NAVEL_DEPTH_RATIO_DEFAULT = 0.7;
@@ -386,6 +389,7 @@ type StudioState = StudioParams & {
   fpInteractNonce: number;
   fpFov: number;
   fpLookSpeed: number;
+  mirrorRes: number;
   setParam: <K extends keyof StudioParams>(key: K, value: StudioParams[K]) => void;
   applyPreset: (id: PresetId) => void;
   setInteractMode: (mode: InteractMode) => void;
@@ -434,6 +438,7 @@ type StudioState = StudioParams & {
   tapFpInteract: () => void;
   setFpFov: (v: number) => void;
   setFpLookSpeed: (v: number) => void;
+  setMirrorRes: (v: number) => void;
   shake: () => void;
   fireStrike: (point?: [number, number, number] | null) => void;
   resetSim: () => void;
@@ -498,6 +503,7 @@ export const useStudio = create<StudioState>((set) => ({
   fpInteractNonce: 0,
   fpFov: FP_FOV_DEFAULT,
   fpLookSpeed: FP_LOOK_SPEED_DEFAULT,
+  mirrorRes: MIRROR_RES_DEFAULT,
   setParam: (key, value) =>
     set((s) => ({
       ...s,
@@ -794,6 +800,10 @@ export const useStudio = create<StudioState>((set) => ({
   setFpLookSpeed: (fpLookSpeed) =>
     set({
       fpLookSpeed: Math.max(FP_LOOK_SPEED_MIN, Math.min(FP_LOOK_SPEED_MAX, fpLookSpeed)),
+    }),
+  setMirrorRes: (mirrorRes) =>
+    set({
+      mirrorRes: Math.max(MIRROR_RES_MIN, Math.min(MIRROR_RES_MAX, Math.round(mirrorRes / 64) * 64)),
     }),
   shake: () => set((s) => ({ shakeNonce: s.shakeNonce + 1 })),
   fireStrike: (point = null) =>

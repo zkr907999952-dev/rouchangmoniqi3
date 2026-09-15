@@ -1459,7 +1459,32 @@ export class SoftSkeleton {
     if (hipI !== undefined) {
       this.poseOff[hipI]!.y = hipY0 + (hipY1 - hipY0) * t;
     }
-    if (clipName === "standIdle") this.nudgeIdleArmsBack();
+    if (clipName === "standIdle") {
+      this.nudgeIdleUpright();
+      this.nudgeIdleArmsBack();
+    }
+  }
+
+  /** Uncurl the Mixamo breathing-idle hip/spine fold so she stands tall. */
+  private nudgeIdleUpright() {
+    const straighten = (name: string, keep: number) => {
+      const i = this.byName[name];
+      if (i === undefined) return;
+      _e.setFromQuaternion(this.poseQ[i]!, "XYZ");
+      _e.x *= keep;
+      this.poseQ[i]!.setFromEuler(_e);
+    };
+    straighten("C_Hip_a", 0.06);
+    straighten("C_Spine_a", 0.4);
+    straighten("C_Spine_b", 0.28);
+    straighten("C_Spine_c", 0.16);
+    straighten("C_Neck_a", 0.2);
+    straighten("L_UpperLeg_a", 0.35);
+    straighten("R_UpperLeg_a", 0.35);
+    straighten("L_Foreleg_a", 0.1);
+    straighten("R_Foreleg_a", 0.1);
+    straighten("L_Foot_a", 0.22);
+    straighten("R_Foot_a", 0.22);
   }
 
   /** Hang idle arms at the sides, slightly behind the torso instead of in front. */

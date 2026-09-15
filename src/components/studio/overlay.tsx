@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 import * as Slider from "@radix-ui/react-slider";
 import { cn } from "@/lib/utils";
-import { PRESETS, useStudio, type CamFocus, type PresetId, type StudioParams, FP_FOV_MIN, FP_FOV_MAX, FP_LOOK_SPEED_MIN, FP_LOOK_SPEED_MAX } from "@/lib/studio-store";
+import { PRESETS, useStudio, type CamFocus, type PresetId, type StudioParams, FP_FOV_MIN, FP_FOV_MAX, FP_LOOK_SPEED_MIN, FP_LOOK_SPEED_MAX, MIRROR_RES_MIN, MIRROR_RES_MAX } from "@/lib/studio-store";
 import { ANIMATIONS, EXPRESSIONS, HAND_GESTURES, POSES } from "@/lib/softbody/soft-skeleton";
 
 const SLIDERS: {
@@ -385,6 +385,7 @@ export function Overlay() {
               <div className="flex flex-col gap-3">
                 <FpFovSlider />
                 <FpLookSlider />
+                <MirrorResSlider />
                 {SLIDERS.map((item) => (
                   <SliderRow key={item.id} {...item} />
                 ))}
@@ -1619,6 +1620,7 @@ function CameraMenu({ onClose }: { onClose: () => void }) {
         </p>
         <FpFovSlider />
         <FpLookSlider />
+        <MirrorResSlider />
         {firstPerson ? null : (
           <>
         <p className="mb-1.5 text-xs text-muted">视角预设</p>
@@ -1947,6 +1949,34 @@ function FpFovSlider() {
         step={1}
         onValueChange={([v]) => {
           if (typeof v === "number") setFpFov(v);
+        }}
+        className="relative flex h-5 w-full touch-none items-center"
+      >
+        <Slider.Track className="relative h-1 grow rounded-full bg-surface-2/50">
+          <Slider.Range className="absolute h-full rounded-full bg-accent" />
+        </Slider.Track>
+        <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+      </Slider.Root>
+    </label>
+  );
+}
+
+function MirrorResSlider() {
+  const res = useStudio((s) => s.mirrorRes);
+  const setMirrorRes = useStudio((s) => s.setMirrorRes);
+  return (
+    <label className="mb-3 block">
+      <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+        <span>镜子清晰度</span>
+        <span className="tabular-nums text-fg">{res}px</span>
+      </span>
+      <Slider.Root
+        value={[res]}
+        min={MIRROR_RES_MIN}
+        max={MIRROR_RES_MAX}
+        step={64}
+        onValueChange={([v]) => {
+          if (typeof v === "number") setMirrorRes(v);
         }}
         className="relative flex h-5 w-full touch-none items-center"
       >

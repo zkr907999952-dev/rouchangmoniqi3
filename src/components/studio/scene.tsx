@@ -133,6 +133,7 @@ const _mirrorFwd = new THREE.Vector3();
 
 function WallMirror() {
   const on = useStudio((s) => s.firstPerson && s.fpView === "body");
+  const mirrorRes = useStudio((s) => s.mirrorRes);
   const group = useMemo(() => {
     const g = new THREE.Group();
     const glass = new Reflector(new THREE.PlaneGeometry(MIRROR_W, MIRROR_H), {
@@ -195,6 +196,11 @@ function WallMirror() {
     g.rotation.y = Math.PI;
     return g;
   }, []);
+
+  useEffect(() => {
+    const glass = group.getObjectByName("WallMirror") as InstanceType<typeof Reflector> | undefined;
+    glass?.getRenderTarget()?.setSize(mirrorRes, mirrorRes);
+  }, [group, mirrorRes]);
 
   useEffect(() => {
     return () => {
