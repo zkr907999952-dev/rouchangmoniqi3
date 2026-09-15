@@ -996,7 +996,7 @@ function FirstPersonRig({
       eyeBlend.current = 0;
     }
     if (eyeBlend.current < 1) {
-      eyeBlend.current = Math.min(1, eyeBlend.current + d / 1);
+      eyeBlend.current = Math.min(1, eyeBlend.current + d / 0.7);
       const t = eyeBlend.current;
       const u = t * t * (3 - 2 * t);
       eye.current = eyeFrom.current + (eyeTarget.current - eyeFrom.current) * u;

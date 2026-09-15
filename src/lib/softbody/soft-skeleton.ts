@@ -180,7 +180,7 @@ const IDENTITY = new THREE.Quaternion();
 const _c = new THREE.Color();
 const _lookQ = new THREE.Quaternion();
 const LOCO_STOP_DUR = 0.7;
-const STANCE_BLEND_DUR = 1;
+const STANCE_BLEND_DUR = 0.7;
 
 const LOCO_BONES = [
   "C_Hip_a",
@@ -444,6 +444,9 @@ export class SoftSkeleton {
   private hairLash: Uint8Array | undefined;
   private readonly hairP: THREE.Vector3[] = [];
   private readonly hairPrev: THREE.Vector3[] = [];
+  private readonly hairRootPrev = new THREE.Vector3();
+  private readonly hairRootRotPrev = new THREE.Quaternion();
+  private hairRootInit = false;
   private hairLen = new Float32Array(0);
   private readonly chestPos = new THREE.Vector3();
   private readonly chestVel = new THREE.Vector3();
@@ -1487,6 +1490,7 @@ export class SoftSkeleton {
     const hipI = this.byName["C_Hip_a"];
     if (hipI !== undefined) {
       this.poseOff[hipI]!.y = hipY0 + (hipY1 - hipY0) * t;
+      if (mode === "crouch") this.poseOff[hipI]!.y += 0.04;
     }
     if (clipName === "standIdle") {
       this.nudgeIdleUpright();
@@ -2183,6 +2187,7 @@ export class SoftSkeleton {
       this.hairP[k]!.set(this.rest[i * 3]!, this.rest[i * 3 + 1]!, this.rest[i * 3 + 2]!);
       this.hairPrev[k]!.set(this.rest[i * 3]!, this.rest[i * 3 + 1]!, this.rest[i * 3 + 2]!);
     }
+    this.hairRootInit = false;
     this.yawF = this.pitchF = this.yawVel = this.pitchVel = 0;
     this.hold = null;
     this.dents.length = 0;
@@ -2497,7 +2502,25 @@ export class SoftSkeleton {
     if (n < 2) return;
     const root = this.hairIds[0]!;
     const rp = this.wpos[root]!;
-    const neckCut = this.neckY;
+    const rq = this.wrot[root]!;
+    if (!this.hairRootInit) {
+      this.hairRootPrev.copy(rp);
+      this.hairRootRotPrev.copy(rq);
+      this.hairRootInit = true;
+    } else {
+      _q.copy(rq).multiply(_q2.copy(this.hairRootRotPrev).invert());
+      for (let k = 1; k < n; k++) {
+        _from.copy(this.hairP[k]!).sub(this.hairRootPrev);
+        _from.applyQuaternion(_q);
+        this.hairP[k]!.copy(rp).add(_from);
+        _from.copy(this.hairPrev[k]!).sub(this.hairRootPrev);
+        _from.applyQuaternion(_q);
+        this.hairPrev[k]!.copy(rp).add(_from);
+      }
+    }
+    this.hairRootPrev.copy(rp);
+    this.hairRootRotPrev.copy(rq);
+    const neckCut = this.iNeck >= 0 ? this.wpos[this.iNeck]!.y - 0.02 : this.neckY;
     const pinned = (k: number) => k <= 1;
     this.hairP[0]!.copy(rp);
     this.hairPrev[0]!.copy(rp);
@@ -2514,9 +2537,6 @@ export class SoftSkeleton {
       const p = this.hairP[k]!;
       const prev = this.hairPrev[k]!;
       const i = this.hairIds[k]!;
-      const rx = this.rest[i * 3]!;
-      const ry = this.rest[i * 3 + 1]!;
-      const rz = this.rest[i * 3 + 2]!;
       if (pinned(k)) {
         p.copy(this.wpos[i]!);
         prev.copy(p);
@@ -2544,11 +2564,18 @@ export class SoftSkeleton {
       p.x += vx + (-yaw * 0.22 * u * hi + params.wind * 0.5 * u) * dt2 * 60;
       p.y += vy + g * dt2;
       p.z += vz + pitch * 0.12 * u * hi * dt2 * 60;
-      p.x += (rx - p.x) * shape;
-      p.y += (ry - p.y) * shape * 0.75;
-      p.z += (rz - p.z) * shape;
-      if (p.y < ry - 0.1) p.y = ry - 0.1;
-      if (p.z > rz + 0.03) p.z = rz + 0.03;
+      _to.set(
+        this.rest[i * 3]! - this.rest[root * 3]!,
+        this.rest[i * 3 + 1]! - this.rest[root * 3 + 1]!,
+        this.rest[i * 3 + 2]! - this.rest[root * 3 + 2]!,
+      );
+      _to.applyQuaternion(rq);
+      _to.add(rp);
+      p.x += (_to.x - p.x) * shape;
+      p.y += (_to.y - p.y) * shape * 0.75;
+      p.z += (_to.z - p.z) * shape;
+      if (p.y < _to.y - 0.1) p.y = _to.y - 0.1;
+      if (p.z > _to.z + 0.03) p.z = _to.z + 0.03;
       if (p.y < neckCut) {
         const cx = p.x;
         const cz = p.z - 0.03;
@@ -2557,7 +2584,7 @@ export class SoftSkeleton {
           const s = 0.118 / (rad || 1e-6);
           p.x = cx * s;
           p.z = 0.03 + cz * s;
-          if (p.z > rz) p.z = rz;
+          if (p.z > _to.z) p.z = _to.z;
         }
       }
     }
