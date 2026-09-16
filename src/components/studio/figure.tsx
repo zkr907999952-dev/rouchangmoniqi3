@@ -2005,6 +2005,7 @@ function FittedFigure({
     });
     const fistBelly = setup.fist.belly();
     const jumping = (bodyOn && !fpLive.grounded) || s.pose === "jump";
+    const jg = THREE.MathUtils.clamp(s.fpBreastJiggle, 0, 1);
     let moveAx = 0;
     let moveAy = 0;
     let moveAz = 0;
@@ -2013,16 +2014,24 @@ function FittedFigure({
       const vx = (fpLive.x - bodyPrevP.current.x) * inv;
       const vy = (fpLive.y - bodyPrevP.current.y) * inv;
       const vz = (fpLive.z - bodyPrevP.current.z) * inv;
-      moveAx = THREE.MathUtils.clamp((vx - bodyPrevV.current.x) * inv, -22, 22);
-      moveAy = THREE.MathUtils.clamp((vy - bodyPrevV.current.y) * inv, -38, 38);
-      moveAz = THREE.MathUtils.clamp((vz - bodyPrevV.current.z) * inv, -22, 22);
+      const gain = 1.15 + jg * 2.35;
+      moveAx = THREE.MathUtils.clamp((vx - bodyPrevV.current.x) * inv, -22, 22) * gain;
+      moveAy = THREE.MathUtils.clamp((vy - bodyPrevV.current.y) * inv, -38, 38) * gain;
+      moveAz = THREE.MathUtils.clamp((vz - bodyPrevV.current.z) * inv, -22, 22) * gain;
+      if (fpLive.grounded) {
+        const mag = Math.min(1, Math.hypot(fpLive.moveFwd, fpLive.moveSide));
+        const bob = jg * mag;
+        const t = state.clock.elapsedTime;
+        moveAy += Math.sin(t * 11.2) * bob * 16;
+        moveAz += Math.cos(t * 5.6) * bob * 5;
+      }
       bodyPrevP.current.set(fpLive.x, fpLive.y, fpLive.z);
       bodyPrevV.current.set(vx, vy, vz);
     }
     setup.skeleton.step(dt, {
       stiffness: s.stiffness,
       damping: s.damping,
-      jiggle: jumping ? s.jiggle * 0.62 : s.jiggle,
+      jiggle: bodyOn ? s.jiggle * (0.85 + jg * 0.45) : jumping ? s.jiggle * 0.62 : s.jiggle,
       gravity: s.gravity,
       wind: s.wind,
       time: state.clock.elapsedTime,
@@ -2043,10 +2052,14 @@ function FittedFigure({
       fistSpread: s.fistSpread,
       fistLever: s.fistLever,
       fistRise: s.fistRise,
-      breastSoft: jumping ? s.breastSoft * 0.72 : s.breastSoft,
-      breastDamp: jumping ? Math.min(1, 0.42 + s.breastDamp * 0.4) : s.breastDamp,
+      breastSoft: bodyOn ? Math.min(1, s.breastSoft + jg * 0.22) : jumping ? s.breastSoft * 0.72 : s.breastSoft,
+      breastDamp: bodyOn
+        ? Math.max(0.06, s.breastDamp * (1 - jg * 0.38))
+        : jumping
+          ? Math.min(1, 0.42 + s.breastDamp * 0.4)
+          : s.breastDamp,
       hairDamp: s.hairDamp,
-      breastInertia: jumping ? s.breastInertia * 0.78 : s.breastInertia,
+      breastInertia: bodyOn ? Math.min(1, 0.42 + jg * 0.52) : jumping ? s.breastInertia * 0.78 : s.breastInertia,
       hairInertia: jumping ? s.hairInertia * 0.55 : s.hairInertia,
       blinkEnabled: s.blinkEnabled,
       eyeOpenL: s.eyeOpenL,

@@ -36,7 +36,7 @@ import {
 } from "lucide-react";
 import * as Slider from "@radix-ui/react-slider";
 import { cn } from "@/lib/utils";
-import { PRESETS, useStudio, type CamFocus, type PresetId, type StudioParams, FP_FOV_MIN, FP_FOV_MAX, FP_LOOK_SPEED_MIN, FP_LOOK_SPEED_MAX, MIRROR_RES_MIN, MIRROR_RES_MAX } from "@/lib/studio-store";
+import { PRESETS, useStudio, type CamFocus, type PresetId, type StudioParams, FP_FOV_MIN, FP_FOV_MAX, FP_LOOK_SPEED_MIN, FP_LOOK_SPEED_MAX, MIRROR_RES_MIN, MIRROR_RES_MAX, FP_BREAST_JIGGLE_MIN, FP_BREAST_JIGGLE_MAX } from "@/lib/studio-store";
 import { ANIMATIONS, EXPRESSIONS, HAND_GESTURES, POSES } from "@/lib/softbody/soft-skeleton";
 
 const SLIDERS: {
@@ -386,6 +386,7 @@ export function Overlay() {
                 <FpFovSlider />
                 <FpLookSlider />
                 <MirrorResSlider />
+                <FpBreastJiggleSlider />
                 {SLIDERS.map((item) => (
                   <SliderRow key={item.id} {...item} />
                 ))}
@@ -1621,6 +1622,7 @@ function CameraMenu({ onClose }: { onClose: () => void }) {
         <FpFovSlider />
         <FpLookSlider />
         <MirrorResSlider />
+        <FpBreastJiggleSlider />
         {firstPerson ? null : (
           <>
         <p className="mb-1.5 text-xs text-muted">视角预设</p>
@@ -2005,6 +2007,34 @@ function FpLookSlider() {
         step={0.05}
         onValueChange={([v]) => {
           if (typeof v === "number") setFpLookSpeed(v);
+        }}
+        className="relative flex h-5 w-full touch-none items-center"
+      >
+        <Slider.Track className="relative h-1 grow rounded-full bg-surface-2/50">
+          <Slider.Range className="absolute h-full rounded-full bg-accent" />
+        </Slider.Track>
+        <Slider.Thumb className="block size-3.5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
+      </Slider.Root>
+    </label>
+  );
+}
+
+function FpBreastJiggleSlider() {
+  const v = useStudio((s) => s.fpBreastJiggle);
+  const setV = useStudio((s) => s.setFpBreastJiggle);
+  return (
+    <label className="mb-3 block">
+      <span className="mb-1.5 flex items-center justify-between text-xs text-muted">
+        <span>角色视角乳摇</span>
+        <span className="tabular-nums text-fg">{Math.round(v * 100)}%</span>
+      </span>
+      <Slider.Root
+        value={[v]}
+        min={FP_BREAST_JIGGLE_MIN}
+        max={FP_BREAST_JIGGLE_MAX}
+        step={0.01}
+        onValueChange={([n]) => {
+          if (typeof n === "number") setV(n);
         }}
         className="relative flex h-5 w-full touch-none items-center"
       >

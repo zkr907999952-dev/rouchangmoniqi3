@@ -90,6 +90,9 @@ export const FP_LOOK_SPEED_DEFAULT = 0.9;
 export const MIRROR_RES_MIN = 256;
 export const MIRROR_RES_MAX = 1024;
 export const MIRROR_RES_DEFAULT = 640;
+export const FP_BREAST_JIGGLE_MIN = 0;
+export const FP_BREAST_JIGGLE_MAX = 1;
+export const FP_BREAST_JIGGLE_DEFAULT = 0.4;
 export const NAVEL_DEPTH_BASE = 0.06;
 export const NAVEL_DIA_BASE = 0.42;
 export const NAVEL_DEPTH_RATIO_DEFAULT = 0.7;
@@ -390,6 +393,7 @@ type StudioState = StudioParams & {
   fpFov: number;
   fpLookSpeed: number;
   mirrorRes: number;
+  fpBreastJiggle: number;
   setParam: <K extends keyof StudioParams>(key: K, value: StudioParams[K]) => void;
   applyPreset: (id: PresetId) => void;
   setInteractMode: (mode: InteractMode) => void;
@@ -439,6 +443,7 @@ type StudioState = StudioParams & {
   setFpFov: (v: number) => void;
   setFpLookSpeed: (v: number) => void;
   setMirrorRes: (v: number) => void;
+  setFpBreastJiggle: (v: number) => void;
   shake: () => void;
   fireStrike: (point?: [number, number, number] | null) => void;
   resetSim: () => void;
@@ -504,6 +509,7 @@ export const useStudio = create<StudioState>((set) => ({
   fpFov: FP_FOV_DEFAULT,
   fpLookSpeed: FP_LOOK_SPEED_DEFAULT,
   mirrorRes: MIRROR_RES_DEFAULT,
+  fpBreastJiggle: FP_BREAST_JIGGLE_DEFAULT,
   setParam: (key, value) =>
     set((s) => ({
       ...s,
@@ -804,6 +810,10 @@ export const useStudio = create<StudioState>((set) => ({
   setMirrorRes: (mirrorRes) =>
     set({
       mirrorRes: Math.max(MIRROR_RES_MIN, Math.min(MIRROR_RES_MAX, Math.round(mirrorRes / 64) * 64)),
+    }),
+  setFpBreastJiggle: (fpBreastJiggle) =>
+    set({
+      fpBreastJiggle: Math.max(FP_BREAST_JIGGLE_MIN, Math.min(FP_BREAST_JIGGLE_MAX, fpBreastJiggle)),
     }),
   shake: () => set((s) => ({ shakeNonce: s.shakeNonce + 1 })),
   fireStrike: (point = null) =>
