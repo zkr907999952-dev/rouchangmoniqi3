@@ -2103,7 +2103,7 @@ function FittedFigure({
     energyTick.current += 1;
     writeBindings();
     if (bodyOn) {
-      setup.skeleton.fpEyeLocal(_eye);
+      setup.skeleton.fpEyeLocal(_eye, fpLive.pitch);
       const err = eyeSmooth.current.distanceTo(_eye);
       const k = 1 - Math.exp(-(err > 0.28 ? 22 : 12) * dt);
       eyeSmooth.current.lerp(_eye, k);

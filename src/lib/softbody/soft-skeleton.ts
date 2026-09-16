@@ -391,6 +391,7 @@ export class SoftSkeleton {
   private poseSnap = 0;
   locoPhase = 0;
   private locoWasAir = false;
+  private jumpEyeU = 0;
   private locoWasMoving = false;
   private locoSettle = 1;
   private locoModeBlend = 1;
@@ -1255,11 +1256,17 @@ export class SoftSkeleton {
     if (point) this.gazeTarget.copy(point);
   }
 
-  /** Stable eye in root-local space. Stance height only — no head nod, look pitch, or walk bob. */
-  fpEyeLocal(out: THREE.Vector3) {
+  /** Stable eye in root-local space. Stance height only — no head nod or walk bob. */
+  fpEyeLocal(out: THREE.Vector3, pitch = 0) {
     this.stanceEye(this.locoLast.mode, out);
     const u = this.stanceU();
     if (u < 1) out.lerpVectors(this.eyeFrom, out, u);
+    if (this.jumpEyeU > 0.001) {
+      const j = this.jumpEyeU * this.jumpEyeU * (3 - 2 * this.jumpEyeU);
+      const down = THREE.MathUtils.clamp(-pitch, 0, 1.2);
+      out.z += (0.18 + down * 0.16) * j;
+      out.y += 0.03 * j;
+    }
     return out;
   }
 
@@ -1332,6 +1339,8 @@ export class SoftSkeleton {
   ) {
     const mag = THREE.MathUtils.clamp(opts.mag, 0, 1);
     const airborne = Boolean(opts.airborne);
+    if (airborne) this.jumpEyeU = Math.min(1, this.jumpEyeU + dt / 0.1);
+    else this.jumpEyeU = Math.max(0, this.jumpEyeU - dt / 0.2);
     const looping = Boolean(opts.timeLoop);
     const active = looping || airborne || mag > 0.07;
     if (this.locoWasMoving && !active) {
@@ -1513,6 +1522,7 @@ export class SoftSkeleton {
     if (hipI !== undefined) {
       this.poseOff[hipI]!.y = hipY0 + (hipY1 - hipY0) * t;
       if (mode === "crouch") this.poseOff[hipI]!.y += 0.04;
+      if (airborne || clipName === "jump") this.poseOff[hipI]!.y *= 0.18;
     }
     if (clipName === "standIdle") {
       this.nudgeIdleUpright();
@@ -1825,6 +1835,7 @@ export class SoftSkeleton {
     this.poseSnap = 1;
     this.locoSettle = 1;
     this.locoModeBlend = 1;
+    this.jumpEyeU = 0;
     this.locoWasMoving = false;
     for (let i = 0; i < this.count; i++) {
       this.poseQ[i]!.identity();
