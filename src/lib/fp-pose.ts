@@ -27,4 +27,5 @@ export const fpLive = {
   grounded: true,
   airTime: 0,
   velY: 0,
+  sprinting: false,
 };

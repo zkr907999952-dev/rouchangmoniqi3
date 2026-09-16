@@ -6,6 +6,7 @@ export type FpActions = {
   jump: boolean;
   crouchHeld: boolean;
   interact: boolean;
+  sprint: boolean;
 };
 
 const GAME_CODES = new Set([
@@ -36,6 +37,7 @@ function THREE_CLAMP(v: number, a: number, b: number) {
   return v < a ? a : v > b ? b : v;
 }
 
+export const STICK_SPRINT = 0.72;
 const CROUCH_LONG_MS = 500;
 const CROUCH_COOL_MS = 380;
 const CROUCH_STICKY_MS = 80;
@@ -92,7 +94,7 @@ export class CrouchHold {
       this.longFired = true;
       this.lastAction = performance.now();
       this.onLong();
-    }, 500);
+    }, CROUCH_LONG_MS);
   }
 
   private up() {
@@ -218,6 +220,19 @@ export class FpInput {
     const jump = jumpHeld && !this.prevJump;
     const interactHeld = this.interactTap || held("KeyE") || held("KeyF");
     const interact = interactHeld && !this.prevInteract;
+    const stickMag = Math.hypot(this.stickX, this.stickY);
+    let padSprint = false;
+    let padMag = 0;
+    if (pad && pad.mapping === "standard") {
+      padSprint = Boolean(pad.buttons[10]?.pressed);
+      padMag = Math.hypot(pad.axes[0] ?? 0, pad.axes[1] ?? 0);
+    }
+    const sprint =
+      held("ShiftLeft") ||
+      held("ShiftRight") ||
+      stickMag >= STICK_SPRINT ||
+      padSprint ||
+      padMag >= 0.88;
     this.prevJump = jumpHeld;
     this.prevInteract = interactHeld;
     this.jumpTap = false;
@@ -228,6 +243,7 @@ export class FpInput {
       jump,
       crouchHeld: this.crouchHold || padCrouch || held("KeyC"),
       interact,
+      sprint,
     };
   }
 }
@@ -242,13 +258,16 @@ declare global {
       getLookSpeed?: () => number;
       applyLook?: (dx: number, dy: number) => void;
       getSpeed: () => number;
+      getSprinting?: () => boolean;
       getPos?: () => [number, number, number];
       getEye?: () => number;
       getCrouch?: () => boolean;
       getProne?: () => boolean;
       setCrouchHeld?: (v: boolean) => void;
       setKeys?: (codes: string[]) => void;
+      setStick?: (x: number, y: number) => void;
       setSteer?: (v: number) => void;
+      setFirstPerson?: (on: boolean, view?: "observe" | "body") => void;
     };
   }
 }

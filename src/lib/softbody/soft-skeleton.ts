@@ -224,7 +224,14 @@ const LOCO_CLIPS = (locoPack as { clips: Record<string, LocoClip> }).clips;
 const _qa = new THREE.Quaternion();
 const _qb = new THREE.Quaternion();
 
-function pickLocoClip(mode: LocoMode, fwd: number, side: number, mag: number, airborne = false) {
+function pickLocoClip(
+  mode: LocoMode,
+  fwd: number,
+  side: number,
+  mag: number,
+  airborne = false,
+  sprint = false,
+) {
   if (airborne) return "jump";
   const moving = mag > 0.07;
   const af = Math.abs(fwd);
@@ -236,7 +243,12 @@ function pickLocoClip(mode: LocoMode, fwd: number, side: number, mag: number, ai
     return side >= 0 ? "crouchRight" : "crouchLeft";
   }
   if (!moving) return "standIdle";
-  if (af >= as) return fwd >= 0 ? "walk" : "walkBack";
+  const run = sprint && Boolean(LOCO_CLIPS.run);
+  if (af >= as) {
+    if (fwd >= 0) return run ? "run" : "walk";
+    return run && LOCO_CLIPS.runBack ? "runBack" : "walkBack";
+  }
+  if (run) return side >= 0 ? (LOCO_CLIPS.runRight ? "runRight" : "walkRight") : LOCO_CLIPS.runLeft ? "runLeft" : "walkLeft";
   return side >= 0 ? "walkRight" : "walkLeft";
 }
 
@@ -1365,6 +1377,7 @@ export class SoftSkeleton {
       jumpU?: number;
       clip?: string | null;
       timeLoop?: boolean;
+      sprint?: boolean;
     },
   ) {
     const mag = THREE.MathUtils.clamp(opts.mag, 0, 1);
@@ -1378,7 +1391,8 @@ export class SoftSkeleton {
       this.locoSettle = 0;
     }
     if (active) this.locoSettle = 1;
-    const clipName = opts.clip ?? pickLocoClip(opts.mode, opts.fwd, opts.side, mag, airborne);
+    const sprint = Boolean(opts.sprint) && opts.mode === "stand";
+    const clipName = opts.clip ?? pickLocoClip(opts.mode, opts.fwd, opts.side, mag, airborne, sprint);
     const clip = clipName ? LOCO_CLIPS[clipName] : undefined;
     const idleSlow = clipName === "standIdle" ? 2.4 : 1;
     if (looping && clip) {
@@ -1412,7 +1426,7 @@ export class SoftSkeleton {
       this.locoModeBlend = 0;
       this.locoSettle = 1;
     }
-    this.applyLocomotion(opts.mode, opts.fwd, opts.side, mag, this.locoPhase, airborne, clipName);
+    this.applyLocomotion(opts.mode, opts.fwd, opts.side, mag, this.locoPhase, airborne, clipName, sprint);
     if (this.locoModeBlend < 1) {
       this.locoModeBlend = Math.min(1, this.locoModeBlend + dt / STANCE_BLEND_DUR);
       this.applyLocoSettle(this.stanceU());
@@ -1475,6 +1489,7 @@ export class SoftSkeleton {
     phase: number,
     airborne = false,
     clipNameArg?: string | null,
+    sprint = false,
   ) {
     for (const name of LOCO_BONES) {
       const i = this.byName[name];
@@ -1482,7 +1497,7 @@ export class SoftSkeleton {
       this.poseQ[i]!.identity();
       this.poseOff[i]!.set(0, 0, 0);
     }
-    const clipName = clipNameArg ?? pickLocoClip(mode, fwd, side, mag, airborne);
+    const clipName = clipNameArg ?? pickLocoClip(mode, fwd, side, mag, airborne, sprint);
     const clip = clipName ? LOCO_CLIPS[clipName] : undefined;
     const stanceName = airborne
       ? null

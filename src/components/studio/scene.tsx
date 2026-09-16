@@ -600,8 +600,8 @@ const FP_STAND = 1.58;
 const FP_CROUCH = 0.86;
 const FP_PRONE = 0.28;
 const FP_WALK = 1.65;
-const FP_AIR = 1.35;
-const FP_JUMP = 5.2;
+const FP_AIR = 1.55;
+const FP_JUMP = 6.9;
 const FP_GRAV = 13;
 const FP_SENS = 0.0017;
 const FP_TOUCH_SENS = 0.00305;
@@ -981,6 +981,7 @@ function FirstPersonRig({
         pitch.current = THREE.MathUtils.clamp(pitch.current, -FP_PITCH_LIM, FP_PITCH_LIM);
       },
       getSpeed: () => speedRef.current,
+      getSprinting: () => fpLive.sprinting,
       getPos: () => pos.current.toArray() as [number, number, number],
       getEye: () => eye.current,
       getCrouch: () => useStudio.getState().fpCrouch,
@@ -1005,9 +1006,15 @@ function FirstPersonRig({
       }),
       setCrouchHeld: (v: boolean) => crouchGate.current?.setHeld(v),
       setKeys: (codes: string[]) => input.current.setKeys(codes),
+      setStick: (x: number, y: number) => {
+        useStudio.getState().setFpStick(x, y);
+      },
       setSteer: (v: number) => {
         input.current.stickX = -v;
         input.current.stickY = 1;
+      },
+      setFirstPerson: (on: boolean, view?: "observe" | "body") => {
+        useStudio.getState().setFirstPerson(on, view);
       },
     };
     window.__controlsTest = probe;
@@ -1060,15 +1067,22 @@ function FirstPersonRig({
     const rx = Math.cos(yaw.current);
     const rz = -Math.sin(yaw.current);
     const cityOn = live.worldMap === "city" && getCityRuntime().ready;
+    const sprint = Boolean(act.sprint) && !crouched && !prone;
     const speed = grounded.current
       ? prone
         ? FP_WALK * 0.28
         : crouched
           ? FP_WALK * 0.45
           : cityOn
-            ? FP_WALK * 1.7
-            : FP_WALK
-      : FP_AIR;
+            ? sprint
+              ? FP_WALK * 5.6
+              : FP_WALK * 3.05
+            : sprint
+              ? FP_WALK * 1.9
+              : FP_WALK
+      : sprint
+        ? FP_AIR * 1.35
+        : FP_AIR;
     const wishX = rx * act.moveX + fx * act.moveY;
     const wishZ = rz * act.moveX + fz * act.moveY;
     const wishLen = Math.hypot(wishX, wishZ);
@@ -1126,7 +1140,10 @@ function FirstPersonRig({
 
     if (grounded.current && wishLen > 0.12) distWalk.current += step;
     else distWalk.current *= 1 - d * 4;
-    const bobAmp = grounded.current && wishLen > 0.12 ? (prone ? 0.006 : crouched ? 0.01 : 0.018) : 0;
+    const bobAmp =
+      grounded.current && wishLen > 0.12
+        ? (prone ? 0.006 : crouched ? 0.01 : sprint ? 0.028 : 0.018)
+        : 0;
     bob.current = Math.sin(distWalk.current * 14) * bobAmp;
 
     fpLive.active = true;
@@ -1144,6 +1161,7 @@ function FirstPersonRig({
     fpLive.stepDist = grounded.current ? stepDist : 0;
     fpLive.grounded = grounded.current;
     fpLive.velY = velY.current;
+    fpLive.sprinting = sprint && wishLen > 0.12;
     if (grounded.current) fpLive.airTime = 0;
     else fpLive.airTime += d;
   }, -1);

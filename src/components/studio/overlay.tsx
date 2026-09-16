@@ -38,6 +38,7 @@ import * as Slider from "@radix-ui/react-slider";
 import { cn } from "@/lib/utils";
 import { PRESETS, useStudio, type CamFocus, type PresetId, type StudioParams, FP_FOV_MIN, FP_FOV_MAX, FP_LOOK_SPEED_MIN, FP_LOOK_SPEED_MAX, MIRROR_RES_MIN, MIRROR_RES_MAX, FP_BREAST_JIGGLE_MIN, FP_BREAST_JIGGLE_MAX } from "@/lib/studio-store";
 import { ANIMATIONS, EXPRESSIONS, HAND_GESTURES, POSES } from "@/lib/softbody/soft-skeleton";
+import { STICK_SPRINT } from "@/lib/fp-control";
 
 const SLIDERS: {
   id: keyof Pick<
@@ -315,7 +316,7 @@ export function Overlay() {
         <div className="max-w-[16rem]">
           <p className="font-display text-2xl leading-none tracking-display text-fg sm:text-3xl">柔肠模拟器</p>
           <p className="mt-1.5 text-[11px] leading-snug text-muted sm:hidden">
-            {firstPerson ? "滑动转视角 · 左摇杆移动" : "双指拖动平移 · 双击后拖动旋转"}
+            {firstPerson ? "滑动转视角 · 左摇杆移动 · 外圈奔跑" : "双指拖动平移 · 双击后拖动旋转"}
           </p>
         </div>
       </header>
@@ -1613,10 +1614,10 @@ function CameraMenu({ onClose }: { onClose: () => void }) {
             ? fpView === "body"
               ? fpLookLocked
                 ? "角色视角已锁定 · 再点右键或 Esc 解除 · 低头可见身体"
-                : "控制角色 · WASD 移动 · 空格跳 · C 蹲 · 低头看身体 · 右键锁定视角"
+                : "控制角色 · WASD 移动 · Shift 奔跑 · 空格跳 · C 蹲 · 低头看身体 · 右键锁定视角"
               : fpLookLocked
                 ? "观察视角已锁定 · 再点右键或 Esc 解除"
-                : "WASD 移动 · 空格跳 · C 点按蹲 · 长按匍匐 · 滚轮缩放 · 右键锁定视角"
+                : "WASD 移动 · Shift 奔跑 · 空格跳 · C 点按蹲 · 长按匍匐 · 滚轮缩放 · 右键锁定视角"
             : "观察：在房间走动看角色。角色视角：以角色头部为镜头，身体跟随转向。左侧发光门为出门。"}
         </p>
         <FpFovSlider />
@@ -1781,7 +1782,7 @@ function FirstPersonHud() {
   const tapFpInteract = useStudio((s) => s.tapFpInteract);
   const portalHint = useStudio((s) => s.portalHint);
   const stickRef = useRef<HTMLDivElement>(null);
-  const [knob, setKnob] = useState({ x: 0, y: 0 });
+  const [knob, setKnob] = useState({ x: 0, y: 0, mag: 0 });
   const [touchUi, setTouchUi] = useState(false);
   const pid = useRef<number | null>(null);
 
@@ -1799,7 +1800,7 @@ function FirstPersonHud() {
     if (!firstPerson) {
       setFpStick(0, 0);
       setFpCrouchHeld(false);
-      setKnob({ x: 0, y: 0 });
+      setKnob({ x: 0, y: 0, mag: 0 });
     }
   }, [firstPerson, setFpStick, setFpCrouchHeld]);
 
@@ -1819,7 +1820,7 @@ function FirstPersonHud() {
       dx = (dx / mag) * max;
       dy = (dy / mag) * max;
     }
-    setKnob({ x: dx, y: dy });
+    setKnob({ x: dx, y: dy, mag: Math.hypot(dx, dy) / max });
     setFpStick(dx / max, -dy / max);
   };
 
@@ -1837,7 +1838,7 @@ function FirstPersonHud() {
   const onStickUp = (e: PointerEvent<HTMLDivElement>) => {
     if (pid.current !== e.pointerId) return;
     pid.current = null;
-    setKnob({ x: 0, y: 0 });
+    setKnob({ x: 0, y: 0, mag: 0 });
     setFpStick(0, 0);
     if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   };
@@ -1870,26 +1871,37 @@ function FirstPersonHud() {
             ? "匍匐中 · 点按 C 起身 · 长按取消匍匐"
             : crouch
               ? "下蹲中 · C 起身 · 长按匍匐"
-              : "右键锁定视角 · WASD 移动 · C 点按蹲 · 长按匍匐"}
+              : "右键锁定视角 · WASD 移动 · Shift 奔跑 · C 点按蹲 · 长按匍匐"}
         </p>
       )}
       {touchUi ? (
         <>
           <div
             ref={stickRef}
-            className="pointer-events-auto absolute bottom-8 left-5 z-20 grid size-32 place-items-center touch-none rounded-full border border-border/50 bg-surface/45 backdrop-blur-[2px]"
+            className={cn(
+              "pointer-events-auto absolute bottom-8 left-5 z-20 grid size-32 place-items-center touch-none rounded-full border backdrop-blur-[2px]",
+              knob.mag >= STICK_SPRINT
+                ? "border-accent bg-accent/25"
+                : "border-border/50 bg-surface/45",
+            )}
             style={{ marginBottom: "env(safe-area-inset-bottom)" }}
             onPointerDown={onStickDown}
             onPointerMove={onStickMove}
             onPointerUp={onStickUp}
             onPointerCancel={onStickUp}
           >
-            <span className="pointer-events-none absolute inset-0 m-auto size-[4.5rem] rounded-full border border-border/35 bg-fg/10" />
+            <span className="pointer-events-none absolute inset-0 m-auto size-[46%] rounded-full border border-border/40 bg-fg/10" />
             <span className="pointer-events-none absolute inset-0 z-[1] m-auto size-1.5 rounded-full bg-fg/50" />
             <span
-              className="pointer-events-none relative z-10 size-12 rounded-full bg-accent/90 shadow-sm"
+              className={cn(
+                "pointer-events-none relative z-10 size-12 rounded-full shadow-sm",
+                knob.mag >= STICK_SPRINT ? "bg-accent" : "bg-accent/90",
+              )}
               style={{ transform: `translate(${knob.x}px, ${knob.y}px)` }}
             />
+            <span className="pointer-events-none absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] tracking-wide text-muted">
+              {knob.mag >= STICK_SPRINT ? "奔跑" : "外圈奔跑"}
+            </span>
           </div>
           <div
             className="absolute right-5 z-20 flex flex-col gap-3"

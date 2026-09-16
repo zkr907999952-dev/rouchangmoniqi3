@@ -24,6 +24,10 @@ const FILES = {
   walkBack: "Walking_Backwards.fbx",
   walkLeft: "Walk_Strafe_Left.fbx",
   walkRight: "Walk_Strafe_Right.fbx",
+  run: "Fast_Run.fbx",
+  runBack: "Running_Backward.fbx",
+  runLeft: "Left_Strafe.fbx",
+  runRight: "Right_Strafe.fbx",
   crouchIdle: "Crouch_Idle.fbx",
   crouchWalk: "Crouch_Walk_Forward.fbx",
   crouchBack: "Crouch_Walk_Back.fbx",
@@ -324,7 +328,7 @@ function bakeOne(name, file) {
     ? Math.max(24, Math.round(dur * 8))
     : name === "standIdle"
       ? Math.max(16, Math.round(dur * 6))
-      : name === "jump" || name === "proneWalk"
+      : name.startsWith("run") || name === "jump" || name === "proneWalk"
         ? 16
         : FRAMES;
   const chainList = chainsFor(name);
@@ -370,7 +374,7 @@ function bakeOne(name, file) {
         else if (name === "proneWalk") x = Math.max(x, 1.05);
         else x = Math.max(x, 0.88);
       }
-      if (/UpperArm/.test(chain.ours) && name !== "jump" && !isDance && name !== "standIdle") {
+      if (/UpperArm/.test(chain.ours) && name !== "jump" && !isDance && name !== "standIdle" && !name.startsWith("run")) {
         y = THREE.MathUtils.clamp(y, -0.22, 0.22);
         z = THREE.MathUtils.clamp(z, -0.42, 0.42);
       }
@@ -402,6 +406,7 @@ function bakeOne(name, file) {
             ? 0
             : 1.35;
   }
+  if (name.startsWith("run")) stride = THREE.MathUtils.clamp(stride < 0.4 ? 1.85 : stride, 1.35, 3.1);
   if (name.startsWith("crouch")) stride = THREE.MathUtils.clamp(stride, 0.5, 1.05);
   if (name === "crawl") stride = THREE.MathUtils.clamp(stride, 0.4, 0.75);
   if (name === "proneWalk") stride = THREE.MathUtils.clamp(stride, 0.45, 0.95);
@@ -435,9 +440,15 @@ function bakeOne(name, file) {
 }
 
 const ONLY_IDLE = process.argv.includes("standIdle");
+const ONLY_RUN = process.argv.includes("run");
 const clips =
-  (ONLY_DANCE || ONLY_IDLE) && fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, "utf8")).clips : {};
-if (ONLY_IDLE) {
+  (ONLY_DANCE || ONLY_IDLE || ONLY_RUN) && fs.existsSync(OUT) ? JSON.parse(fs.readFileSync(OUT, "utf8")).clips : {};
+if (ONLY_RUN) {
+  bakeOne("run", FILES.run);
+  bakeOne("runBack", FILES.runBack);
+  bakeOne("runLeft", FILES.runLeft);
+  bakeOne("runRight", FILES.runRight);
+} else if (ONLY_IDLE) {
   bakeOne("standIdle", FILES.standIdle);
 } else {
   if (!ONLY_DANCE) {

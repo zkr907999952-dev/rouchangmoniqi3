@@ -1771,6 +1771,7 @@ function FittedFigure({
         stepDist: fpLive.stepDist,
         airborne: !fpLive.grounded,
         airTime: fpLive.airTime,
+        sprint: fpLive.sprinting,
       });
     } else {
       if (s.worldMap === "city") {

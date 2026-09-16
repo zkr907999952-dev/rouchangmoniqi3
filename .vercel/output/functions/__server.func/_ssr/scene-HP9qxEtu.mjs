@@ -1,9 +1,10 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { a as require_jsx_runtime, o as require_react } from "../_libs/@radix-ui/react-collection+[...].mjs";
-import { B as MOUSE, Dt as Vector2, Et as TorusGeometry, F as LinearFilter, G as Mesh, H as MathUtils, I as LinearMipmapLinearFilter, K as MeshBasicMaterial, M as LineBasicMaterial, Ot as Vector3, P as LineSegments, S as Group, St as Spherical, U as Matrix3, W as Matrix4, Y as MeshStandardMaterial, _ as CylinderGeometry, at as PlaneGeometry, b as Euler, d as BufferGeometry, ft as Ray, g as ConeGeometry, gt as SRGBColorSpace, h as Color, ht as RingGeometry, i as useThree, it as Plane, kt as Vector4, l as Box3, m as ClampToEdgeWrapping, n as Canvas, ot as PointLight, p as CanvasTexture, pt as Raycaster, q as MeshLambertMaterial, r as useFrame, t as OrbitControls, u as BufferAttribute, ut as Quaternion, xt as SphereGeometry, y as DynamicDrawUsage } from "../_libs/@react-three/drei+[...].mjs";
+import { At as TorusGeometry, C as Fog, Et as Spherical, F as LineBasicMaterial, G as MathUtils, J as Mesh, K as Matrix3, L as LineSegments, Mt as Vector2, Nt as Vector3, Pt as Vector4, Q as MeshStandardMaterial, R as LinearFilter, Tt as SphereGeometry, U as MOUSE, X as MeshLambertMaterial, Y as MeshBasicMaterial, _ as ConeGeometry, b as DynamicDrawUsage, ct as PlaneGeometry, d as BufferAttribute, f as BufferGeometry, g as Color, gt as Raycaster, h as ClampToEdgeWrapping, ht as Ray, i as useThree, l as Box3, lt as PointLight, m as CanvasTexture, n as Canvas, pt as Quaternion, q as Matrix4, r as useFrame, st as Plane, t as OrbitControls, u as BoxGeometry, v as CylinderGeometry, vt as RingGeometry, w as Group, x as Euler, yt as SRGBColorSpace, z as LinearMipmapLinearFilter } from "../_libs/@react-three/drei+[...].mjs";
 import { n as SkeletonUtils } from "../_libs/three-stdlib.mjs";
-import { a as SoftSkeleton, i as LOCO_POSES, n as navelInsertMorph, o as isLocoPose, r as useStudio } from "./routes-CD1NVt1k.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/scene-CvbS2Pit.js
+import { t as Reflector } from "../_libs/three.mjs";
+import { a as navelInsertMorph, c as SoftSkeleton, i as FpInput, l as isDancePose, n as loadCityModel, o as useStudio, r as CrouchHold, s as LOCO_POSES, u as isLocoPose } from "./routes-BgQXMseR.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/scene-HP9qxEtu.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var nude_rig_data_default = {
@@ -3436,16 +3437,25 @@ var BayonetPlay = class {
 			shader.uniforms.uY1 = { value: y1 };
 			shader.uniforms.uXMax = { value: xMax };
 			shader.uniforms.uZFront = { value: zFront };
+			shader.uniforms.uNavelW = { value: new Vector3(0, (y0 + y1) * .5, 0) };
+			shader.uniforms.uAbRight = { value: new Vector3(1, 0, 0) };
+			shader.uniforms.uAbUp = { value: new Vector3(0, 1, 0) };
+			shader.uniforms.uAbFwd = { value: new Vector3(0, 0, 1) };
 			shader.uniforms.uTile = { value: new Vector4(u0, v0, uSpan, vSpan) };
 			shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vBodyW;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvBodyW = (modelMatrix * vec4(transformed, 1.0)).xyz;");
 			shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>
 uniform float uXray; uniform float uY0; uniform float uY1; uniform float uXMax; uniform float uZFront;
+uniform vec3 uNavelW; uniform vec3 uAbRight; uniform vec3 uAbUp; uniform vec3 uAbFwd;
 uniform vec4 uTile;
 varying vec3 vBodyW;
 float xrayHole() {
-  float band = smoothstep(uY0, uY0 + 0.08, vBodyW.y) * (1.0 - smoothstep(uY1 - 0.04, uY1, vBodyW.y));
-  float torso = 1.0 - smoothstep(uXMax * 0.65, uXMax + 0.1, abs(vBodyW.x));
-  float front = smoothstep(uZFront - 0.16, uZFront + 0.04, vBodyW.z);
+  vec3 d = vBodyW - uNavelW;
+  float lx = dot(d, uAbRight);
+  float ly = dot(d, uAbUp);
+  float lz = dot(d, uAbFwd);
+  float band = smoothstep(uY0, uY0 + 0.08, ly) * (1.0 - smoothstep(uY1 - 0.04, uY1, ly));
+  float torso = 1.0 - smoothstep(uXMax * 0.65, uXMax + 0.1, abs(lx));
+  float front = smoothstep(uZFront - 0.16, uZFront + 0.04, lz);
   return clamp(band * torso * front * uXray, 0.0, 1.0);
 }`).replace("#include <map_fragment>", `#ifdef USE_MAP
            if (vMapUv.x < 0.0 || vMapUv.x > 1.0 || vMapUv.y < 0.0 || vMapUv.y > 1.0) discard;
@@ -3999,6 +4009,7 @@ var fpLive = {
 	z: 0,
 	yaw: 0,
 	pitch: 0,
+	bodyYaw: Math.PI,
 	crouched: false,
 	prone: false,
 	eyeX: 0,
@@ -4014,8 +4025,274 @@ var fpLive = {
 	stepDist: 0,
 	grounded: true,
 	airTime: 0,
-	velY: 0
+	velY: 0,
+	sprinting: false
 };
+var HOME_EXIT = {
+	x: -1.62,
+	y: 0,
+	z: .12,
+	r: 1.05
+};
+var HOME_RETURN_SPAWN = {
+	x: -1.12,
+	y: 0,
+	z: .12,
+	yaw: -Math.PI / 2,
+	pitch: -.08
+};
+var CELL = 8;
+var HCELL = 4;
+var PLAYER_R = .32;
+var city = {
+	group: null,
+	solids: [],
+	hash: /* @__PURE__ */ new Map(),
+	heights: /* @__PURE__ */ new Map(),
+	spawn: {
+		x: 42.5,
+		y: 0,
+		z: 40.2,
+		yaw: 0,
+		pitch: -.06
+	},
+	portal: {
+		x: 42.5,
+		z: 40.2,
+		r: 1.8
+	},
+	minX: -1800,
+	maxX: 1300,
+	minZ: -1500,
+	maxZ: 1550,
+	ready: false
+};
+function getCityRuntime() {
+	return city;
+}
+function getCitySpawn() {
+	return city.spawn;
+}
+function cellKey(ix, iz) {
+	return ix + 32768 << 16 | iz + 32768;
+}
+function kindOf(name) {
+	const n = name.toLowerCase();
+	if (/water/.test(n) && !/ground/.test(n)) return "skip";
+	if (/grass|green_|garden|ground|boulevard_ground|docks_ground|island_ground|hotel_ground|richarea|businessdistrict|sidewalk/.test(n)) return "ground";
+	if (/palm|tree|parasol|flag|golf|lightpole|radar|crane/.test(n)) return "skip";
+	return "solid";
+}
+function collectName(obj) {
+	const parts = [];
+	let o = obj;
+	while (o) {
+		if (o.name) parts.push(o.name);
+		o = o.parent;
+	}
+	return parts.join(" ");
+}
+function fillHeightBox(b, y) {
+	const x0 = Math.floor(b.minX / HCELL);
+	const x1 = Math.floor(b.maxX / HCELL);
+	const z0 = Math.floor(b.minZ / HCELL);
+	const z1 = Math.floor(b.maxZ / HCELL);
+	for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
+		const k = cellKey(ix, iz);
+		const prev = city.heights.get(k);
+		if (prev === void 0 || y > prev) city.heights.set(k, y);
+	}
+}
+function addSolid(b) {
+	const i = city.solids.length;
+	city.solids.push(b);
+	const x0 = Math.floor(b.minX / CELL);
+	const x1 = Math.floor(b.maxX / CELL);
+	const z0 = Math.floor(b.minZ / CELL);
+	const z1 = Math.floor(b.maxZ / CELL);
+	for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
+		const k = cellKey(ix, iz);
+		let list = city.hash.get(k);
+		if (!list) {
+			list = [];
+			city.hash.set(k, list);
+		}
+		list.push(i);
+	}
+}
+function mergeBoxes(list) {
+	if (!list.length) return null;
+	const b = { ...list[0] };
+	for (let i = 1; i < list.length; i++) {
+		const n = list[i];
+		b.minX = Math.min(b.minX, n.minX);
+		b.minY = Math.min(b.minY, n.minY);
+		b.minZ = Math.min(b.minZ, n.minZ);
+		b.maxX = Math.max(b.maxX, n.maxX);
+		b.maxY = Math.max(b.maxY, n.maxY);
+		b.maxZ = Math.max(b.maxZ, n.maxZ);
+	}
+	return b;
+}
+function bakeCityCollision(root) {
+	city.group = root;
+	city.solids = [];
+	city.hash = /* @__PURE__ */ new Map();
+	city.heights = /* @__PURE__ */ new Map();
+	city.ready = false;
+	root.updateMatrixWorld(true);
+	const _box = new Box3();
+	const houseBoxes = [];
+	let minX = Infinity;
+	let maxX = -Infinity;
+	let minZ = Infinity;
+	let maxZ = -Infinity;
+	root.traverse((obj) => {
+		const mesh = obj;
+		if (!mesh.isMesh) return;
+		mesh.castShadow = false;
+		mesh.receiveShadow = false;
+		mesh.frustumCulled = true;
+		const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+		for (const mat of mats) {
+			const std = mat;
+			if ("envMapIntensity" in std) std.envMapIntensity = .55;
+			if (std.transparent && (std.opacity ?? 1) > .92 && !std.alphaMap) {
+				std.transparent = false;
+				std.depthWrite = true;
+			}
+		}
+		if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
+		_box.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrixWorld);
+		if (!Number.isFinite(_box.min.x) || _box.isEmpty()) return;
+		const aabb = {
+			minX: _box.min.x,
+			minY: _box.min.y,
+			minZ: _box.min.z,
+			maxX: _box.max.x,
+			maxY: _box.max.y,
+			maxZ: _box.max.z
+		};
+		minX = Math.min(minX, aabb.minX);
+		maxX = Math.max(maxX, aabb.maxX);
+		minZ = Math.min(minZ, aabb.minZ);
+		maxZ = Math.max(maxZ, aabb.maxZ);
+		const w = aabb.maxX - aabb.minX;
+		const h = aabb.maxY - aabb.minY;
+		const d = aabb.maxZ - aabb.minZ;
+		const name = collectName(mesh);
+		const kind = kindOf(name);
+		if (kind === "ground") {
+			fillHeightBox(aabb, aabb.maxY);
+			return;
+		}
+		if (kind === "skip") return;
+		if (h < .48 && aabb.maxY < .7) {
+			fillHeightBox(aabb, aabb.maxY);
+			return;
+		}
+		if (h < .55 && Math.max(w, d) < .7) return;
+		addSolid(aabb);
+		if (/\bHouse_2B\b/.test(name) && !/fence/i.test(name)) houseBoxes.push(aabb);
+	});
+	city.minX = Number.isFinite(minX) ? minX + 4 : -1800;
+	city.maxX = Number.isFinite(maxX) ? maxX - 4 : 1300;
+	city.minZ = Number.isFinite(minZ) ? minZ + 4 : -1500;
+	city.maxZ = Number.isFinite(maxZ) ? maxZ - 4 : 1550;
+	const home = mergeBoxes(houseBoxes);
+	if (home) {
+		const cx = (home.minX + home.maxX) * .5;
+		const cz = home.maxZ + 3.4;
+		city.spawn = {
+			x: cx,
+			y: cityGroundY(cx, cz),
+			z: cz,
+			yaw: 0,
+			pitch: -.06
+		};
+		city.portal = {
+			x: cx,
+			z: cz,
+			r: 1.85
+		};
+	} else {
+		city.spawn.y = cityGroundY(city.spawn.x, city.spawn.z);
+		city.portal.x = city.spawn.x;
+		city.portal.z = city.spawn.z;
+	}
+	city.ready = true;
+}
+function cityGroundY(x, z) {
+	const ix = Math.floor(x / HCELL);
+	const iz = Math.floor(z / HCELL);
+	let best = Number.NEGATIVE_INFINITY;
+	for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
+		const y = city.heights.get(cellKey(ix + dx, iz + dz));
+		if (y !== void 0 && y > best) best = y;
+	}
+	if (best === Number.NEGATIVE_INFINITY) return 0;
+	return best;
+}
+function cityResolve(x, y, z, radius = PLAYER_R) {
+	x = MathUtils.clamp(x, city.minX, city.maxX);
+	z = MathUtils.clamp(z, city.minZ, city.maxZ);
+	const ix0 = Math.floor((x - radius) / CELL);
+	const ix1 = Math.floor((x + radius) / CELL);
+	const iz0 = Math.floor((z - radius) / CELL);
+	const iz1 = Math.floor((z + radius) / CELL);
+	const seen = /* @__PURE__ */ new Set();
+	const head = y + 1.55;
+	const feet = y + .12;
+	for (let pass = 0; pass < 3; pass++) for (let ix = ix0; ix <= ix1; ix++) for (let iz = iz0; iz <= iz1; iz++) {
+		const list = city.hash.get(cellKey(ix, iz));
+		if (!list) continue;
+		for (const i of list) {
+			if (pass === 0 && seen.has(i)) continue;
+			seen.add(i);
+			const b = city.solids[i];
+			if (head < b.minY || feet > b.maxY) continue;
+			const nx = MathUtils.clamp(x, b.minX, b.maxX);
+			const nz = MathUtils.clamp(z, b.minZ, b.maxZ);
+			const dx = x - nx;
+			const dz = z - nz;
+			const d2 = dx * dx + dz * dz;
+			if (d2 >= radius * radius) continue;
+			if (d2 < 1e-8) {
+				const left = x - b.minX;
+				const right = b.maxX - x;
+				const back = z - b.minZ;
+				const fwd = b.maxZ - z;
+				const m = Math.min(left, right, back, fwd);
+				if (m === left) x = b.minX - radius;
+				else if (m === right) x = b.maxX + radius;
+				else if (m === back) z = b.minZ - radius;
+				else z = b.maxZ + radius;
+			} else {
+				const d = Math.sqrt(d2);
+				const k = (radius - d) / d;
+				x += dx * k;
+				z += dz * k;
+			}
+		}
+	}
+	x = MathUtils.clamp(x, city.minX, city.maxX);
+	z = MathUtils.clamp(z, city.minZ, city.maxZ);
+	return {
+		x,
+		z
+	};
+}
+function nearHomeExit(x, z) {
+	const dx = x - HOME_EXIT.x;
+	const dz = z - HOME_EXIT.z;
+	return dx * dx + dz * dz <= HOME_EXIT.r * HOME_EXIT.r;
+}
+function nearCityPortal(x, z) {
+	const dx = x - city.portal.x;
+	const dz = z - city.portal.z;
+	const r = city.portal.r;
+	return dx * dx + dz * dz <= r * r;
+}
 var _hit = new Vector3();
 var _normal = new Vector3();
 var _target = new Vector3();
@@ -4029,7 +4306,15 @@ var _size = new Vector3();
 var _center = new Vector3();
 var _local = new Vector3();
 var _eye = new Vector3();
+var _navelW = new Vector3();
+var _abRight = new Vector3();
+var _abUp = new Vector3();
+var _abFwd = new Vector3();
 var _bodyE = new Euler();
+var BODY_LOOK_DEAD = Math.PI / 3;
+function shortestAng(a) {
+	return Math.atan2(Math.sin(a), Math.cos(a));
+}
 var TORSO_RE = /skin|dress|body|torso|outfit|cloth|top|bottom|nude|mesh/i;
 var SKIP_BIND_RE = /charm|wing/i;
 function meshKey(mesh) {
@@ -4971,24 +5256,33 @@ function polishOrgans(root, kind) {
 		mesh.raycast = () => {};
 	});
 }
-function injectXray(shader, y0, y1, xMax, zFront) {
+function injectXray(shader, y0, y1, xMax, zFront, navel) {
 	shader.uniforms.uXray = { value: 0 };
 	shader.uniforms.uY0 = { value: y0 };
 	shader.uniforms.uY1 = { value: y1 };
 	shader.uniforms.uXMax = { value: xMax };
 	shader.uniforms.uZFront = { value: zFront };
+	shader.uniforms.uNavelW = { value: navel.clone() };
+	shader.uniforms.uAbRight = { value: new Vector3(1, 0, 0) };
+	shader.uniforms.uAbUp = { value: new Vector3(0, 1, 0) };
+	shader.uniforms.uAbFwd = { value: new Vector3(0, 0, 1) };
 	shader.vertexShader = shader.vertexShader.replace("#include <common>", "#include <common>\nvarying vec3 vBodyW;").replace("#include <begin_vertex>", "#include <begin_vertex>\nvBodyW = (modelMatrix * vec4(transformed, 1.0)).xyz;");
 	shader.fragmentShader = shader.fragmentShader.replace("#include <common>", `#include <common>
 uniform float uXray; uniform float uY0; uniform float uY1; uniform float uXMax; uniform float uZFront;
+uniform vec3 uNavelW; uniform vec3 uAbRight; uniform vec3 uAbUp; uniform vec3 uAbFwd;
 varying vec3 vBodyW;
 float xrayHole() {
-  float band = smoothstep(uY0, uY0 + 0.08, vBodyW.y) * (1.0 - smoothstep(uY1 - 0.04, uY1, vBodyW.y));
-  float torso = 1.0 - smoothstep(uXMax * 0.65, uXMax + 0.1, abs(vBodyW.x));
-  float front = smoothstep(uZFront - 0.16, uZFront + 0.04, vBodyW.z);
+  vec3 d = vBodyW - uNavelW;
+  float lx = dot(d, uAbRight);
+  float ly = dot(d, uAbUp);
+  float lz = dot(d, uAbFwd);
+  float band = smoothstep(uY0, uY0 + 0.08, ly) * (1.0 - smoothstep(uY1 - 0.04, uY1, ly));
+  float torso = 1.0 - smoothstep(uXMax * 0.65, uXMax + 0.1, abs(lx));
+  float front = smoothstep(uZFront - 0.16, uZFront + 0.04, lz);
   return clamp(band * torso * front * uXray, 0.0, 1.0);
 }`);
 }
-function attachXray(mesh, y0, y1, xMax, zFront, list, overlays) {
+function attachXray(mesh, y0, y1, xMax, zFront, navel, list, overlays) {
 	const punchMats = (Array.isArray(mesh.material) ? mesh.material : [mesh.material]).map((mat) => {
 		if (!mat) return mat;
 		const punch = mat.clone();
@@ -4998,7 +5292,7 @@ function attachXray(mesh, y0, y1, xMax, zFront, list, overlays) {
 		punch.depthWrite = true;
 		punch.depthTest = true;
 		punch.onBeforeCompile = (shader) => {
-			injectXray(shader, y0, y1, xMax, zFront);
+			injectXray(shader, y0, y1, xMax, zFront, navel);
 			shader.fragmentShader = shader.fragmentShader.replace("#include <dithering_fragment>", `if (!gl_FrontFacing) discard;
          if (xrayHole() > 0.07) discard;
          #include <dithering_fragment>`);
@@ -5019,7 +5313,7 @@ function attachXray(mesh, y0, y1, xMax, zFront, list, overlays) {
 		fade.depthTest = true;
 		fade.side = 0;
 		fade.onBeforeCompile = (shader) => {
-			injectXray(shader, y0, y1, xMax, zFront);
+			injectXray(shader, y0, y1, xMax, zFront, navel);
 			shader.fragmentShader = shader.fragmentShader.replace("#include <dithering_fragment>", `if (!gl_FrontFacing) discard;
          float hole = xrayHole();
          if (hole < 0.012) discard;
@@ -5065,6 +5359,7 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 	const exprRef = (0, import_react.useRef)(useStudio.getState().expression);
 	const poseRef = (0, import_react.useRef)(useStudio.getState().pose);
 	const bodyWasOn = (0, import_react.useRef)(false);
+	const bodyYawRef = (0, import_react.useRef)(Math.PI);
 	const eyeSmooth = (0, import_react.useRef)(new Vector3(0, 1.5, .12));
 	const jumpMenuT = (0, import_react.useRef)(0);
 	const gestLRef = (0, import_react.useRef)(useStudio.getState().handGestureL);
@@ -5081,6 +5376,8 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 	const navelLiveInsert = (0, import_react.useRef)(0);
 	const navelThrustOn = (0, import_react.useRef)(false);
 	const rmbDown = (0, import_react.useRef)(false);
+	const bodyPrevP = (0, import_react.useRef)(new Vector3());
+	const bodyPrevV = (0, import_react.useRef)(new Vector3());
 	const { camera, gl, raycaster, pointer } = useThree();
 	const setup = (0, import_react.useMemo)(() => {
 		const xrayList = [];
@@ -5218,7 +5515,10 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 			if (!mesh.isMesh || !mesh.geometry) return;
 			const hint = bindHint(mesh);
 			const k = meshKey(mesh);
-			if (hint === "hair" || hint === "face" || hint === "eye" || hint === "mouth" || /charm|lash|头发|hair/.test(k)) hideMeshes.push(mesh);
+			if (hint === "hair" || hint === "face" || hint === "eye" || hint === "mouth" || /charm|lash|头发|hair/.test(k)) {
+				mesh.userData.fpHide = true;
+				hideMeshes.push(mesh);
+			}
 			if (!shouldBind(mesh)) {
 				mesh.raycast = () => {};
 				return;
@@ -5226,7 +5526,7 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 			bindMesh(mesh);
 			if (isTorsoMesh(mesh)) {
 				torsoMeshes.push(mesh);
-				if (attachXray(mesh, yX0, yX1, .12, skinZ - .01, xrayList, xrayOverlays)) xrayHosts.push(mesh);
+				if (attachXray(mesh, yX0 - navel.y, yX1 - navel.y, .12, skinZ - .01 - navel.z, navel, xrayList, xrayOverlays)) xrayHosts.push(mesh);
 			}
 		});
 		for (let i = 0; i < xrayOverlays.length; i++) xrayHosts[i]?.add(xrayOverlays[i]);
@@ -5249,10 +5549,10 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 		const knife = new BayonetPlay();
 		knife.attach(bayonet, peristalsis.getTubes(), bayonetLong);
 		knife.setSkin(torsoMeshes, {
-			y0: yX0,
-			y1: yX1,
+			y0: yX0 - navel.y,
+			y1: yX1 - navel.y,
 			xMax: .12,
-			zFront: skinZ - .01
+			zFront: skinZ - .01 - navel.z
 		});
 		const navelMorph = buildNavelMorph(torsoBinds, navel);
 		root.add(knife.root);
@@ -5600,12 +5900,24 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 		}
 		const bodyOn = s.firstPerson && s.fpView === "body";
 		if (bodyOn) {
-			if (!bodyWasOn.current) setup.skeleton.fpEyeLocal(eyeSmooth.current);
+			if (!bodyWasOn.current) {
+				setup.skeleton.fpEyeLocal(eyeSmooth.current);
+				bodyYawRef.current = fpLive.yaw;
+			}
+			const lookYaw = fpLive.yaw;
+			let bodyYaw = bodyYawRef.current;
+			const delta = shortestAng(lookYaw - bodyYaw);
+			if (Math.hypot(fpLive.moveFwd, fpLive.moveSide) > .1 || !fpLive.grounded) bodyYaw += shortestAng(lookYaw - bodyYaw) * (1 - Math.exp(-10 * dt));
+			else if (Math.abs(delta) > BODY_LOOK_DEAD) bodyYaw = lookYaw - Math.sign(delta) * BODY_LOOK_DEAD;
+			bodyYaw = shortestAng(bodyYaw);
+			bodyYawRef.current = bodyYaw;
+			fpLive.bodyYaw = bodyYaw;
 			setup.root.position.set(fpLive.x, fpLive.y, fpLive.z);
-			_bodyE.set(0, fpLive.yaw + Math.PI, 0, "YXZ");
+			_bodyE.set(0, bodyYaw + Math.PI, 0, "YXZ");
 			setup.root.quaternion.setFromEuler(_bodyE);
 			setup.root.updateMatrixWorld(true);
-			setup.skeleton.setBodyLook?.(s.fpProne ? 0 : fpLive.pitch);
+			setup.skeleton.setGazeTarget(null);
+			setup.skeleton.setBodyLook(shortestAng(lookYaw - bodyYaw), fpLive.pitch);
 			setup.skeleton.tickLocomotion(dt, {
 				mode: s.fpProne ? "prone" : s.fpCrouch ? "crouch" : "stand",
 				fwd: fpLive.moveFwd,
@@ -5614,11 +5926,19 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 				speedMps: fpLive.speedMps,
 				stepDist: fpLive.stepDist,
 				airborne: !fpLive.grounded,
-				airTime: fpLive.airTime
+				airTime: fpLive.airTime,
+				sprint: fpLive.sprinting
 			});
 		} else {
-			setup.root.position.set(0, 0, 0);
-			setup.root.quaternion.identity();
+			if (s.worldMap === "city") {
+				const sp = getCitySpawn();
+				setup.root.position.set(sp.x, sp.y, sp.z);
+				_bodyE.set(0, sp.yaw + Math.PI, 0, "YXZ");
+				setup.root.quaternion.setFromEuler(_bodyE);
+			} else {
+				setup.root.position.set(0, 0, 0);
+				setup.root.quaternion.identity();
+			}
 			setup.skeleton.clearBodyLook?.();
 			if (bodyWasOn.current) {
 				setup.skeleton.setPose(s.pose);
@@ -5626,7 +5946,15 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 				jumpMenuT.current = 0;
 			}
 			if (s.pose === "jump") jumpMenuT.current += dt;
-			if (isLocoPose(s.pose) || s.pose === "squat" || s.pose === "jump") {
+			if (isDancePose(s.pose)) setup.skeleton.tickLocomotion(dt, {
+				mode: "stand",
+				fwd: 0,
+				side: 0,
+				mag: 1,
+				clip: s.pose,
+				timeLoop: true
+			});
+			else if (isLocoPose(s.pose) || s.pose === "squat" || s.pose === "jump") {
 				const spec = s.pose === "squat" ? {
 					mode: "crouch",
 					fwd: 0,
@@ -5646,7 +5974,14 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 					jumpU: s.pose === "jump" ? jumpMenuT.current % 2.17 / 2.17 : void 0,
 					clip: s.pose === "crawl" ? "crawl" : void 0
 				});
-			}
+			} else if (s.pose === "idle") setup.skeleton.tickLocomotion(dt, {
+				mode: "stand",
+				fwd: 0,
+				side: 0,
+				mag: 0,
+				clip: "standIdle",
+				timeLoop: true
+			});
 		}
 		bodyWasOn.current = bodyOn;
 		for (const mesh of setup.hideMeshes ?? []) mesh.visible = !bodyOn;
@@ -5692,15 +6027,25 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 					}
 				}
 			} else {
-				_plane.setFromNormalAndCoplanarPoint(_camDir, grab.current.planePoint);
+				if (grab.current.mode === "fist") {
+					_local.copy(o);
+					setup.fist.root.localToWorld(_local);
+					_plane.setFromNormalAndCoplanarPoint(_camDir, _local);
+				} else _plane.setFromNormalAndCoplanarPoint(_camDir, grab.current.planePoint);
 				if (_ray.intersectPlane(_plane, _target)) {
 					if (grab.current.mode === "fist") {
+						setup.root.worldToLocal(_target);
+						setup.skeleton.toRestLocal(_target);
 						setup.fist.dragTo(o, _target);
 						grab.current.origin.copy(_target);
 						grab.current.planePoint.copy(_target);
 					} else if (grab.current.mode === "bayonet") {
-						_plane.setFromNormalAndCoplanarPoint(_camDir, setup.knife.handle);
+						_local.copy(setup.knife.handle);
+						setup.knife.root.localToWorld(_local);
+						_plane.setFromNormalAndCoplanarPoint(_camDir, _local);
 						if (_ray.intersectPlane(_plane, _target)) {
+							setup.root.worldToLocal(_target);
+							setup.skeleton.toRestLocal(_target);
 							setup.knife.dragTo(_target);
 							grab.current.origin.copy(setup.knife.handle);
 							grab.current.planePoint.copy(setup.knife.handle);
@@ -5793,10 +6138,33 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 			stirRadius: s.fistStirRadius
 		});
 		const fistBelly = setup.fist.belly();
+		const jumping = bodyOn && !fpLive.grounded || s.pose === "jump";
+		const jg = MathUtils.clamp(s.fpBreastJiggle, 0, 1);
+		let moveAx = 0;
+		let moveAy = 0;
+		let moveAz = 0;
+		if (bodyOn) {
+			const inv = 1 / Math.max(dt, 1 / 120);
+			const vx = (fpLive.x - bodyPrevP.current.x) * inv;
+			const vy = (fpLive.y - bodyPrevP.current.y) * inv;
+			const vz = (fpLive.z - bodyPrevP.current.z) * inv;
+			const gain = 1.15 + jg * 2.35;
+			moveAx = MathUtils.clamp((vx - bodyPrevV.current.x) * inv, -22, 22) * gain;
+			moveAy = MathUtils.clamp((vy - bodyPrevV.current.y) * inv, -38, 38) * gain;
+			moveAz = MathUtils.clamp((vz - bodyPrevV.current.z) * inv, -22, 22) * gain;
+			if (fpLive.grounded) {
+				const bob = jg * Math.min(1, Math.hypot(fpLive.moveFwd, fpLive.moveSide));
+				const t = state.clock.elapsedTime;
+				moveAy += Math.sin(t * 11.2) * bob * 16;
+				moveAz += Math.cos(t * 5.6) * bob * 5;
+			}
+			bodyPrevP.current.set(fpLive.x, fpLive.y, fpLive.z);
+			bodyPrevV.current.set(vx, vy, vz);
+		}
 		setup.skeleton.step(dt, {
 			stiffness: s.stiffness,
 			damping: s.damping,
-			jiggle: s.jiggle,
+			jiggle: bodyOn ? s.jiggle * (.85 + jg * .45) : jumping ? s.jiggle * .62 : s.jiggle,
 			gravity: s.gravity,
 			wind: s.wind,
 			time: state.clock.elapsedTime,
@@ -5817,11 +6185,11 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 			fistSpread: s.fistSpread,
 			fistLever: s.fistLever,
 			fistRise: s.fistRise,
-			breastSoft: s.breastSoft,
-			breastDamp: s.breastDamp,
+			breastSoft: bodyOn ? Math.min(1, s.breastSoft + jg * .22) : jumping ? s.breastSoft * .72 : s.breastSoft,
+			breastDamp: bodyOn ? Math.max(.06, s.breastDamp * (1 - jg * .38)) : jumping ? Math.min(1, .42 + s.breastDamp * .4) : s.breastDamp,
 			hairDamp: s.hairDamp,
-			breastInertia: s.breastInertia,
-			hairInertia: s.hairInertia,
+			breastInertia: bodyOn ? Math.min(1, .42 + jg * .52) : jumping ? s.breastInertia * .78 : s.breastInertia,
+			hairInertia: jumping ? s.hairInertia * .55 : s.hairInertia,
 			blinkEnabled: s.blinkEnabled,
 			eyeOpenL: s.eyeOpenL,
 			eyeOpenR: s.eyeOpenR,
@@ -5833,7 +6201,10 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 			mouthLipAmp: s.mouthLipAmp,
 			mouthSmile: s.mouthSmile,
 			mouthPucker: s.mouthPucker,
-			mouthWidth: s.mouthWidth
+			mouthWidth: s.mouthWidth,
+			moveAx,
+			moveAy,
+			moveAz
 		});
 		{
 			let depth = s.navelDepth;
@@ -5864,6 +6235,9 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 			pump: s.bayonetPump,
 			grabbing: grabbingKnife
 		});
+		setup.skeleton.bindAbdomen(setup.fist.root);
+		setup.skeleton.bindAbdomen(setup.knife.root);
+		setup.skeleton.bindAbdomen(setup.knife.wounds);
 		if (setup.knife.consumeAutoReleased()) {
 			bayonetPenRef.current = 0;
 			useStudio.setState({
@@ -5904,7 +6278,7 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 		energyTick.current += 1;
 		writeBindings();
 		if (bodyOn) {
-			setup.skeleton.fpEyeLocal(_eye);
+			setup.skeleton.fpEyeLocal(_eye, fpLive.pitch);
 			const err = eyeSmooth.current.distanceTo(_eye);
 			const k = 1 - Math.exp(-(err > .28 ? 22 : 12) * dt);
 			eyeSmooth.current.lerp(_eye, k);
@@ -5923,9 +6297,24 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 		if (energyTick.current % 8 === 0) s.setEnergy(setup.skeleton.energy);
 		if (Boolean(grab.current?.active) || setup.skeleton.hasDents || Math.abs(s.bellyInflate) > .04 || s.navelDepth > .03 || s.navelDiameter > .03 || s.navelInsert > .03 || s.navelThrust || s.navelStir || energyTick.current % 2 === 0) for (const geo of setup.boundGeos) geo.computeVertexNormals();
 		const xray = s.abdomenXray;
+		setup.skeleton.posedNavel(setup.navel, _navelW);
+		setup.skeleton.abdomenAxes(_abRight, _abUp, _abFwd);
+		setup.bellyLight.position.copy(_navelW);
+		_abRight.transformDirection(setup.root.matrixWorld).normalize();
+		_abUp.transformDirection(setup.root.matrixWorld).normalize();
+		_abFwd.transformDirection(setup.root.matrixWorld).normalize();
+		setup.root.localToWorld(_navelW);
+		const writeXrayFrame = (mat) => {
+			const u = mat.userData.shader?.uniforms;
+			if (!u) return;
+			if (u.uXray) u.uXray.value = xray;
+			u.uNavelW?.value.copy(_navelW);
+			u.uAbRight?.value.copy(_abRight);
+			u.uAbUp?.value.copy(_abUp);
+			u.uAbFwd?.value.copy(_abFwd);
+		};
 		for (const mat of setup.xrayList) {
-			const shader = mat.userData.shader;
-			if (shader?.uniforms?.uXray) shader.uniforms.uXray.value = xray;
+			writeXrayFrame(mat);
 			if (mat.transparent) {
 				mat.depthWrite = false;
 				mat.depthTest = true;
@@ -5937,6 +6326,12 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 				mat.side = 0;
 			}
 		}
+		setup.knife.wounds.traverse((obj) => {
+			const mesh = obj;
+			if (!mesh.isMesh) return;
+			const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+			for (const mat of mats) if (mat) writeXrayFrame(mat);
+		});
 		for (const ov of setup.xrayOverlays) ov.visible = xray > .03 && !s.showWeights;
 		setup.gutRoot.visible = s.showOrgans;
 		setup.pelvisRoot.visible = s.showOrgans;
@@ -6113,7 +6508,8 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 					airborne: opts.airborne,
 					airTime: opts.airTime,
 					jumpU: opts.jumpU,
-					clip: opts.clip
+					clip: opts.clip,
+					timeLoop: opts.timeLoop
 				});
 				return setup.skeleton.dumpLoco();
 			};
@@ -6137,6 +6533,29 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 					hideCount: setup.hideMeshes.length,
 					root: setup.root.position.toArray(),
 					rotY: setup.root.rotation.y,
+					lookYaw: fpLive.yaw,
+					bodyYaw: fpLive.bodyYaw,
+					lookPitch: fpLive.pitch,
+					neckEul: (() => {
+						const i = setup.skeleton.names.indexOf("C_Neck_a");
+						if (i < 0) return null;
+						_bodyE.setFromQuaternion(setup.skeleton.boneRot(i), "YXZ");
+						return [
+							_bodyE.x,
+							_bodyE.y,
+							_bodyE.z
+						];
+					})(),
+					headEul: (() => {
+						const i = setup.headBone;
+						if (i < 0) return null;
+						_bodyE.setFromQuaternion(setup.skeleton.boneRot(i), "YXZ");
+						return [
+							_bodyE.x,
+							_bodyE.y,
+							_bodyE.z
+						];
+					})(),
 					cam: camera.position.toArray(),
 					eye: [
 						fpLive.eyeX,
@@ -6180,6 +6599,10 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 					camera.position.set(1.55, 1.15, 1.45);
 					camera.lookAt(0, .95, .08);
 					if (controlsRef.current) controlsRef.current.target.set(0, .95, .08);
+				} else if (mode === "dance") {
+					camera.position.set(1.85, 1.12, 2.35);
+					camera.lookAt(0, .82, .05);
+					if (controlsRef.current) controlsRef.current.target.set(0, .82, .05);
 				} else {
 					camera.position.set(1.2, 1.08, 1.85);
 					camera.lookAt(0, .9, .06);
@@ -6372,6 +6795,8 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 		e.stopPropagation();
 		_hit.copy(e.point);
 		const st = useStudio.getState();
+		const pt = e.nativeEvent.pointerType;
+		if (st.firstPerson && (pt === "touch" || pt === "pen")) return;
 		const mode = st.interactMode;
 		if (mode === "strike") {
 			useStudio.getState().fireStrike([
@@ -6382,6 +6807,8 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 			return;
 		}
 		if (mode === "fist") {
+			setup.root.worldToLocal(_hit);
+			setup.skeleton.toRestLocal(_hit);
 			beginGrab(_hit, _normal.set(0, 0, 1), "fist");
 			return;
 		}
@@ -6408,6 +6835,13 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 				_hit.copy(hit.point);
 				_normal.copy(hit.face.normal).transformDirection(hit.object.matrixWorld).normalize();
 				if (_normal.dot(_camDir) > 0) _normal.negate();
+				_local.copy(_hit).add(_normal);
+				setup.root.worldToLocal(_hit);
+				setup.root.worldToLocal(_local);
+				_normal.copy(_local).sub(_hit);
+				if (_normal.lengthSq() > 1e-10) _normal.normalize();
+				setup.skeleton.toRestLocal(_hit);
+				setup.skeleton.toRestDir(_normal);
 				setup.knife.pick(_hit, _normal, hit.object, hit.faceIndex ?? -1);
 				bayonetPenRef.current = 0;
 				st.setBayonetHasEntry(true);
@@ -6580,219 +7014,6 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 		})
 	] });
 }
-var GAME_CODES = /* @__PURE__ */ new Set([
-	"KeyW",
-	"KeyA",
-	"KeyS",
-	"KeyD",
-	"ArrowUp",
-	"ArrowDown",
-	"ArrowLeft",
-	"ArrowRight",
-	"Space",
-	"KeyC",
-	"KeyE",
-	"KeyF",
-	"ShiftLeft",
-	"ShiftRight"
-]);
-function radialDeadzone(x, y, dz = .15) {
-	const m = Math.hypot(x, y);
-	if (m < dz) return {
-		x: 0,
-		y: 0
-	};
-	const scale = (m - dz) / (1 - dz) / m;
-	return {
-		x: x * scale,
-		y: y * scale
-	};
-}
-function THREE_CLAMP(v, a, b) {
-	return v < a ? a : v > b ? b : v;
-}
-var CROUCH_COOL_MS = 380;
-var CROUCH_STICKY_MS = 80;
-/** Tap vs long-press with sticky release so key-repeat cannot flicker posture. */
-var CrouchHold = class {
-	onTap;
-	onLong;
-	held = false;
-	downAt = 0;
-	longFired = false;
-	lastAction = 0;
-	longTimer = null;
-	stickyTimer = null;
-	constructor(onTap, onLong) {
-		this.onTap = onTap;
-		this.onLong = onLong;
-	}
-	setHeld(on) {
-		if (on) this.down();
-		else this.up();
-	}
-	reset() {
-		this.clearTimers();
-		this.held = false;
-		this.longFired = false;
-		this.downAt = 0;
-	}
-	down() {
-		if (this.stickyTimer) {
-			clearTimeout(this.stickyTimer);
-			this.stickyTimer = null;
-			if (this.held) {
-				if (!this.longFired) this.armLong();
-				return;
-			}
-		}
-		if (this.held) return;
-		this.held = true;
-		this.downAt = performance.now();
-		this.longFired = false;
-		this.armLong();
-	}
-	armLong() {
-		if (this.longTimer) clearTimeout(this.longTimer);
-		this.longTimer = setTimeout(() => {
-			this.longTimer = null;
-			const age = performance.now() - this.downAt;
-			if (!this.held || this.longFired) return;
-			if (age < 460) return;
-			this.longFired = true;
-			this.lastAction = performance.now();
-			this.onLong();
-		}, 500);
-	}
-	up() {
-		if (!this.held) return;
-		if (this.stickyTimer) return;
-		if (this.longTimer) {
-			clearTimeout(this.longTimer);
-			this.longTimer = null;
-		}
-		this.stickyTimer = setTimeout(() => this.commitUp(), CROUCH_STICKY_MS);
-	}
-	commitUp() {
-		this.stickyTimer = null;
-		if (!this.held) return;
-		this.held = false;
-		if (this.longTimer) {
-			clearTimeout(this.longTimer);
-			this.longTimer = null;
-		}
-		if (this.longFired) return;
-		const now = performance.now();
-		if (now - this.lastAction < CROUCH_COOL_MS) return;
-		this.lastAction = now;
-		this.onTap();
-	}
-	clearTimers() {
-		if (this.longTimer) {
-			clearTimeout(this.longTimer);
-			this.longTimer = null;
-		}
-		if (this.stickyTimer) {
-			clearTimeout(this.stickyTimer);
-			this.stickyTimer = null;
-		}
-	}
-};
-var FpInput = class {
-	keys = /* @__PURE__ */ new Set();
-	stickX = 0;
-	stickY = 0;
-	jumpTap = false;
-	crouchHold = false;
-	interactTap = false;
-	gate = null;
-	injected = [];
-	prevJump = false;
-	prevInteract = false;
-	attach() {
-		this.prevJump = false;
-		this.prevInteract = false;
-		this.keys.clear();
-		this.injected = [];
-		const down = (e) => {
-			if (e.repeat) {
-				if (GAME_CODES.has(e.code)) e.preventDefault();
-				return;
-			}
-			const tag = e.target?.tagName;
-			if (tag === "INPUT" || tag === "TEXTAREA") return;
-			this.keys.add(e.code);
-			if (e.code === "KeyC") this.gate?.setHeld(true);
-			if (GAME_CODES.has(e.code)) e.preventDefault();
-		};
-		const up = (e) => {
-			this.keys.delete(e.code);
-			if (e.code === "KeyC") this.gate?.setHeld(false);
-		};
-		const clear = () => {
-			this.keys.clear();
-			this.gate?.setHeld(false);
-		};
-		window.addEventListener("keydown", down, { capture: true });
-		window.addEventListener("keyup", up, { capture: true });
-		window.addEventListener("blur", clear);
-		document.addEventListener("visibilitychange", () => {
-			if (document.hidden) clear();
-		});
-		this.detach = () => {
-			window.removeEventListener("keydown", down, true);
-			window.removeEventListener("keyup", up, true);
-			window.removeEventListener("blur", clear);
-			this.keys.clear();
-		};
-	}
-	detach = () => {};
-	setKeys(codes) {
-		this.injected = codes.slice();
-		this.gate?.setHeld(codes.includes("KeyC"));
-	}
-	poll() {
-		const held = (code) => this.keys.has(code) || this.injected.includes(code);
-		let mx = this.stickX;
-		let my = this.stickY;
-		if (held("KeyD") || held("ArrowRight")) mx += 1;
-		if (held("KeyA") || held("ArrowLeft")) mx -= 1;
-		if (held("KeyW") || held("ArrowUp")) my += 1;
-		if (held("KeyS") || held("ArrowDown")) my -= 1;
-		let padCrouch = false;
-		const pad = typeof navigator !== "undefined" ? navigator.getGamepads?.()[0] : null;
-		if (pad && pad.mapping === "standard") {
-			const dz = radialDeadzone(pad.axes[0] ?? 0, -(pad.axes[1] ?? 0));
-			mx += dz.x;
-			my += dz.y;
-			if (pad.buttons[0]?.pressed) this.jumpTap = true;
-			if (pad.buttons[1]?.pressed) padCrouch = true;
-			if (pad.buttons[2]?.pressed) this.interactTap = true;
-		}
-		mx = THREE_CLAMP(mx, -1, 1);
-		my = THREE_CLAMP(my, -1, 1);
-		const mag = Math.hypot(mx, my);
-		if (mag > 1) {
-			mx /= mag;
-			my /= mag;
-		}
-		const jumpHeld = this.jumpTap || held("Space");
-		const jump = jumpHeld && !this.prevJump;
-		const interactHeld = this.interactTap || held("KeyE") || held("KeyF");
-		const interact = interactHeld && !this.prevInteract;
-		this.prevJump = jumpHeld;
-		this.prevInteract = interactHeld;
-		this.jumpTap = false;
-		this.interactTap = false;
-		return {
-			moveX: mx,
-			moveY: my,
-			jump,
-			crouchHeld: this.crouchHold || padCrouch || held("KeyC"),
-			interact
-		};
-	}
-};
 function Scene({ character, intestines, pelvis, arm, bayonet, bayonetLong, room }) {
 	const controlsRef = (0, import_react.useRef)(null);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
@@ -6827,7 +7048,14 @@ function Scene({ character, intestines, pelvis, arm, bayonet, bayonetLong, room 
 				fallback: null,
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Bedroom, { room }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CityWorld, {}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(WallMirror, {}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(HomeExitDoor, {}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CityReturnDoor, {}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(WorldGate, {}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(WorldClip, {}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(StudioLights, {}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CityLights, {}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(BodyFillLight, {}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Figure, {
 						controlsRef,
@@ -6870,6 +7098,7 @@ function applyBedStance(room, stance) {
 }
 function Bedroom({ room }) {
 	const stance = useStudio((s) => s.bedStance);
+	const world = useStudio((s) => s.worldMap);
 	(0, import_react.useMemo)(() => {
 		room.traverse((obj) => {
 			const mesh = obj;
@@ -6889,7 +7118,89 @@ function Bedroom({ room }) {
 		});
 	}, [room]);
 	applyBedStance(room, stance);
+	room.visible = world === "home";
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("primitive", { object: room });
+}
+var MIRROR_W = 2.42;
+var MIRROR_H = 2.18;
+var MIRROR_Y = 1.12;
+var MIRROR_Z = .948;
+var _mirrorFwd = new Vector3();
+function WallMirror() {
+	const on = useStudio((s) => s.firstPerson && s.fpView === "body" && s.worldMap === "home");
+	const mirrorRes = useStudio((s) => s.mirrorRes);
+	const group = (0, import_react.useMemo)(() => {
+		const g = new Group();
+		const glass = new Reflector(new PlaneGeometry(MIRROR_W, MIRROR_H), {
+			clipBias: .003,
+			textureWidth: 640,
+			textureHeight: 640,
+			color: 15133936,
+			multisample: 0
+		});
+		glass.name = "WallMirror";
+		glass.frustumCulled = false;
+		const draw = glass.onBeforeRender.bind(glass);
+		glass.onBeforeRender = function(renderer, scene, camera, geometry, material, group) {
+			camera.getWorldDirection(_mirrorFwd);
+			if (_mirrorFwd.z < .08) return;
+			let hide = glass.userData.fpHide;
+			if (!hide || hide.length === 0) {
+				hide = [];
+				scene.traverse((obj) => {
+					if (obj.userData.fpHide) hide.push(obj);
+				});
+				glass.userData.fpHide = hide;
+			}
+			const shown = [];
+			for (const obj of hide) if (!obj.visible) {
+				obj.visible = true;
+				shown.push(obj);
+			}
+			const fill = scene.getObjectByName("BodyFillLight");
+			const fillI = fill?.intensity ?? 0;
+			if (fill) fill.intensity = 0;
+			draw(renderer, scene, camera, geometry, material, group);
+			if (fill) fill.intensity = fillI;
+			for (const obj of shown) obj.visible = false;
+		};
+		g.add(glass);
+		const frameMat = new MeshStandardMaterial({
+			color: 2893346,
+			roughness: .48,
+			metalness: .32
+		});
+		const t = .032;
+		const d = .022;
+		const bar = (w, h, x, y) => {
+			const mesh = new Mesh(new BoxGeometry(w, h, d), frameMat);
+			mesh.position.set(x, y, -.008);
+			g.add(mesh);
+		};
+		bar(2.484, t, 0, 1.106);
+		bar(2.484, t, 0, -1.09 - t * .5);
+		bar(t, MIRROR_H, -1.21 - t * .5, 0);
+		bar(t, MIRROR_H, 1.226, 0);
+		g.position.set(0, MIRROR_Y, MIRROR_Z);
+		g.rotation.y = Math.PI;
+		return g;
+	}, []);
+	(0, import_react.useEffect)(() => {
+		group.getObjectByName("WallMirror")?.getRenderTarget()?.setSize(mirrorRes, mirrorRes);
+	}, [group, mirrorRes]);
+	(0, import_react.useEffect)(() => {
+		return () => {
+			group.traverse((obj) => {
+				const mesh = obj;
+				if (mesh.isMesh) mesh.geometry.dispose();
+				if ("dispose" in obj && typeof obj.dispose === "function") obj.dispose();
+			});
+		};
+	}, [group]);
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("primitive", {
+		object: group,
+		visible: on
+	});
 }
 function ControlsBridge({ controlsRef }) {
 	const autoRotate = useStudio((s) => s.autoRotate);
@@ -7258,12 +7569,12 @@ var FP_STAND = 1.58;
 var FP_CROUCH = .86;
 var FP_PRONE = .28;
 var FP_WALK = 1.65;
-var FP_AIR = 1.15;
-var FP_JUMP = 3.15;
-var FP_GRAV = 14;
+var FP_AIR = 1.55;
+var FP_JUMP = 6.9;
+var FP_GRAV = 13;
 var FP_SENS = .0017;
 var FP_TOUCH_SENS = .00305;
-var FP_PITCH_LIM = 1.18;
+var FP_PITCH_LIM = Math.PI / 2 - .02;
 var FP_BOUNDS = {
 	x: 1.85,
 	zMin: -1.55,
@@ -7283,7 +7594,6 @@ var _fpRight = new Vector3();
 var _fpFwd = new Vector3();
 var _fpUp = new Vector3();
 var _fpZ = new Vector3();
-var _fpAim = new Vector3();
 var _fpMat = new Matrix4();
 function lookDirFromYawPitch(yaw, pitch, out) {
 	const cy = Math.cos(pitch);
@@ -7314,6 +7624,7 @@ function FirstPersonRig({ controlsRef }) {
 	const { camera, gl } = useThree();
 	const firstPerson = useStudio((s) => s.firstPerson);
 	const fpView = useStudio((s) => s.fpView);
+	const worldMap = useStudio((s) => s.worldMap);
 	const lookLocked = useStudio((s) => s.fpLookLocked);
 	const fpFov = useStudio((s) => s.fpFov);
 	const pos = (0, import_react.useRef)(new Vector3(.12, 0, 1.92));
@@ -7324,6 +7635,9 @@ function FirstPersonRig({ controlsRef }) {
 	const coyote = (0, import_react.useRef)(0);
 	const jumpBuf = (0, import_react.useRef)(0);
 	const eye = (0, import_react.useRef)(FP_STAND);
+	const eyeFrom = (0, import_react.useRef)(FP_STAND);
+	const eyeTarget = (0, import_react.useRef)(FP_STAND);
+	const eyeBlend = (0, import_react.useRef)(1);
 	const bob = (0, import_react.useRef)(0);
 	const distWalk = (0, import_react.useRef)(0);
 	const input = (0, import_react.useRef)(new FpInput());
@@ -7333,6 +7647,8 @@ function FirstPersonRig({ controlsRef }) {
 	const lastInteractNonce = (0, import_react.useRef)(0);
 	const speedRef = (0, import_react.useRef)(0);
 	const crouchGate = (0, import_react.useRef)(null);
+	const wasFp = (0, import_react.useRef)(false);
+	const lastWorld = (0, import_react.useRef)(worldMap);
 	(0, import_react.useEffect)(() => {
 		const gate = new CrouchHold(() => {
 			const s = useStudio.getState();
@@ -7367,39 +7683,70 @@ function FirstPersonRig({ controlsRef }) {
 				tz: c?.target.z ?? .1,
 				fov: persp.fov
 			};
+			const city = worldMap === "city";
 			const body = fpView === "body";
-			if (body) {
-				pos.current.set(0, 0, 0);
-				yaw.current = Math.PI;
-				pitch.current = -.72;
-				fpLive.eyeX = 0;
-				fpLive.eyeY = 1.46;
-				fpLive.eyeZ = .22;
-				fpLive.chestX = 0;
-				fpLive.chestY = 1.14;
-				fpLive.chestZ = .12;
-				fpLive.headReady = true;
-				camera.position.set(0, 1.46, .22);
-				lookDirFromYawPitch(Math.PI, -.72, _fpFwd);
-				applyLookDir(camera, _fpFwd, Math.PI);
-			} else {
-				pos.current.set(.12, 0, 1.92);
-				yaw.current = 0;
-				pitch.current = -.08;
-				camera.position.set(.12, FP_STAND, 1.92);
-				camera.lookAt(.12, 1.5, .92);
+			const worldChanged = lastWorld.current !== worldMap;
+			const fpJustOn = !wasFp.current;
+			lastWorld.current = worldMap;
+			wasFp.current = true;
+			if (fpJustOn || worldChanged || !city) {
+				if (city) {
+					const sp = getCitySpawn();
+					pos.current.set(sp.x, sp.y, sp.z);
+					yaw.current = sp.yaw;
+					pitch.current = sp.pitch;
+					fpLive.bodyYaw = sp.yaw;
+					camera.position.set(sp.x, sp.y + 1.46, sp.z);
+					lookDirFromYawPitch(sp.yaw, sp.pitch, _fpFwd);
+					applyLookDir(camera, _fpFwd, sp.yaw);
+				} else if (worldChanged) {
+					const sp = HOME_RETURN_SPAWN;
+					pos.current.set(sp.x, sp.y, sp.z);
+					yaw.current = sp.yaw;
+					pitch.current = sp.pitch;
+					fpLive.bodyYaw = sp.yaw;
+					camera.position.set(sp.x, FP_STAND, sp.z);
+					lookDirFromYawPitch(sp.yaw, sp.pitch, _fpFwd);
+					applyLookDir(camera, _fpFwd, sp.yaw);
+				} else if (body) {
+					pos.current.set(0, 0, 0);
+					yaw.current = Math.PI;
+					pitch.current = -.72;
+					fpLive.bodyYaw = Math.PI;
+					fpLive.eyeX = 0;
+					fpLive.eyeY = 1.46;
+					fpLive.eyeZ = .22;
+					fpLive.chestX = 0;
+					fpLive.chestY = 1.14;
+					fpLive.chestZ = .12;
+					fpLive.headReady = true;
+					camera.position.set(0, 1.46, .22);
+					lookDirFromYawPitch(Math.PI, -.72, _fpFwd);
+					applyLookDir(camera, _fpFwd, Math.PI);
+				} else {
+					pos.current.set(.12, 0, 1.92);
+					yaw.current = 0;
+					pitch.current = -.08;
+					camera.position.set(.12, FP_STAND, 1.92);
+					camera.lookAt(.12, 1.5, .92);
+				}
+				velY.current = 0;
+				eye.current = FP_STAND;
+				eyeFrom.current = FP_STAND;
+				eyeTarget.current = FP_STAND;
+				eyeBlend.current = 1;
+				grounded.current = true;
 			}
-			velY.current = 0;
-			eye.current = FP_STAND;
-			grounded.current = true;
 			persp.fov = useStudio.getState().fpFov;
-			persp.near = body ? .04 : .08;
+			persp.near = city ? .12 : body ? .04 : .08;
+			persp.far = city ? 1400 : 40;
 			persp.updateProjectionMatrix();
 			fpLive.active = true;
 			fpLive.view = fpView;
 			input.current.gate = crouchGate.current;
 			input.current.attach();
 		} else {
+			wasFp.current = false;
 			crouchGate.current?.reset();
 			input.current.detach();
 			fpLive.active = false;
@@ -7425,6 +7772,7 @@ function FirstPersonRig({ controlsRef }) {
 	}, [
 		firstPerson,
 		fpView,
+		worldMap,
 		camera,
 		controlsRef
 	]);
@@ -7497,7 +7845,7 @@ function FirstPersonRig({ controlsRef }) {
 			const sens = FP_SENS * useStudio.getState().fpLookSpeed;
 			yaw.current -= e.movementX * sens;
 			pitch.current -= e.movementY * sens;
-			pitch.current = MathUtils.clamp(pitch.current, -1.18, FP_PITCH_LIM);
+			pitch.current = MathUtils.clamp(pitch.current, -FP_PITCH_LIM, FP_PITCH_LIM);
 		};
 		const onPointerDown = (e) => {
 			if (e.button === 2) {
@@ -7513,14 +7861,17 @@ function FirstPersonRig({ controlsRef }) {
 				}
 				return;
 			}
-			if (e.pointerType === "touch" && e.button === 0) {
-				const r = el.getBoundingClientRect();
-				if (e.clientX < r.left + r.width * .42) return;
+			if (e.pointerType === "touch" || e.pointerType === "pen") {
+				if (e.button !== 0) return;
 				lookTouch.current = {
 					id: e.pointerId,
 					x: e.clientX,
 					y: e.clientY
 				};
+				try {
+					el.setPointerCapture(e.pointerId);
+				} catch {}
+				e.preventDefault();
 			}
 		};
 		const onPointerMove = (e) => {
@@ -7532,10 +7883,14 @@ function FirstPersonRig({ controlsRef }) {
 			t.y = e.clientY;
 			yaw.current -= dx * FP_TOUCH_SENS * useStudio.getState().fpLookSpeed;
 			pitch.current -= dy * FP_TOUCH_SENS * useStudio.getState().fpLookSpeed;
-			pitch.current = MathUtils.clamp(pitch.current, -1.18, FP_PITCH_LIM);
+			pitch.current = MathUtils.clamp(pitch.current, -FP_PITCH_LIM, FP_PITCH_LIM);
 		};
 		const onPointerUp = (e) => {
-			if (lookTouch.current?.id === e.pointerId) lookTouch.current = null;
+			if (lookTouch.current?.id !== e.pointerId) return;
+			lookTouch.current = null;
+			try {
+				if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+			} catch {}
 		};
 		const onKey = (e) => {
 			if (e.code !== "Escape") return;
@@ -7566,20 +7921,21 @@ function FirstPersonRig({ controlsRef }) {
 			getYaw: () => yaw.current,
 			getPitch: () => pitch.current,
 			setPitch: (v) => {
-				pitch.current = MathUtils.clamp(v, -1.18, FP_PITCH_LIM);
+				pitch.current = MathUtils.clamp(v, -FP_PITCH_LIM, FP_PITCH_LIM);
 			},
 			setLook: (y, p) => {
 				yaw.current = y;
-				pitch.current = MathUtils.clamp(p, -1.18, FP_PITCH_LIM);
+				pitch.current = MathUtils.clamp(p, -FP_PITCH_LIM, FP_PITCH_LIM);
 			},
 			getLookSpeed: () => useStudio.getState().fpLookSpeed,
 			applyLook: (dx, dy) => {
 				const sens = FP_SENS * useStudio.getState().fpLookSpeed;
 				yaw.current -= dx * sens;
 				pitch.current -= dy * sens;
-				pitch.current = MathUtils.clamp(pitch.current, -1.18, FP_PITCH_LIM);
+				pitch.current = MathUtils.clamp(pitch.current, -FP_PITCH_LIM, FP_PITCH_LIM);
 			},
 			getSpeed: () => speedRef.current,
+			getSprinting: () => fpLive.sprinting,
 			getPos: () => pos.current.toArray(),
 			getEye: () => eye.current,
 			getCrouch: () => useStudio.getState().fpCrouch,
@@ -7609,9 +7965,15 @@ function FirstPersonRig({ controlsRef }) {
 			}),
 			setCrouchHeld: (v) => crouchGate.current?.setHeld(v),
 			setKeys: (codes) => input.current.setKeys(codes),
+			setStick: (x, y) => {
+				useStudio.getState().setFpStick(x, y);
+			},
 			setSteer: (v) => {
 				input.current.stickX = -v;
 				input.current.stickY = 1;
+			},
+			setFirstPerson: (on, view) => {
+				useStudio.getState().setFirstPerson(on, view);
 			}
 		};
 		window.__controlsTest = probe;
@@ -7640,12 +8002,25 @@ function FirstPersonRig({ controlsRef }) {
 			lastInteractNonce.current = st.fpInteractNonce;
 			window.dispatchEvent(new Event("studio-fp-interact"));
 		} else if (act.interact) window.dispatchEvent(new Event("studio-fp-interact"));
-		eye.current += ((prone ? FP_PRONE : crouched ? FP_CROUCH : FP_STAND) - eye.current) * (1 - Math.exp(-10 * d));
+		const wantEye = prone ? FP_PRONE : crouched ? FP_CROUCH : FP_STAND;
+		if (wantEye !== eyeTarget.current) {
+			eyeFrom.current = eye.current;
+			eyeTarget.current = wantEye;
+			eyeBlend.current = 0;
+		}
+		if (eyeBlend.current < 1) {
+			eyeBlend.current = Math.min(1, eyeBlend.current + d / .7);
+			const t = eyeBlend.current;
+			const u = t * t * (3 - 2 * t);
+			eye.current = eyeFrom.current + (eyeTarget.current - eyeFrom.current) * u;
+		} else eye.current = wantEye;
 		const fx = -Math.sin(yaw.current);
 		const fz = -Math.cos(yaw.current);
 		const rx = Math.cos(yaw.current);
 		const rz = -Math.sin(yaw.current);
-		const speed = grounded.current ? prone ? FP_WALK * .28 : crouched ? FP_WALK * .45 : FP_WALK : FP_AIR;
+		const cityOn = live.worldMap === "city" && getCityRuntime().ready;
+		const sprint = Boolean(act.sprint) && !crouched && !prone;
+		const speed = grounded.current ? prone ? FP_WALK * .28 : crouched ? FP_WALK * .45 : cityOn ? sprint ? FP_WALK * 5.6 : FP_WALK * 3.05 : sprint ? FP_WALK * 1.9 : FP_WALK : sprint ? FP_AIR * 1.35 : FP_AIR;
 		const wishX = rx * act.moveX + fx * act.moveY;
 		const wishZ = rz * act.moveX + fz * act.moveY;
 		const wishLen = Math.hypot(wishX, wishZ);
@@ -7656,14 +8031,20 @@ function FirstPersonRig({ controlsRef }) {
 		const prevZ = pos.current.z;
 		let x = pos.current.x + nx * step;
 		let z = pos.current.z + nz * step;
-		x = MathUtils.clamp(x, -FP_BOUNDS.x, FP_BOUNDS.x);
-		z = MathUtils.clamp(z, FP_BOUNDS.zMin, FP_BOUNDS.zMax);
-		const br = FP_BOUNDS.bodyR;
-		const r2 = x * x + z * z;
-		if (!body && r2 < br * br && pos.current.y < 1.75) {
-			const r = Math.sqrt(r2) || 1e-6;
-			x = x / r * br;
-			z = z / r * br;
+		if (cityOn) {
+			const hit = cityResolve(x, pos.current.y, z);
+			x = hit.x;
+			z = hit.z;
+		} else {
+			x = MathUtils.clamp(x, -FP_BOUNDS.x, FP_BOUNDS.x);
+			z = MathUtils.clamp(z, FP_BOUNDS.zMin, FP_BOUNDS.zMax);
+			const br = FP_BOUNDS.bodyR;
+			const r2 = x * x + z * z;
+			if (!body && r2 < br * br && pos.current.y < 1.75) {
+				const r = Math.sqrt(r2) || 1e-6;
+				x = x / r * br;
+				z = z / r * br;
+			}
 		}
 		pos.current.x = x;
 		pos.current.z = z;
@@ -7685,14 +8066,15 @@ function FirstPersonRig({ controlsRef }) {
 		}
 		velY.current -= FP_GRAV * d;
 		pos.current.y += velY.current * d;
-		if (pos.current.y <= 0) {
-			pos.current.y = 0;
+		const floorY = cityOn ? cityGroundY(pos.current.x, pos.current.z) : 0;
+		if (pos.current.y <= floorY) {
+			pos.current.y = floorY;
 			velY.current = 0;
 			grounded.current = true;
 		} else grounded.current = false;
 		if (grounded.current && wishLen > .12) distWalk.current += step;
 		else distWalk.current *= 1 - d * 4;
-		const bobAmp = grounded.current && wishLen > .12 ? prone ? .006 : crouched ? .01 : .018 : 0;
+		const bobAmp = grounded.current && wishLen > .12 ? prone ? .006 : crouched ? .01 : sprint ? .028 : .018 : 0;
 		bob.current = Math.sin(distWalk.current * 14) * bobAmp;
 		fpLive.active = true;
 		fpLive.view = body ? "body" : "observe";
@@ -7709,6 +8091,7 @@ function FirstPersonRig({ controlsRef }) {
 		fpLive.stepDist = grounded.current ? stepDist : 0;
 		fpLive.grounded = grounded.current;
 		fpLive.velY = velY.current;
+		fpLive.sprinting = sprint && wishLen > .12;
 		if (grounded.current) fpLive.airTime = 0;
 		else fpLive.airTime += d;
 	}, -1);
@@ -7719,15 +8102,7 @@ function FirstPersonRig({ controlsRef }) {
 		const fz = -Math.cos(yaw.current);
 		if (body) {
 			camera.position.set(fpLive.eyeX, fpLive.eyeY, fpLive.eyeZ);
-			lookDirFromYawPitch(yaw.current, pitch.current, _fpFwd);
-			const down = MathUtils.clamp(-pitch.current, 0, FP_PITCH_LIM);
-			const t = MathUtils.smoothstep(down, .12, .7);
-			_fpAim.set(fpLive.chestX - camera.position.x, fpLive.chestY - camera.position.y, fpLive.chestZ - camera.position.z);
-			if (_fpAim.lengthSq() > 1e-8) {
-				_fpAim.normalize();
-				_fpFwd.lerp(_fpAim, t).normalize();
-			}
-			applyLookDir(camera, _fpFwd, yaw.current);
+			applyFpLook(camera, yaw.current, pitch.current);
 		} else {
 			const lookY = pos.current.y + eye.current + bob.current;
 			camera.position.set(pos.current.x, lookY, pos.current.z);
@@ -7741,58 +8116,300 @@ function FirstPersonRig({ controlsRef }) {
 	});
 	return null;
 }
+function WorldClip() {
+	const world = useStudio((s) => s.worldMap);
+	const { camera, scene, gl } = useThree();
+	(0, import_react.useEffect)(() => {
+		const p = camera;
+		const city = world === "city";
+		p.far = city ? 1400 : 40;
+		if (!useStudio.getState().firstPerson) p.near = city ? .2 : .05;
+		p.updateProjectionMatrix();
+		const bg = city ? "#7eafd0" : "#1a1614";
+		scene.background = new Color(bg);
+		scene.fog = city ? new Fog(8302544, 90, 780) : null;
+		gl.setClearColor(bg);
+	}, [
+		world,
+		camera,
+		scene,
+		gl
+	]);
+	return null;
+}
+function CityWorld() {
+	const world = useStudio((s) => s.worldMap);
+	const group = getCityRuntime().group;
+	if (!group) return null;
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("primitive", {
+		object: group,
+		visible: world === "city"
+	});
+}
+function makeDoorMarker(label, color) {
+	const g = new Group();
+	g.name = label;
+	const mat = new MeshBasicMaterial({
+		color,
+		transparent: true,
+		opacity: .42,
+		depthWrite: false,
+		side: 2
+	});
+	const pane = new Mesh(new PlaneGeometry(.92, 2.05), mat);
+	pane.position.y = 1.05;
+	g.add(pane);
+	const edge = new Mesh(new PlaneGeometry(.98, 2.12), new MeshBasicMaterial({
+		color: 16774102,
+		transparent: true,
+		opacity: .7,
+		side: 2,
+		depthWrite: false
+	}));
+	edge.position.y = 1.05;
+	edge.position.z = -.01;
+	g.add(edge);
+	const chev = new Mesh(new RingGeometry(.11, .2, 3), new MeshBasicMaterial({
+		color: 16775406,
+		transparent: true,
+		opacity: .95,
+		side: 2,
+		depthWrite: false
+	}));
+	chev.position.set(0, 1.55, .02);
+	chev.rotation.z = Math.PI;
+	g.add(chev);
+	return g;
+}
+function HomeExitDoor() {
+	const world = useStudio((s) => s.worldMap);
+	const group = (0, import_react.useMemo)(() => makeDoorMarker("HomeExit", 8048895), []);
+	useFrame(({ clock }) => {
+		const pulse = .38 + Math.sin(clock.elapsedTime * 3.2) * .16;
+		const mat = group.children[0].material;
+		mat.opacity = pulse;
+		group.visible = world === "home";
+	});
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("primitive", {
+		object: group,
+		position: [
+			HOME_EXIT.x,
+			0,
+			HOME_EXIT.z
+		],
+		rotation: [
+			0,
+			Math.PI / 2,
+			0
+		]
+	});
+}
+function CityReturnDoor() {
+	const world = useStudio((s) => s.worldMap);
+	const group = (0, import_react.useMemo)(() => makeDoorMarker("CityReturn", 16763256), []);
+	useFrame(({ clock }) => {
+		const rt = getCityRuntime();
+		group.visible = world === "city" && rt.ready;
+		if (!group.visible) return;
+		const pulse = .4 + Math.sin(clock.elapsedTime * 3.2) * .16;
+		const pane = group.children[0];
+		pane.material.opacity = pulse;
+		const sp = rt.spawn;
+		group.position.set(sp.x, sp.y, sp.z - 2.15);
+		group.rotation.set(0, 0, 0);
+	});
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("primitive", { object: group });
+}
+var travelLock = false;
+function WorldGate() {
+	const [, bump] = (0, import_react.useState)(0);
+	(0, import_react.useEffect)(() => {
+		const go = async () => {
+			const s = useStudio.getState();
+			if (!s.firstPerson || travelLock || s.loading) return;
+			const x = fpLive.x;
+			const z = fpLive.z;
+			if (s.worldMap === "home" && nearHomeExit(x, z)) {
+				travelLock = true;
+				s.setFirstPerson(true, "body");
+				useStudio.setState({
+					loading: true,
+					loadError: null,
+					loadProgress: 8,
+					loadHint: "打开家门…"
+				});
+				try {
+					const model = await loadCityModel((pct, hint) => {
+						useStudio.setState({
+							loading: true,
+							loadProgress: pct,
+							loadHint: hint,
+							loadError: null
+						});
+					});
+					useStudio.setState({
+						loadProgress: 94,
+						loadHint: "绘制城市碰撞"
+					});
+					if (!getCityRuntime().ready || getCityRuntime().group !== model) bakeCityCollision(model);
+					useStudio.setState({
+						worldMap: "city",
+						portalHint: "",
+						loadProgress: 100,
+						loadHint: "进入城市"
+					});
+					bump((n) => n + 1);
+					requestAnimationFrame(() => {
+						useStudio.setState({
+							loading: false,
+							loadProgress: 100,
+							loadHint: "就绪"
+						});
+						travelLock = false;
+					});
+				} catch (err) {
+					travelLock = false;
+					useStudio.setState({
+						loading: false,
+						loadError: null,
+						loadHint: "就绪",
+						portalHint: err instanceof Error ? `城市载入失败：${err.message}` : "城市载入失败"
+					});
+				}
+				return;
+			}
+			if (s.worldMap === "city" && nearCityPortal(x, z)) {
+				travelLock = true;
+				useStudio.setState({
+					loading: true,
+					loadError: null,
+					loadProgress: 22,
+					loadHint: "返回家中…"
+				});
+				s.setFirstPerson(true, "body");
+				await new Promise((r) => setTimeout(r, 260));
+				useStudio.setState({
+					worldMap: "home",
+					portalHint: "",
+					loadProgress: 80,
+					loadHint: "进入房间"
+				});
+				await new Promise((r) => setTimeout(r, 180));
+				useStudio.setState({
+					loading: false,
+					loadProgress: 100,
+					loadHint: "就绪"
+				});
+				travelLock = false;
+			}
+		};
+		window.addEventListener("studio-fp-interact", go);
+		return () => window.removeEventListener("studio-fp-interact", go);
+	}, []);
+	useFrame(() => {
+		const s = useStudio.getState();
+		if (!s.firstPerson) {
+			if (s.portalHint) s.setPortalHint("");
+			return;
+		}
+		let hint = "";
+		if (s.worldMap === "home" && nearHomeExit(fpLive.x, fpLive.z)) hint = "按 E / 互动 出门";
+		else if (s.worldMap === "city" && nearCityPortal(fpLive.x, fpLive.z)) hint = "按 E / 互动 回家";
+		if (hint !== s.portalHint) s.setPortalHint(hint);
+	});
+	return null;
+}
 function StudioLights() {
-	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("ambientLight", {
-			intensity: .34,
-			color: "#e6d8c8"
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("hemisphereLight", { args: [
-			"#f2ebe3",
-			"#3a322c",
-			.48
-		] }),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("directionalLight", {
-			position: [
-				1.8,
-				3.4,
-				2.4
-			],
-			intensity: 1.05,
-			color: "#fff1e0"
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("directionalLight", {
-			position: [
-				-2.6,
-				2.6,
-				.8
-			],
-			intensity: .32,
-			color: "#c8d0dc"
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("pointLight", {
-			position: [
-				0,
-				2.55,
-				-1.35
-			],
-			intensity: 2.1,
-			distance: 8,
-			decay: 2,
-			color: "#ffd7b0"
-		}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("pointLight", {
-			position: [
-				1.4,
-				1.7,
-				-2.1
-			],
-			intensity: 1.1,
-			distance: 4.2,
-			decay: 2,
-			color: "#ffc98a"
-		})
-	] });
+	const home = useStudio((s) => s.worldMap === "home");
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", {
+		visible: home,
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("ambientLight", {
+				intensity: .34,
+				color: "#e6d8c8"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("hemisphereLight", { args: [
+				"#f2ebe3",
+				"#3a322c",
+				.48
+			] }),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("directionalLight", {
+				position: [
+					1.8,
+					3.4,
+					2.4
+				],
+				intensity: 1.05,
+				color: "#fff1e0"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("directionalLight", {
+				position: [
+					-2.6,
+					2.6,
+					.8
+				],
+				intensity: .32,
+				color: "#c8d0dc"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("pointLight", {
+				position: [
+					0,
+					2.55,
+					-1.35
+				],
+				intensity: 2.1,
+				distance: 8,
+				decay: 2,
+				color: "#ffd7b0"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("pointLight", {
+				position: [
+					1.4,
+					1.7,
+					-2.1
+				],
+				intensity: 1.1,
+				distance: 4.2,
+				decay: 2,
+				color: "#ffc98a"
+			})
+		]
+	});
+}
+function CityLights() {
+	const on = useStudio((s) => s.worldMap === "city");
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", {
+		visible: on,
+		children: [
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("ambientLight", {
+				intensity: .42,
+				color: "#d7e6f2"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("hemisphereLight", { args: [
+				"#c8e4ff",
+				"#4a6a4a",
+				.72
+			] }),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("directionalLight", {
+				position: [
+					80,
+					140,
+					40
+				],
+				intensity: 1.35,
+				color: "#fff4d6"
+			}),
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("directionalLight", {
+				position: [
+					-50,
+					40,
+					-30
+				],
+				intensity: .28,
+				color: "#8eb4d8"
+			})
+		]
+	});
 }
 function BodyFillLight() {
 	const ref = (0, import_react.useRef)(null);
@@ -7804,13 +8421,17 @@ function BodyFillLight() {
 			l.intensity = 0;
 			return;
 		}
-		l.intensity = 2.4;
-		l.position.set(fpLive.eyeX + .04, fpLive.eyeY + .1, fpLive.eyeZ + .06);
+		const yaw = fpLive.yaw;
+		const fx = -Math.sin(yaw);
+		const fz = -Math.cos(yaw);
+		l.intensity = 1.05;
+		l.position.set(fpLive.chestX + fx * .32, fpLive.chestY + .02, fpLive.chestZ + fz * .32);
 	});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("pointLight", {
 		ref,
+		name: "BodyFillLight",
 		color: "#ffd2b6",
-		distance: 1.6,
+		distance: 1.15,
 		decay: 2,
 		intensity: 0
 	});
