@@ -2,6 +2,8 @@ import { create } from "zustand";
 import type { ExpressionId, HandGesture, HandSide, PoseId } from "@/lib/softbody/soft-skeleton";
 import type { FpViewMode } from "@/lib/fp-pose";
 
+export type WorldId = "home" | "city";
+
 export type PresetId = "soft" | "firm" | "jelly" | "athletic";
 export type InteractMode = "drag" | "pose" | "strike" | "fist" | "bayonet" | "navel";
 export type PoseEditMode = "ik" | "rotate" | "move";
@@ -394,6 +396,8 @@ type StudioState = StudioParams & {
   fpLookSpeed: number;
   mirrorRes: number;
   fpBreastJiggle: number;
+  worldMap: WorldId;
+  portalHint: string;
   setParam: <K extends keyof StudioParams>(key: K, value: StudioParams[K]) => void;
   applyPreset: (id: PresetId) => void;
   setInteractMode: (mode: InteractMode) => void;
@@ -444,6 +448,8 @@ type StudioState = StudioParams & {
   setFpLookSpeed: (v: number) => void;
   setMirrorRes: (v: number) => void;
   setFpBreastJiggle: (v: number) => void;
+  setWorldMap: (v: WorldId) => void;
+  setPortalHint: (v: string) => void;
   shake: () => void;
   fireStrike: (point?: [number, number, number] | null) => void;
   resetSim: () => void;
@@ -510,6 +516,8 @@ export const useStudio = create<StudioState>((set) => ({
   fpLookSpeed: FP_LOOK_SPEED_DEFAULT,
   mirrorRes: MIRROR_RES_DEFAULT,
   fpBreastJiggle: FP_BREAST_JIGGLE_DEFAULT,
+  worldMap: "home",
+  portalHint: "",
   setParam: (key, value) =>
     set((s) => ({
       ...s,
@@ -815,6 +823,8 @@ export const useStudio = create<StudioState>((set) => ({
     set({
       fpBreastJiggle: Math.max(FP_BREAST_JIGGLE_MIN, Math.min(FP_BREAST_JIGGLE_MAX, fpBreastJiggle)),
     }),
+  setWorldMap: (worldMap) => set({ worldMap, portalHint: "" }),
+  setPortalHint: (portalHint) => set({ portalHint }),
   shake: () => set((s) => ({ shakeNonce: s.shakeNonce + 1 })),
   fireStrike: (point = null) =>
     set((s) => ({ strikeNonce: s.strikeNonce + 1, strikePoint: point ?? null })),

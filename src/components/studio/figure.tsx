@@ -13,6 +13,7 @@ import { BayonetPlay } from "@/lib/softbody/bayonet-play";
 import { applyNavelMorph, buildNavelMorph } from "@/lib/softbody/navel-morph";
 import { useStudio, navelInsertMorph } from "@/lib/studio-store";
 import { fpLive } from "@/lib/fp-pose";
+import { getCitySpawn } from "@/lib/world-map";
 
 const _hit = new THREE.Vector3();
 const _normal = new THREE.Vector3();
@@ -1772,8 +1773,15 @@ function FittedFigure({
         airTime: fpLive.airTime,
       });
     } else {
-      setup.root.position.set(0, 0, 0);
-      setup.root.quaternion.identity();
+      if (s.worldMap === "city") {
+        const sp = getCitySpawn();
+        setup.root.position.set(sp.x, sp.y, sp.z);
+        _bodyE.set(0, sp.yaw + Math.PI, 0, "YXZ");
+        setup.root.quaternion.setFromEuler(_bodyE);
+      } else {
+        setup.root.position.set(0, 0, 0);
+        setup.root.quaternion.identity();
+      }
       setup.skeleton.clearBodyLook?.();
       if (bodyWasOn.current) {
         setup.skeleton.setPose(s.pose);

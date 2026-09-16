@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import * as THREE from "three";
 import { GLTFLoader } from "three-stdlib";
+import { MeshoptDecoder } from "three/examples/jsm/libs/meshopt_decoder.module.js";
 import { useStudio } from "@/lib/studio-store";
 
 THREE.Cache.enabled = true;
@@ -18,6 +19,7 @@ export const MODEL_FILES = [
 const TOTAL_BYTES = MODEL_FILES.reduce((s, f) => s + f.bytes, 0);
 const CORE_BYTES = MODEL_FILES.filter((f) => f.core).reduce((s, f) => s + f.bytes, 0);
 const CACHE_NAME = "vela-glb-v2";
+export const CITY_FILE = { url: "/models/city.glb", bytes: 8_037_544, path: "/models/", hint: "城市" };
 
 export type LoadedScenes = {
   character: THREE.Group;
@@ -127,15 +129,20 @@ async function fetchBuffer(
 }
 
 function parseGlb(data: ArrayBuffer, resourcePath: string) {
-  return new Promise<THREE.Group>((resolve, reject) => {
+  return (async () => {
     const loader = new GLTFLoader();
-    loader.parse(
-      data,
-      resourcePath,
-      (gltf) => resolve(gltf.scene),
-      (err) => reject(err instanceof Error ? err : new Error("模型解析失败")),
-    );
-  });
+    const ready = (MeshoptDecoder as { ready?: Promise<void> }).ready;
+    if (ready) await ready;
+    loader.setMeshoptDecoder(MeshoptDecoder);
+    return new Promise<THREE.Group>((resolve, reject) => {
+      loader.parse(
+        data,
+        resourcePath,
+        (gltf) => resolve(gltf.scene),
+        (err) => reject(err instanceof Error ? err : new Error("模型解析失败")),
+      );
+    });
+  })();
 }
 
 export function useModelAssets(enabled: boolean): LoadedScenes | null {
@@ -249,4 +256,31 @@ export function useModelAssets(enabled: boolean): LoadedScenes | null {
   }, [enabled, retryNonce]);
 
   return scenes;
+}
+
+let cityBuf: ArrayBuffer | null = null;
+let cityGroup: THREE.Group | null = null;
+
+export async function loadCityModel(onProgress: (pct: number, hint: string) => void): Promise<THREE.Group> {
+  if (cityGroup) {
+    onProgress(100, "城市已就绪");
+    return cityGroup;
+  }
+  onProgress(6, "载入城市地图");
+  const buf = cityBuf ?? (await fetchBuffer(
+    CITY_FILE.url,
+    CITY_FILE.bytes,
+    (n) => {
+      const pct = 8 + Math.round((n / CITY_FILE.bytes) * 78);
+      onProgress(pct, `下载城市 ${formatMb(n)} / ${formatMb(CITY_FILE.bytes)}`);
+    },
+    false,
+  ));
+  cityBuf = buf;
+  onProgress(90, "解析城市模型");
+  const scene = await parseGlb(buf, CITY_FILE.path);
+  scene.name = "MiamiCity";
+  cityGroup = scene;
+  onProgress(96, "绘制碰撞");
+  return scene;
 }

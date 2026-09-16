@@ -1,6 +1,6 @@
 import { Canvas, useFrame, useThree } from "@react-three/fiber";
 import { OrbitControls } from "@react-three/drei";
-import { Suspense, useEffect, useMemo, useRef, type RefObject } from "react";
+import { Suspense, useEffect, useMemo, useRef, useState, type RefObject } from "react";
 import * as THREE from "three";
 import { Reflector } from "three/examples/jsm/objects/Reflector.js";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
@@ -8,6 +8,18 @@ import { Figure } from "./figure";
 import { useStudio, type CamFocus } from "@/lib/studio-store";
 import { CrouchHold, FpInput } from "@/lib/fp-control";
 import { fpLive } from "@/lib/fp-pose";
+import { loadCityModel } from "@/lib/load-models";
+import {
+  bakeCityCollision,
+  cityGroundY,
+  cityResolve,
+  getCityRuntime,
+  getCitySpawn,
+  HOME_EXIT,
+  HOME_RETURN_SPAWN,
+  nearCityPortal,
+  nearHomeExit,
+} from "@/lib/world-map";
 
 export default function Scene({
   character,
@@ -52,8 +64,14 @@ export default function Scene({
       >
         <Suspense fallback={null}>
           <Bedroom room={room} />
+          <CityWorld />
           <WallMirror />
+          <HomeExitDoor />
+          <CityReturnDoor />
+          <WorldGate />
+          <WorldClip />
           <StudioLights />
+          <CityLights />
           <BodyFillLight />
           <Figure
             controlsRef={controlsRef}
@@ -103,6 +121,7 @@ function applyBedStance(room: THREE.Object3D, stance: "front" | "on" | "lie") {
 
 function Bedroom({ room }: { room: THREE.Object3D }) {
   const stance = useStudio((s) => s.bedStance);
+  const world = useStudio((s) => s.worldMap);
   useMemo(() => {
     room.traverse((obj) => {
       const mesh = obj as THREE.Mesh;
@@ -122,6 +141,7 @@ function Bedroom({ room }: { room: THREE.Object3D }) {
     });
   }, [room]);
   applyBedStance(room, stance);
+  room.visible = world === "home";
   return <primitive object={room} />;
 }
 
@@ -132,7 +152,7 @@ const MIRROR_Z = 0.948;
 const _mirrorFwd = new THREE.Vector3();
 
 function WallMirror() {
-  const on = useStudio((s) => s.firstPerson && s.fpView === "body");
+  const on = useStudio((s) => s.firstPerson && s.fpView === "body" && s.worldMap === "home");
   const mirrorRes = useStudio((s) => s.mirrorRes);
   const group = useMemo(() => {
     const g = new THREE.Group();
@@ -632,6 +652,7 @@ function FirstPersonRig({
   const { camera, gl } = useThree();
   const firstPerson = useStudio((s) => s.firstPerson);
   const fpView = useStudio((s) => s.fpView);
+  const worldMap = useStudio((s) => s.worldMap);
   const lookLocked = useStudio((s) => s.fpLookLocked);
   const fpFov = useStudio((s) => s.fpFov);
   const pos = useRef(new THREE.Vector3(0.12, 0, 1.92));
@@ -662,6 +683,8 @@ function FirstPersonRig({
   const lastInteractNonce = useRef(0);
   const speedRef = useRef(0);
   const crouchGate = useRef<CrouchHold | null>(null);
+  const wasFp = useRef(false);
+  const lastWorld = useRef(worldMap);
 
   useEffect(() => {
     const gate = new CrouchHold(
@@ -705,43 +728,71 @@ function FirstPersonRig({
           fov: persp.fov,
         };
       }
+      const city = worldMap === "city";
       const body = fpView === "body";
-      if (body) {
-        pos.current.set(0, 0, 0);
-        yaw.current = Math.PI;
-        pitch.current = -0.72;
-        fpLive.bodyYaw = Math.PI;
-        fpLive.eyeX = 0;
-        fpLive.eyeY = 1.46;
-        fpLive.eyeZ = 0.22;
-        fpLive.chestX = 0;
-        fpLive.chestY = 1.14;
-        fpLive.chestZ = 0.12;
-        fpLive.headReady = true;
-        camera.position.set(0, 1.46, 0.22);
-        lookDirFromYawPitch(Math.PI, -0.72, _fpFwd);
-        applyLookDir(camera, _fpFwd, Math.PI);
-      } else {
-        pos.current.set(0.12, 0, 1.92);
-        yaw.current = 0;
-        pitch.current = -0.08;
-        camera.position.set(0.12, FP_STAND, 1.92);
-        camera.lookAt(0.12, FP_STAND - 0.08, 0.92);
+      const worldChanged = lastWorld.current !== worldMap;
+      const fpJustOn = !wasFp.current;
+      lastWorld.current = worldMap;
+      wasFp.current = true;
+      const resetPos = fpJustOn || worldChanged || !city;
+      if (resetPos) {
+        if (city) {
+          const sp = getCitySpawn();
+          pos.current.set(sp.x, sp.y, sp.z);
+          yaw.current = sp.yaw;
+          pitch.current = sp.pitch;
+          fpLive.bodyYaw = sp.yaw;
+          camera.position.set(sp.x, sp.y + 1.46, sp.z);
+          lookDirFromYawPitch(sp.yaw, sp.pitch, _fpFwd);
+          applyLookDir(camera, _fpFwd, sp.yaw);
+        } else if (worldChanged) {
+          const sp = HOME_RETURN_SPAWN;
+          pos.current.set(sp.x, sp.y, sp.z);
+          yaw.current = sp.yaw;
+          pitch.current = sp.pitch;
+          fpLive.bodyYaw = sp.yaw;
+          camera.position.set(sp.x, FP_STAND, sp.z);
+          lookDirFromYawPitch(sp.yaw, sp.pitch, _fpFwd);
+          applyLookDir(camera, _fpFwd, sp.yaw);
+        } else if (body) {
+          pos.current.set(0, 0, 0);
+          yaw.current = Math.PI;
+          pitch.current = -0.72;
+          fpLive.bodyYaw = Math.PI;
+          fpLive.eyeX = 0;
+          fpLive.eyeY = 1.46;
+          fpLive.eyeZ = 0.22;
+          fpLive.chestX = 0;
+          fpLive.chestY = 1.14;
+          fpLive.chestZ = 0.12;
+          fpLive.headReady = true;
+          camera.position.set(0, 1.46, 0.22);
+          lookDirFromYawPitch(Math.PI, -0.72, _fpFwd);
+          applyLookDir(camera, _fpFwd, Math.PI);
+        } else {
+          pos.current.set(0.12, 0, 1.92);
+          yaw.current = 0;
+          pitch.current = -0.08;
+          camera.position.set(0.12, FP_STAND, 1.92);
+          camera.lookAt(0.12, FP_STAND - 0.08, 0.92);
+        }
+        velY.current = 0;
+        eye.current = FP_STAND;
+        eyeFrom.current = FP_STAND;
+        eyeTarget.current = FP_STAND;
+        eyeBlend.current = 1;
+        grounded.current = true;
       }
-      velY.current = 0;
-      eye.current = FP_STAND;
-      eyeFrom.current = FP_STAND;
-      eyeTarget.current = FP_STAND;
-      eyeBlend.current = 1;
-      grounded.current = true;
       persp.fov = useStudio.getState().fpFov;
-      persp.near = body ? 0.04 : 0.08;
+      persp.near = city ? 0.12 : body ? 0.04 : 0.08;
+      persp.far = city ? 1400 : 40;
       persp.updateProjectionMatrix();
       fpLive.active = true;
       fpLive.view = fpView;
       input.current.gate = crouchGate.current;
       input.current.attach();
     } else {
+      wasFp.current = false;
       crouchGate.current?.reset();
       input.current.detach();
       fpLive.active = false;
@@ -765,7 +816,7 @@ function FirstPersonRig({
       camera.lookAt(home.tx, home.ty, home.tz);
     }
     return () => input.current.detach();
-  }, [firstPerson, fpView, camera, controlsRef]);
+  }, [firstPerson, fpView, worldMap, camera, controlsRef]);
 
   useEffect(() => {
     if (!firstPerson) return;
@@ -1008,12 +1059,15 @@ function FirstPersonRig({
     const fz = -Math.cos(yaw.current);
     const rx = Math.cos(yaw.current);
     const rz = -Math.sin(yaw.current);
+    const cityOn = live.worldMap === "city" && getCityRuntime().ready;
     const speed = grounded.current
       ? prone
         ? FP_WALK * 0.28
         : crouched
           ? FP_WALK * 0.45
-          : FP_WALK
+          : cityOn
+            ? FP_WALK * 1.7
+            : FP_WALK
       : FP_AIR;
     const wishX = rx * act.moveX + fx * act.moveY;
     const wishZ = rz * act.moveX + fz * act.moveY;
@@ -1025,14 +1079,20 @@ function FirstPersonRig({
     const prevZ = pos.current.z;
     let x = pos.current.x + nx * step;
     let z = pos.current.z + nz * step;
-    x = THREE.MathUtils.clamp(x, -FP_BOUNDS.x, FP_BOUNDS.x);
-    z = THREE.MathUtils.clamp(z, FP_BOUNDS.zMin, FP_BOUNDS.zMax);
-    const br = FP_BOUNDS.bodyR;
-    const r2 = x * x + z * z;
-    if (!body && r2 < br * br && pos.current.y < 1.75) {
-      const r = Math.sqrt(r2) || 1e-6;
-      x = (x / r) * br;
-      z = (z / r) * br;
+    if (cityOn) {
+      const hit = cityResolve(x, pos.current.y, z);
+      x = hit.x;
+      z = hit.z;
+    } else {
+      x = THREE.MathUtils.clamp(x, -FP_BOUNDS.x, FP_BOUNDS.x);
+      z = THREE.MathUtils.clamp(z, FP_BOUNDS.zMin, FP_BOUNDS.zMax);
+      const br = FP_BOUNDS.bodyR;
+      const r2 = x * x + z * z;
+      if (!body && r2 < br * br && pos.current.y < 1.75) {
+        const r = Math.sqrt(r2) || 1e-6;
+        x = (x / r) * br;
+        z = (z / r) * br;
+      }
     }
     pos.current.x = x;
     pos.current.z = z;
@@ -1055,8 +1115,9 @@ function FirstPersonRig({
     }
     velY.current -= FP_GRAV * d;
     pos.current.y += velY.current * d;
-    if (pos.current.y <= 0) {
-      pos.current.y = 0;
+    const floorY = cityOn ? cityGroundY(pos.current.x, pos.current.z) : 0;
+    if (pos.current.y <= floorY) {
+      pos.current.y = floorY;
       velY.current = 0;
       grounded.current = true;
     } else {
@@ -1110,16 +1171,179 @@ function FirstPersonRig({
   return null;
 }
 
+function WorldClip() {
+  const world = useStudio((s) => s.worldMap);
+  const { camera, scene, gl } = useThree();
+  useEffect(() => {
+    const p = camera as THREE.PerspectiveCamera;
+    const city = world === "city";
+    p.far = city ? 1400 : 40;
+    if (!useStudio.getState().firstPerson) p.near = city ? 0.2 : 0.05;
+    p.updateProjectionMatrix();
+    const bg = city ? "#7eafd0" : "#1a1614";
+    scene.background = new THREE.Color(bg);
+    scene.fog = city ? new THREE.Fog(0x7eafd0, 90, 780) : null;
+    gl.setClearColor(bg);
+  }, [world, camera, scene, gl]);
+  return null;
+}
+
+function CityWorld() {
+  const world = useStudio((s) => s.worldMap);
+  const group = getCityRuntime().group;
+  if (!group) return null;
+  return <primitive object={group} visible={world === "city"} />;
+}
+
+function makeDoorMarker(label: string, color: number) {
+  const g = new THREE.Group();
+  g.name = label;
+  const mat = new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity: 0.42,
+    depthWrite: false,
+    side: THREE.DoubleSide,
+  });
+  const pane = new THREE.Mesh(new THREE.PlaneGeometry(0.92, 2.05), mat);
+  pane.position.y = 1.05;
+  g.add(pane);
+  const edge = new THREE.Mesh(
+    new THREE.PlaneGeometry(0.98, 2.12),
+    new THREE.MeshBasicMaterial({ color: 0xfff3d6, transparent: true, opacity: 0.7, side: THREE.DoubleSide, depthWrite: false }),
+  );
+  edge.position.y = 1.05;
+  edge.position.z = -0.01;
+  g.add(edge);
+  const chev = new THREE.Mesh(
+    new THREE.RingGeometry(0.11, 0.2, 3),
+    new THREE.MeshBasicMaterial({ color: 0xfff8ee, transparent: true, opacity: 0.95, side: THREE.DoubleSide, depthWrite: false }),
+  );
+  chev.position.set(0, 1.55, 0.02);
+  chev.rotation.z = Math.PI;
+  g.add(chev);
+  return g;
+}
+
+function HomeExitDoor() {
+  const world = useStudio((s) => s.worldMap);
+  const group = useMemo(() => makeDoorMarker("HomeExit", 0x7ad0ff), []);
+  useFrame(({ clock }) => {
+    const pulse = 0.38 + Math.sin(clock.elapsedTime * 3.2) * 0.16;
+    const pane = group.children[0] as THREE.Mesh;
+    const mat = pane.material as THREE.MeshBasicMaterial;
+    mat.opacity = pulse;
+    group.visible = world === "home";
+  });
+  return <primitive object={group} position={[HOME_EXIT.x, 0, HOME_EXIT.z]} rotation={[0, Math.PI / 2, 0]} />;
+}
+
+function CityReturnDoor() {
+  const world = useStudio((s) => s.worldMap);
+  const group = useMemo(() => makeDoorMarker("CityReturn", 0xffc978), []);
+  useFrame(({ clock }) => {
+    const rt = getCityRuntime();
+    group.visible = world === "city" && rt.ready;
+    if (!group.visible) return;
+    const pulse = 0.4 + Math.sin(clock.elapsedTime * 3.2) * 0.16;
+    const pane = group.children[0] as THREE.Mesh;
+    (pane.material as THREE.MeshBasicMaterial).opacity = pulse;
+    const sp = rt.spawn;
+    group.position.set(sp.x, sp.y, sp.z - 2.15);
+    group.rotation.set(0, 0, 0);
+  });
+  return <primitive object={group} />;
+}
+
+let travelLock = false;
+
+function WorldGate() {
+  const [, bump] = useState(0);
+  useEffect(() => {
+    const go = async () => {
+      const s = useStudio.getState();
+      if (!s.firstPerson || travelLock || s.loading) return;
+      const x = fpLive.x;
+      const z = fpLive.z;
+      if (s.worldMap === "home" && nearHomeExit(x, z)) {
+        travelLock = true;
+        s.setFirstPerson(true, "body");
+        useStudio.setState({ loading: true, loadError: null, loadProgress: 8, loadHint: "打开家门…" });
+        try {
+          const model = await loadCityModel((pct, hint) => {
+            useStudio.setState({ loading: true, loadProgress: pct, loadHint: hint, loadError: null });
+          });
+          useStudio.setState({ loadProgress: 94, loadHint: "绘制城市碰撞" });
+          if (!getCityRuntime().ready || getCityRuntime().group !== model) bakeCityCollision(model);
+          useStudio.setState({ worldMap: "city", portalHint: "", loadProgress: 100, loadHint: "进入城市" });
+          bump((n) => n + 1);
+          requestAnimationFrame(() => {
+            useStudio.setState({ loading: false, loadProgress: 100, loadHint: "就绪" });
+            travelLock = false;
+          });
+        } catch (err) {
+          travelLock = false;
+          useStudio.setState({
+            loading: false,
+            loadError: null,
+            loadHint: "就绪",
+            portalHint: err instanceof Error ? `城市载入失败：${err.message}` : "城市载入失败",
+          });
+        }
+        return;
+      }
+      if (s.worldMap === "city" && nearCityPortal(x, z)) {
+        travelLock = true;
+        useStudio.setState({ loading: true, loadError: null, loadProgress: 22, loadHint: "返回家中…" });
+        s.setFirstPerson(true, "body");
+        await new Promise((r) => setTimeout(r, 260));
+        useStudio.setState({ worldMap: "home", portalHint: "", loadProgress: 80, loadHint: "进入房间" });
+        await new Promise((r) => setTimeout(r, 180));
+        useStudio.setState({ loading: false, loadProgress: 100, loadHint: "就绪" });
+        travelLock = false;
+      }
+    };
+    window.addEventListener("studio-fp-interact", go);
+    return () => window.removeEventListener("studio-fp-interact", go);
+  }, []);
+
+  useFrame(() => {
+    const s = useStudio.getState();
+    if (!s.firstPerson) {
+      if (s.portalHint) s.setPortalHint("");
+      return;
+    }
+    let hint = "";
+    if (s.worldMap === "home" && nearHomeExit(fpLive.x, fpLive.z)) hint = "按 E / 互动 出门";
+    else if (s.worldMap === "city" && nearCityPortal(fpLive.x, fpLive.z)) hint = "按 E / 互动 回家";
+    if (hint !== s.portalHint) s.setPortalHint(hint);
+  });
+  return null;
+}
+
 function StudioLights() {
+  const home = useStudio((s) => s.worldMap === "home");
   return (
-    <>
+    <group visible={home}>
       <ambientLight intensity={0.34} color="#e6d8c8" />
       <hemisphereLight args={["#f2ebe3", "#3a322c", 0.48]} />
       <directionalLight position={[1.8, 3.4, 2.4]} intensity={1.05} color="#fff1e0" />
       <directionalLight position={[-2.6, 2.6, 0.8]} intensity={0.32} color="#c8d0dc" />
       <pointLight position={[0, 2.55, -1.35]} intensity={2.1} distance={8} decay={2} color="#ffd7b0" />
       <pointLight position={[1.4, 1.7, -2.1]} intensity={1.1} distance={4.2} decay={2} color="#ffc98a" />
-    </>
+    </group>
+  );
+}
+
+function CityLights() {
+  const on = useStudio((s) => s.worldMap === "city");
+  return (
+    <group visible={on}>
+      <ambientLight intensity={0.42} color="#d7e6f2" />
+      <hemisphereLight args={["#c8e4ff", "#4a6a4a", 0.72]} />
+      <directionalLight position={[80, 140, 40]} intensity={1.35} color="#fff4d6" />
+      <directionalLight position={[-50, 40, -30]} intensity={0.28} color="#8eb4d8" />
+    </group>
   );
 }
 

@@ -2,6 +2,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { StudioApp } from "@/components/studio/studio-app";
 
 export const Route = createFileRoute("/")({
+  ssr: false,
   component: Home,
 });
 

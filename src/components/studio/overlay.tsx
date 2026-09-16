@@ -1617,7 +1617,7 @@ function CameraMenu({ onClose }: { onClose: () => void }) {
               : fpLookLocked
                 ? "观察视角已锁定 · 再点右键或 Esc 解除"
                 : "WASD 移动 · 空格跳 · C 点按蹲 · 长按匍匐 · 滚轮缩放 · 右键锁定视角"
-            : "观察：在房间走动看角色。角色视角：以角色头部为镜头，身体跟随转向。"}
+            : "观察：在房间走动看角色。角色视角：以角色头部为镜头，身体跟随转向。左侧发光门为出门。"}
         </p>
         <FpFovSlider />
         <FpLookSlider />
@@ -1779,6 +1779,7 @@ function FirstPersonHud() {
   const setFpCrouchHeld = useStudio((s) => s.setFpCrouchHeld);
   const tapFpJump = useStudio((s) => s.tapFpJump);
   const tapFpInteract = useStudio((s) => s.tapFpInteract);
+  const portalHint = useStudio((s) => s.portalHint);
   const stickRef = useRef<HTMLDivElement>(null);
   const [knob, setKnob] = useState({ x: 0, y: 0 });
   const [touchUi, setTouchUi] = useState(false);
@@ -1853,6 +1854,11 @@ function FirstPersonHud() {
       <p className="pointer-events-none absolute top-5 left-1/2 z-20 -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-2.5 py-0.5 text-[10px] tracking-wide text-muted">
         {fpView === "body" ? "角色视角" : "观察"}
       </p>
+      {portalHint ? (
+        <p className="pointer-events-none absolute top-14 left-1/2 z-20 -translate-x-1/2 rounded-full border border-accent/50 bg-accent/80 px-3 py-1 text-[12px] font-medium text-accent-fg">
+          {portalHint}
+        </p>
+      ) : null}
       <FpZoomBar />
       {lookLocked ? (
         <p className="pointer-events-none absolute bottom-6 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-3 py-1 text-[11px] text-muted sm:block">
