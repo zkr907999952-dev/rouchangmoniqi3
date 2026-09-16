@@ -43,6 +43,9 @@ export type SkelParams = {
   mouthSmile: number;
   mouthPucker: number;
   mouthWidth: number;
+  moveAx: number;
+  moveAy: number;
+  moveAz: number;
 };
 
 export type ExpressionId = "rest" | "ahegao" | "pain" | "vomit" | "disgust" | "climax";
@@ -1217,6 +1220,33 @@ export class SoftSkeleton {
     right.set(1, 0, 0).applyQuaternion(q);
     up.set(0, 1, 0).applyQuaternion(q);
     fwd.set(0, 0, 1).applyQuaternion(q);
+  }
+
+  /** Parent a rest-space tool so it rides the posed abdomen. */
+  bindAbdomen(obj: THREE.Object3D) {
+    const i = this.byName["C_Spine_a"] ?? this.byName["C_Hip_a"] ?? 0;
+    const q = this.wrot[i]!;
+    obj.quaternion.copy(q);
+    _from.set(this.rest[i * 3]!, this.rest[i * 3 + 1]!, this.rest[i * 3 + 2]!);
+    _from.applyQuaternion(q);
+    obj.position.copy(this.wpos[i]!).sub(_from);
+  }
+
+  /** Convert a point in posed skeleton space back to rest/bind space. */
+  toRestLocal(p: THREE.Vector3) {
+    const i = this.byName["C_Spine_a"] ?? this.byName["C_Hip_a"] ?? 0;
+    p.sub(this.wpos[i]!);
+    p.applyQuaternion(_q.copy(this.wrot[i]!).invert());
+    p.x += this.rest[i * 3]!;
+    p.y += this.rest[i * 3 + 1]!;
+    p.z += this.rest[i * 3 + 2]!;
+    return p;
+  }
+
+  toRestDir(n: THREE.Vector3) {
+    const i = this.byName["C_Spine_a"] ?? this.byName["C_Hip_a"] ?? 0;
+    n.applyQuaternion(_q.copy(this.wrot[i]!).invert());
+    return n;
   }
 
   poseQuat(i: number) {
@@ -2904,13 +2934,18 @@ export class SoftSkeleton {
       this.chestPos.copy(p);
       this.chestVel.set(vx, vy, vz);
       const mass = 0.0048 * (0.5 + soft) * (0.25 + bi * 1.5);
-      const tX = (-ax * mass * 0.55 * j - this.yawF * 0.022 * j - this.yawVel * 0.004 * j) * bi;
+      const tX =
+        (-ax * mass * 0.55 * j - this.yawF * 0.022 * j - this.yawVel * 0.004 * j) * bi -
+        params.moveAx * mass * 0.32 * j * bi;
       const drop = (Math.abs(tX) * 0.28 + Math.abs(this.yawF) * 0.004 * j) * bi;
       const tY =
         (-ay * mass * 0.72 * j - this.pitchF * 0.012 * j - this.pitchVel * 0.003 * j) * bi -
         drop -
-        0.006 * (0.3 + soft);
-      const tZ = (-az * mass * 0.5 * j + Math.abs(this.yawF) * 0.006 * j + Math.max(0, -ay) * mass * 0.28) * bi;
+        0.006 * (0.3 + soft) -
+        params.moveAy * mass * 0.42 * j * bi;
+      const tZ =
+        (-az * mass * 0.5 * j + Math.abs(this.yawF) * 0.006 * j + Math.max(0, -ay) * mass * 0.28) * bi -
+        params.moveAz * mass * 0.28 * j * bi;
       const w1 = 11.2 - soft * 3.4;
       const z1 = 0.2 + bd * 0.32;
       const k1 = w1 * w1;

@@ -1241,6 +1241,8 @@ function FittedFigure({
   const navelLiveInsert = useRef(0);
   const navelThrustOn = useRef(false);
   const rmbDown = useRef(false);
+  const bodyPrevP = useRef(new THREE.Vector3());
+  const bodyPrevV = useRef(new THREE.Vector3());
   const { camera, gl, raycaster, pointer } = useThree();
 
   const setup = useMemo(() => {
@@ -1865,15 +1867,27 @@ function FittedFigure({
           }
         }
       } else {
-      _plane.setFromNormalAndCoplanarPoint(_camDir, grab.current.planePoint);
+      if (grab.current.mode === "fist") {
+        _local.copy(o);
+        setup.fist.root.localToWorld(_local);
+        _plane.setFromNormalAndCoplanarPoint(_camDir, _local);
+      } else {
+        _plane.setFromNormalAndCoplanarPoint(_camDir, grab.current.planePoint);
+      }
       if (_ray.intersectPlane(_plane, _target)) {
         if (grab.current.mode === "fist") {
+          setup.root.worldToLocal(_target);
+          setup.skeleton.toRestLocal(_target);
           setup.fist.dragTo(o, _target);
           grab.current.origin.copy(_target);
           grab.current.planePoint.copy(_target);
         } else if (grab.current.mode === "bayonet") {
-          _plane.setFromNormalAndCoplanarPoint(_camDir, setup.knife.handle);
+          _local.copy(setup.knife.handle);
+          setup.knife.root.localToWorld(_local);
+          _plane.setFromNormalAndCoplanarPoint(_camDir, _local);
           if (_ray.intersectPlane(_plane, _target)) {
+            setup.root.worldToLocal(_target);
+            setup.skeleton.toRestLocal(_target);
             setup.knife.dragTo(_target);
             grab.current.origin.copy(setup.knife.handle);
             grab.current.planePoint.copy(setup.knife.handle);
@@ -1991,11 +2005,24 @@ function FittedFigure({
     });
     const fistBelly = setup.fist.belly();
     const jumping = (bodyOn && !fpLive.grounded) || s.pose === "jump";
-    const breastLock = jumping ? 0.14 : 1;
+    let moveAx = 0;
+    let moveAy = 0;
+    let moveAz = 0;
+    if (bodyOn) {
+      const inv = 1 / Math.max(dt, 1 / 120);
+      const vx = (fpLive.x - bodyPrevP.current.x) * inv;
+      const vy = (fpLive.y - bodyPrevP.current.y) * inv;
+      const vz = (fpLive.z - bodyPrevP.current.z) * inv;
+      moveAx = THREE.MathUtils.clamp((vx - bodyPrevV.current.x) * inv, -22, 22);
+      moveAy = THREE.MathUtils.clamp((vy - bodyPrevV.current.y) * inv, -38, 38);
+      moveAz = THREE.MathUtils.clamp((vz - bodyPrevV.current.z) * inv, -22, 22);
+      bodyPrevP.current.set(fpLive.x, fpLive.y, fpLive.z);
+      bodyPrevV.current.set(vx, vy, vz);
+    }
     setup.skeleton.step(dt, {
       stiffness: s.stiffness,
       damping: s.damping,
-      jiggle: jumping ? s.jiggle * 0.18 : s.jiggle,
+      jiggle: jumping ? s.jiggle * 0.62 : s.jiggle,
       gravity: s.gravity,
       wind: s.wind,
       time: state.clock.elapsedTime,
@@ -2016,11 +2043,11 @@ function FittedFigure({
       fistSpread: s.fistSpread,
       fistLever: s.fistLever,
       fistRise: s.fistRise,
-      breastSoft: s.breastSoft * breastLock,
-      breastDamp: jumping ? Math.min(1, 0.88 + s.breastDamp * 0.12) : s.breastDamp,
+      breastSoft: jumping ? s.breastSoft * 0.72 : s.breastSoft,
+      breastDamp: jumping ? Math.min(1, 0.42 + s.breastDamp * 0.4) : s.breastDamp,
       hairDamp: s.hairDamp,
-      breastInertia: s.breastInertia * breastLock,
-      hairInertia: jumping ? s.hairInertia * 0.35 : s.hairInertia,
+      breastInertia: jumping ? s.breastInertia * 0.78 : s.breastInertia,
+      hairInertia: jumping ? s.hairInertia * 0.55 : s.hairInertia,
       blinkEnabled: s.blinkEnabled,
       eyeOpenL: s.eyeOpenL,
       eyeOpenR: s.eyeOpenR,
@@ -2033,6 +2060,9 @@ function FittedFigure({
       mouthSmile: s.mouthSmile,
       mouthPucker: s.mouthPucker,
       mouthWidth: s.mouthWidth,
+      moveAx,
+      moveAy,
+      moveAz,
     });
     {
       let depth = s.navelDepth;
@@ -2063,6 +2093,9 @@ function FittedFigure({
       pump: s.bayonetPump,
       grabbing: grabbingKnife,
     });
+    setup.skeleton.bindAbdomen(setup.fist.root);
+    setup.skeleton.bindAbdomen(setup.knife.root);
+    setup.skeleton.bindAbdomen(setup.knife.wounds);
     if (setup.knife.consumeAutoReleased()) {
       bayonetPenRef.current = 0;
       useStudio.setState({ bayonetHasEntry: false, bayonetPen: 0 });
@@ -2639,6 +2672,8 @@ function FittedFigure({
       return;
     }
     if (mode === "fist") {
+      setup.root.worldToLocal(_hit);
+      setup.skeleton.toRestLocal(_hit);
       beginGrab(_hit, _normal.set(0, 0, 1), "fist");
       return;
     }
@@ -2669,6 +2704,13 @@ function FittedFigure({
         _hit.copy(hit.point);
         _normal.copy(hit.face.normal).transformDirection(hit.object.matrixWorld).normalize();
         if (_normal.dot(_camDir) > 0) _normal.negate();
+        _local.copy(_hit).add(_normal);
+        setup.root.worldToLocal(_hit);
+        setup.root.worldToLocal(_local);
+        _normal.copy(_local).sub(_hit);
+        if (_normal.lengthSq() > 1e-10) _normal.normalize();
+        setup.skeleton.toRestLocal(_hit);
+        setup.skeleton.toRestDir(_normal);
         setup.knife.pick(_hit, _normal, hit.object as THREE.Mesh, hit.faceIndex ?? -1);
         bayonetPenRef.current = 0;
         st.setBayonetHasEntry(true);
