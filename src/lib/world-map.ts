@@ -6,8 +6,8 @@ export const CITY_BYTES = 8_037_544;
 export const CITY_SCALE = 1;
 export const CITY_BAKE_ID = "house-v10";
 
-export const HOME_EXIT = { x: -1.62, y: 0, z: 0.12, r: 1.05 };
-export const HOME_RETURN_SPAWN = { x: -1.12, y: 0, z: 0.12, yaw: -Math.PI / 2, pitch: -0.08 };
+export const HOME_EXIT = { x: -2.16, y: 0, z: 0.12, r: 1.28 };
+export const HOME_RETURN_SPAWN = { x: -1.28, y: 0, z: 0.12, yaw: -Math.PI / 2, pitch: -0.08 };
 
 export const PLAYER_R = 0.3;
 export const CITY_MAP_H_MIN = 36;

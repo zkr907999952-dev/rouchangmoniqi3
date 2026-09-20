@@ -1,7 +1,7 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { a as require_jsx_runtime, o as require_react } from "../_libs/@radix-ui/react-collection+[...].mjs";
 import { I as Line3, It as Vector3, S as Euler, T as Group, Y as Matrix4, _ as Color, _t as Ray, d as BufferAttribute, f as BufferGeometry, ht as Quaternion, l as Box3, p as Cache, q as MathUtils } from "../_libs/@react-three/drei+[...].mjs";
-import { A as Bone, C as Eye, D as ChevronsDown, E as ChevronsUpDown, F as Activity, M as ArrowRight, N as ArrowLeft, O as Camera, P as ArrowDown, S as Grab, T as Crosshair, _ as Map$1, a as User, b as GripHorizontal, c as Settings2, d as RotateCcw, f as Rotate3d, g as Move, h as Pause, i as Wind, j as ArrowUp, k as Box, l as Scan, m as Pointer, n as Zap, p as Repeat, r as Wrench, s as Sword, t as ZoomIn, u as RotateCw, v as Heart, w as EyeOff, x as Grid3x3, y as Hand } from "../_libs/lucide-react.mjs";
+import { A as Box, C as Grab, D as ChevronsUpDown, E as Crosshair, F as ArrowDown, I as Activity, M as ArrowUp, N as ArrowRight, O as ChevronsDown, P as ArrowLeft, S as Grid3x3, T as EyeOff, _ as Map$1, a as User, b as Hand, c as Settings2, d as RotateCcw, f as Rotate3d, g as Move, h as Pause, i as Wind, j as Bone, k as Camera, l as Scan, m as Pointer, n as Zap, p as Repeat, r as Wrench, s as Sword, t as ZoomIn, u as RotateCw, v as House, w as Eye, x as GripHorizontal, y as Heart } from "../_libs/lucide-react.mjs";
 import { t as GLTFLoader } from "../_libs/three-stdlib.mjs";
 import { t as MeshBVH } from "../_libs/three-mesh-bvh.mjs";
 import { t as create } from "../_libs/zustand.mjs";
@@ -9,7 +9,7 @@ import { n as MeshoptDecoder } from "../_libs/three.mjs";
 import { i as SliderTrack, n as SliderRange, r as SliderThumb, t as Slider } from "../_libs/@radix-ui/react-slider+[...].mjs";
 import { t as clsx } from "../_libs/clsx.mjs";
 import { t as twMerge } from "../_libs/tailwind-merge.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-1RYC3LC1.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-D669OK6D.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -3239,13 +3239,13 @@ var SoftSkeleton = class {
 };
 var CITY_BAKE_ID = "house-v10";
 var HOME_EXIT = {
-	x: -1.62,
+	x: -2.16,
 	y: 0,
 	z: .12,
-	r: 1.05
+	r: 1.28
 };
 var HOME_RETURN_SPAWN = {
-	x: -1.12,
+	x: -1.28,
 	y: 0,
 	z: .12,
 	yaw: -Math.PI / 2,
@@ -7237,11 +7237,38 @@ function CityMapPanel() {
 	const setMarker = useStudio((s) => s.setCityMapMarker);
 	const warpFp = useStudio((s) => s.warpFp);
 	const height = useStudio((s) => s.cityMapHeight);
+	const setWorldMap = useStudio((s) => s.setWorldMap);
+	const setFirstPerson = useStudio((s) => s.setFirstPerson);
 	if (!open) return null;
 	const teleport = () => {
 		if (!marker) return;
 		const y = citySurfaceAt(marker.x, marker.z);
 		warpFp(marker.x, y, marker.z);
+	};
+	const goHome = () => {
+		setFirstPerson(true, "body");
+		useStudio.setState({
+			loading: true,
+			loadError: null,
+			loadProgress: 28,
+			loadHint: "返回家中…",
+			cityMapOpen: false,
+			cityMapMarker: null
+		});
+		window.setTimeout(() => {
+			setWorldMap("home");
+			useStudio.setState({
+				loadProgress: 82,
+				loadHint: "进入房间"
+			});
+			window.setTimeout(() => {
+				useStudio.setState({
+					loading: false,
+					loadProgress: 100,
+					loadHint: "就绪"
+				});
+			}, 180);
+		}, 220);
 	};
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 		className: "pointer-events-none absolute inset-0 z-40",
@@ -7254,11 +7281,19 @@ function CityMapPanel() {
 			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 				className: "mt-0.5 text-[11px] text-muted",
 				children: "拖动平移 · 滚轮 / 侧栏缩放 · 点击选点 · M / Esc 关闭"
-			})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
-				type: "button",
-				className: "inline-flex h-9 items-center rounded-md border border-border px-3 text-xs font-medium text-muted hover:text-fg",
-				onClick: () => setOpen(false),
-				children: "关闭"
+			})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex items-center gap-2",
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+					type: "button",
+					className: "inline-flex h-11 min-w-24 items-center justify-center gap-1.5 rounded-md bg-accent px-3 text-sm font-medium text-accent-fg",
+					onClick: goHome,
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(House, { className: "size-3.5" }), "回家"]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					className: "inline-flex h-11 items-center rounded-md border border-border px-3 text-xs font-medium text-muted hover:text-fg",
+					onClick: () => setOpen(false),
+					children: "关闭"
+				})]
 			})]
 		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 			className: "pointer-events-auto absolute right-4 bottom-4 left-4 mx-auto flex max-w-lg flex-wrap items-center justify-between gap-2 rounded-xl border border-border/50 bg-surface/70 px-4 py-3 backdrop-blur-[2px]",
@@ -7666,7 +7701,7 @@ function Toggle({ active, onClick, icon, label }) {
 		children: [icon, label]
 	});
 }
-var Scene = (0, import_react.lazy)(() => import("./scene-EGrwH2vi.mjs"));
+var Scene = (0, import_react.lazy)(() => import("./scene-BfqJXc4A.mjs"));
 function StudioApp() {
 	const [mounted, setMounted] = (0, import_react.useState)(false);
 	(0, import_react.useEffect)(() => setMounted(true), []);

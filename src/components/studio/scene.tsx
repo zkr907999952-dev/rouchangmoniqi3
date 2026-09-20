@@ -621,7 +621,7 @@ const FP_STEP = 0.4;
 const FP_SENS = 0.0017;
 const FP_TOUCH_SENS = 0.00305;
 const FP_PITCH_LIM = Math.PI / 2 - 0.02;
-const FP_BOUNDS = { x: 1.85, zMin: -1.55, zMax: 2.85, bodyR: 0.28 };
+const FP_BOUNDS = { xMin: -2.48, xMax: 1.85, zMin: -1.55, zMax: 2.85, bodyR: 0.28 };
 const ORBIT_HOME = { px: 0.28, py: 1.18, pz: 2.35, tx: 0, ty: 1.06, tz: 0.1, fov: 34 };
 const _fpRight = new THREE.Vector3();
 const _fpFwd = new THREE.Vector3();
@@ -633,6 +633,19 @@ function lookDirFromYawPitch(yaw: number, pitch: number, out: THREE.Vector3) {
   const cy = Math.cos(pitch);
   out.set(-Math.sin(yaw) * cy, Math.sin(pitch), -Math.cos(yaw) * cy);
   return out;
+}
+
+function syncFpProjection(camera: THREE.Camera, worldMap: string, fpView: string, fov: number) {
+  const persp = camera as THREE.PerspectiveCamera;
+  const city = worldMap === "city";
+  const body = fpView === "body";
+  const near = city ? 0.12 : body ? 0.04 : 0.08;
+  const far = city ? 2200 : 40;
+  if (persp.fov === fov && persp.near === near && persp.far === far) return;
+  persp.fov = fov;
+  persp.near = near;
+  persp.far = far;
+  persp.updateProjectionMatrix();
 }
 
 /** Roll-free look. Right axis stays horizontal from yaw so looking down never mirrors. */
@@ -803,10 +816,7 @@ function FirstPersonRig({
         eyeBlend.current = 1;
         grounded.current = true;
       }
-      persp.fov = useStudio.getState().fpFov;
-      persp.near = city ? 0.12 : body ? 0.04 : 0.08;
-      persp.far = city ? 2200 : 40;
-      persp.updateProjectionMatrix();
+      syncFpProjection(camera, worldMap, fpView, useStudio.getState().fpFov);
       fpLive.active = true;
       fpLive.view = fpView;
       input.current.gate = crouchGate.current;
@@ -1286,7 +1296,7 @@ function FirstPersonRig({
       } else {
         x += dx;
         z += dz;
-        x = THREE.MathUtils.clamp(x, -FP_BOUNDS.x, FP_BOUNDS.x);
+        x = THREE.MathUtils.clamp(x, FP_BOUNDS.xMin, FP_BOUNDS.xMax);
         z = THREE.MathUtils.clamp(z, FP_BOUNDS.zMin, FP_BOUNDS.zMax);
         const br = FP_BOUNDS.bodyR;
         const r2 = x * x + z * z;
@@ -1342,8 +1352,10 @@ function FirstPersonRig({
 
   useFrame(() => {
     if (!firstPerson) return;
-    if (useStudio.getState().cityMapOpen) return;
-    const body = useStudio.getState().fpView === "body";
+    const st = useStudio.getState();
+    if (st.cityMapOpen) return;
+    syncFpProjection(camera, st.worldMap, st.fpView, st.fpFov);
+    const body = st.fpView === "body";
     const fx = -Math.sin(yaw.current);
     const fz = -Math.cos(yaw.current);
     if (body) {
@@ -1430,6 +1442,7 @@ function CityMapRig() {
   const drag = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
   const prevFog = useRef<THREE.Fog | THREE.FogExp2 | null>(null);
   const prevUp = useRef(new THREE.Vector3(0, 1, 0));
+  const prevProj = useRef({ fov: 50, near: 0.1, far: 40 });
 
   useEffect(() => {
     if (!open) return;
@@ -1439,6 +1452,8 @@ function CityMapRig() {
     if (st.cityMapHeight < 50 || st.cityMapHeight > 400) st.setCityMapHeight(CITY_MAP_H_DEFAULT);
     prevFog.current = scene.fog;
     prevUp.current.copy(camera.up);
+    const persp0 = camera as THREE.PerspectiveCamera;
+    prevProj.current = { fov: persp0.fov, near: persp0.near, far: persp0.far };
     scene.fog = null;
     const el = gl.domElement;
     el.style.cursor = "grab";
@@ -1536,6 +1551,11 @@ function CityMapRig() {
       el.style.cursor = "";
       camera.up.copy(prevUp.current);
       scene.fog = prevFog.current;
+      const persp = camera as THREE.PerspectiveCamera;
+      persp.fov = prevProj.current.fov;
+      persp.near = prevProj.current.near;
+      persp.far = prevProj.current.far;
+      persp.updateProjectionMatrix();
     };
   }, [open, camera, gl, scene, size.width, size.height]);
 
@@ -1626,15 +1646,23 @@ function CollisionDebug() {
     group.name = "CollisionDebug";
     group.frustumCulled = false;
     const mat = new THREE.MeshBasicMaterial({
-      color: 0xffcc33,
-      wireframe: true,
+      color: 0x7ad0ff,
       transparent: true,
-      opacity: 0.9,
-      depthTest: false,
+      opacity: 0.18,
+      depthTest: true,
       depthWrite: false,
+      side: THREE.DoubleSide,
+      polygonOffset: true,
+      polygonOffsetFactor: -2,
+      polygonOffsetUnits: -2,
     });
+    const huge = mat.clone();
+    huge.opacity = 0.07;
+    huge.color.setHex(0x9ad8c8);
     for (let i = 0; i < 56; i++) {
       const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+      mesh.userData.huge = huge;
+      mesh.userData.fill = mat;
       mesh.visible = false;
       mesh.frustumCulled = false;
       mesh.renderOrder = 10;
@@ -1646,12 +1674,12 @@ function CollisionDebug() {
     const mesh = new THREE.Mesh(
       new THREE.CapsuleGeometry(0.3, 1.04, 3, 8),
       new THREE.MeshBasicMaterial({
-        color: 0xffe08a,
-        wireframe: true,
-        depthTest: false,
+        color: 0x7ad0ff,
+        depthTest: true,
         depthWrite: false,
         transparent: true,
-        opacity: 0.95,
+        opacity: 0.26,
+        side: THREE.DoubleSide,
       }),
     );
     mesh.frustumCulled = false;
@@ -1672,12 +1700,24 @@ function CollisionDebug() {
         mesh.visible = false;
         continue;
       }
-      mesh.visible = true;
       const w = Math.max(0.04, box.maxX - box.minX);
       const h = Math.max(0.04, box.maxY - box.minY);
       const d = Math.max(0.04, box.maxZ - box.minZ);
+      const inside =
+        fpLive.x >= box.minX &&
+        fpLive.x <= box.maxX &&
+        fpLive.z >= box.minZ &&
+        fpLive.z <= box.maxZ &&
+        fpLive.y + 0.4 >= box.minY &&
+        fpLive.y <= box.maxY;
+      if (inside && w * d > 16) {
+        mesh.visible = false;
+        continue;
+      }
+      mesh.visible = true;
       mesh.position.set((box.minX + box.maxX) * 0.5, (box.minY + box.maxY) * 0.5, (box.minZ + box.maxZ) * 0.5);
       mesh.scale.set(w, h, d);
+      mesh.material = w * d > 80 ? (mesh.userData.huge as THREE.Material) : (mesh.userData.fill as THREE.Material);
     }
     const r = fpLive.prone ? 0.22 : fpLive.crouched ? 0.26 : 0.3;
     const h = fpLive.prone ? 0.42 : fpLive.crouched ? 0.94 : 1.64;

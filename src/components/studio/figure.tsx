@@ -1402,7 +1402,7 @@ function FittedFigure({
       if (!mesh.isMesh || !mesh.geometry) return;
       const hint = bindHint(mesh);
       const k = meshKey(mesh);
-      if (hint === "hair" || hint === "face" || hint === "eye" || hint === "mouth" || /charm|lash|头发|hair/.test(k)) {
+      if (hint === "hair" || hint === "face" || hint === "eye" || hint === "mouth" || /charm|lash|头发|hair|neck|头|颈/.test(k)) {
         mesh.userData.fpHide = true;
         hideMeshes.push(mesh);
       }
@@ -2163,6 +2163,11 @@ function FittedFigure({
       eyeSmooth.current.lerp(_eye, k);
       _eye.copy(eyeSmooth.current);
       setup.root.localToWorld(_eye);
+      const moving = Math.hypot(fpLive.moveFwd, fpLive.moveSide) > 0.12;
+      const push = fpLive.sprinting ? 0.13 : moving ? 0.07 : 0.045;
+      _eye.x += -Math.sin(fpLive.yaw) * push;
+      _eye.z += -Math.cos(fpLive.yaw) * push;
+      if (fpLive.sprinting) _eye.y += 0.02;
       fpLive.eyeX = _eye.x;
       fpLive.eyeY = _eye.y;
       fpLive.eyeZ = _eye.z;

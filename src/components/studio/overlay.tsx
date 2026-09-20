@@ -35,6 +35,7 @@ import {
   ZoomIn,
   User,
   Map,
+  Home,
 } from "lucide-react";
 import * as Slider from "@radix-ui/react-slider";
 import { cn } from "@/lib/utils";
@@ -1848,6 +1849,8 @@ function CityMapPanel() {
   const setMarker = useStudio((s) => s.setCityMapMarker);
   const warpFp = useStudio((s) => s.warpFp);
   const height = useStudio((s) => s.cityMapHeight);
+  const setWorldMap = useStudio((s) => s.setWorldMap);
+  const setFirstPerson = useStudio((s) => s.setFirstPerson);
 
   if (!open) return null;
 
@@ -1855,6 +1858,25 @@ function CityMapPanel() {
     if (!marker) return;
     const y = citySurfaceAt(marker.x, marker.z);
     warpFp(marker.x, y, marker.z);
+  };
+
+  const goHome = () => {
+    setFirstPerson(true, "body");
+    useStudio.setState({
+      loading: true,
+      loadError: null,
+      loadProgress: 28,
+      loadHint: "返回家中…",
+      cityMapOpen: false,
+      cityMapMarker: null,
+    });
+    window.setTimeout(() => {
+      setWorldMap("home");
+      useStudio.setState({ loadProgress: 82, loadHint: "进入房间" });
+      window.setTimeout(() => {
+        useStudio.setState({ loading: false, loadProgress: 100, loadHint: "就绪" });
+      }, 180);
+    }, 220);
   };
 
   return (
@@ -1867,13 +1889,23 @@ function CityMapPanel() {
           <p className="font-display text-lg tracking-display">城市俯视</p>
           <p className="mt-0.5 text-[11px] text-muted">拖动平移 · 滚轮 / 侧栏缩放 · 点击选点 · M / Esc 关闭</p>
         </div>
-        <button
-          type="button"
-          className="inline-flex h-9 items-center rounded-md border border-border px-3 text-xs font-medium text-muted hover:text-fg"
-          onClick={() => setOpen(false)}
-        >
-          关闭
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            className="inline-flex h-11 min-w-24 items-center justify-center gap-1.5 rounded-md bg-accent px-3 text-sm font-medium text-accent-fg"
+            onClick={goHome}
+          >
+            <Home className="size-3.5" />
+            回家
+          </button>
+          <button
+            type="button"
+            className="inline-flex h-11 items-center rounded-md border border-border px-3 text-xs font-medium text-muted hover:text-fg"
+            onClick={() => setOpen(false)}
+          >
+            关闭
+          </button>
+        </div>
       </div>
       <div
         className="pointer-events-auto absolute right-4 bottom-4 left-4 mx-auto flex max-w-lg flex-wrap items-center justify-between gap-2 rounded-xl border border-border/50 bg-surface/70 px-4 py-3 backdrop-blur-[2px]"
