@@ -1,6 +1,6 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { a as require_jsx_runtime, o as require_react } from "../_libs/@radix-ui/react-collection+[...].mjs";
-import { I as Line3, It as Vector3, S as Euler, T as Group, Y as Matrix4, _ as Color, _t as Ray, d as BufferAttribute, f as BufferGeometry, ht as Quaternion, l as Box3, p as Cache, q as MathUtils } from "../_libs/@react-three/drei+[...].mjs";
+import { C as Euler, E as Group, J as MathUtils, L as Line3, Lt as Vector3, X as Matrix4, d as BufferAttribute, f as BufferGeometry, gt as Quaternion, l as Box3, p as Cache, v as Color, vt as Ray } from "../_libs/@react-three/drei+[...].mjs";
 import { A as Box, C as Grab, D as ChevronsUpDown, E as Crosshair, F as ArrowDown, I as Activity, M as ArrowUp, N as ArrowRight, O as ChevronsDown, P as ArrowLeft, S as Grid3x3, T as EyeOff, _ as Map$1, a as User, b as Hand, c as Settings2, d as RotateCcw, f as Rotate3d, g as Move, h as Pause, i as Wind, j as Bone, k as Camera, l as Scan, m as Pointer, n as Zap, p as Repeat, r as Wrench, s as Sword, t as ZoomIn, u as RotateCw, v as House, w as Eye, x as GripHorizontal, y as Heart } from "../_libs/lucide-react.mjs";
 import { t as GLTFLoader } from "../_libs/three-stdlib.mjs";
 import { t as MeshBVH } from "../_libs/three-mesh-bvh.mjs";
@@ -9,7 +9,7 @@ import { n as MeshoptDecoder } from "../_libs/three.mjs";
 import { i as SliderTrack, n as SliderRange, r as SliderThumb, t as Slider } from "../_libs/@radix-ui/react-slider+[...].mjs";
 import { t as clsx } from "../_libs/clsx.mjs";
 import { t as twMerge } from "../_libs/tailwind-merge.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-D669OK6D.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-BkKcuB_H.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -3239,13 +3239,13 @@ var SoftSkeleton = class {
 };
 var CITY_BAKE_ID = "house-v10";
 var HOME_EXIT = {
-	x: -2.16,
+	x: -3.58,
 	y: 0,
 	z: .12,
-	r: 1.28
+	r: .92
 };
 var HOME_RETURN_SPAWN = {
-	x: -1.28,
+	x: -1.22,
 	y: 0,
 	z: .12,
 	yaw: -Math.PI / 2,
@@ -3682,7 +3682,7 @@ var _triPoint = new Vector3();
 var _capPoint = new Vector3();
 var _dir = new Vector3();
 /** Push a vertical capsule out of city triangles. Feet at (x,y,z). */
-function cityMoveCapsule(px, py, pz, radius, height, dx, dy, dz) {
+function cityMoveCapsule(px, py, pz, radius, height, dx, dy, dz, snapGround = true) {
 	let x = px + dx;
 	let y = py + dy;
 	let z = pz + dz;
@@ -3761,7 +3761,7 @@ function cityMoveCapsule(px, py, pz, radius, height, dx, dy, dz) {
 	}
 	x = MathUtils.clamp(x, city.minX, city.maxX);
 	z = MathUtils.clamp(z, city.minZ, city.maxZ);
-	if (dy < 0) {
+	if (dy < 0 && snapGround) {
 		const gy = cityRayDown(x, y + Math.max(capH, 1.35), z, Math.max(capH + .85, 2.2));
 		if (gy != null && y - gy <= .55 && y - gy >= -.4) {
 			y = gy;
@@ -7701,7 +7701,7 @@ function Toggle({ active, onClick, icon, label }) {
 		children: [icon, label]
 	});
 }
-var Scene = (0, import_react.lazy)(() => import("./scene-BfqJXc4A.mjs"));
+var Scene = (0, import_react.lazy)(() => import("./scene-BdB2aTF5.mjs"));
 function StudioApp() {
 	const [mounted, setMounted] = (0, import_react.useState)(false);
 	(0, import_react.useEffect)(() => setMounted(true), []);

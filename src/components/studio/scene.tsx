@@ -613,7 +613,7 @@ const FP_WALK = 1.65;
 const FP_AIR = 1.55;
 const FP_JUMP = 8.5;
 const FP_GRAV = 20;
-const FP_MAX_FALL = 28;
+const FP_MAX_FALL = 58;
 const FP_FRICTION = 6.4;
 const FP_ACCEL = 12;
 const FP_AIR_ACCEL = 3.4;
@@ -621,13 +621,16 @@ const FP_STEP = 0.4;
 const FP_SENS = 0.0017;
 const FP_TOUCH_SENS = 0.00305;
 const FP_PITCH_LIM = Math.PI / 2 - 0.02;
-const FP_BOUNDS = { xMin: -2.48, xMax: 1.85, zMin: -1.55, zMax: 2.85, bodyR: 0.28 };
+const FP_BOUNDS = { xMin: -4.35, xMax: 1.85, zMin: -1.55, zMax: 2.85, bodyR: 0.28 };
+const CITY_WALK = 5.8;
+const CITY_RUN = 11;
 const ORBIT_HOME = { px: 0.28, py: 1.18, pz: 2.35, tx: 0, ty: 1.06, tz: 0.1, fov: 34 };
 const _fpRight = new THREE.Vector3();
 const _fpFwd = new THREE.Vector3();
 const _fpUp = new THREE.Vector3();
 const _fpZ = new THREE.Vector3();
 const _fpMat = new THREE.Matrix4();
+const _camHit = new THREE.Vector3();
 
 function lookDirFromYawPitch(yaw: number, pitch: number, out: THREE.Vector3) {
   const cy = Math.cos(pitch);
@@ -670,6 +673,35 @@ function applyLookDir(camera: THREE.Camera, dir: THREE.Vector3, yaw: number) {
 
 function applyFpLook(camera: THREE.Camera, yaw: number, pitch: number) {
   applyLookDir(camera, lookDirFromYawPitch(yaw, pitch, _fpFwd), yaw);
+}
+
+function pullCameraOutOfWalls(camera: THREE.Camera, city: boolean, near: number, yaw: number, pitch: number) {
+  const p = camera.position;
+  if (city && getCityRuntime().ready) {
+    const r = near + 0.08;
+    const y0 = p.y;
+    const pushed = cityMoveCapsule(p.x, p.y - r, p.z, r, r * 2.08, 0, 0, 0);
+    p.x = pushed.x;
+    p.z = pushed.z;
+    p.y = THREE.MathUtils.clamp(pushed.y + r, y0 - 0.1, y0 + 0.1);
+    lookDirFromYawPitch(yaw, pitch, _fpFwd);
+    const hit = cityRayPick(p, _fpFwd, r + 0.16);
+    if (hit) {
+      _camHit.set(hit.x, hit.y, hit.z);
+      const dist = p.distanceTo(_camHit);
+      const need = near + 0.07;
+      if (dist < need) p.addScaledVector(_fpFwd, dist - need);
+    }
+  } else {
+    const skin = near + 0.08;
+    const inside = p.x > -2.02 && p.x < 3.62 && p.z > -3.36 && p.z < 1.02 && p.y < 2.48;
+    if (!inside) return;
+    if (p.x < -1.96 + skin) p.x = -1.96 + skin;
+    if (p.x > 3.52 - skin) p.x = 3.52 - skin;
+    if (p.z < -3.28 + skin) p.z = -3.28 + skin;
+    if (p.z > 0.9 - skin) p.z = 0.9 - skin;
+    if (p.y > 2.3 - skin) p.y = 2.3 - skin;
+  }
 }
 
 function FirstPersonRig({
@@ -1040,6 +1072,8 @@ function FirstPersonRig({
         world: useStudio.getState().worldMap,
         grounded: grounded.current,
         posY: pos.current.y,
+        velY: velY.current,
+        airTime: fpLive.airTime,
         cityReady: getCityRuntime().ready,
         cityCols: getCityRuntime().colliders.length,
         citySkip: getCityRuntime().skipped,
@@ -1170,15 +1204,15 @@ function FirstPersonRig({
           ? FP_WALK * 0.45
           : cityOn
             ? sprint
-              ? FP_WALK * 8.2
-              : FP_WALK * 4.6
+              ? FP_WALK * CITY_RUN
+              : FP_WALK * CITY_WALK
             : sprint
               ? FP_WALK * 1.9
               : FP_WALK
       : cityOn
         ? sprint
-          ? FP_WALK * 8.2
-          : FP_WALK * 4.6
+          ? FP_WALK * CITY_RUN
+          : FP_WALK * CITY_WALK
         : sprint
           ? FP_AIR * 1.35
           : FP_AIR;
@@ -1239,7 +1273,12 @@ function FirstPersonRig({
         coyote.current = 0;
         jumpBuf.current = 0;
       }
-      velY.current -= FP_GRAV * stepDt;
+      velY.current -=
+        FP_GRAV *
+        (grounded.current || (velY.current > -14 && fpLive.airTime < 1.05)
+          ? 1
+          : 1 + Math.min(1.8, Math.max(0, fpLive.airTime - 1.05) * 1.15 + Math.max(0, -velY.current - 14) * 0.04)) *
+        stepDt;
       if (velY.current < -FP_MAX_FALL) velY.current = -FP_MAX_FALL;
 
       const dx = velX.current * stepDt;
@@ -1250,7 +1289,8 @@ function FirstPersonRig({
       let z = pos.current.z;
       if (cityOn) {
         const wasGround = grounded.current;
-        let hor = cityMoveCapsule(x, y, z, capR, capH, dx, 0, dz);
+        const snapGround = wasGround || velY.current > -9;
+        let hor = cityMoveCapsule(x, y, z, capR, capH, dx, 0, dz, snapGround);
         const wishDx = x + dx;
         const wishDz = z + dz;
         const blocked =
@@ -1264,7 +1304,7 @@ function FirstPersonRig({
             hor = stepped;
           }
         }
-        const vert = cityMoveCapsule(hor.x, hor.y, hor.z, capR, capH, 0, dy, 0);
+        const vert = cityMoveCapsule(hor.x, hor.y, hor.z, capR, capH, 0, dy, 0, snapGround);
         x = vert.x;
         y = vert.y;
         z = vert.z;
@@ -1366,6 +1406,7 @@ function FirstPersonRig({
       camera.position.set(pos.current.x, lookY, pos.current.z);
       applyFpLook(camera, yaw.current, pitch.current);
     }
+    pullCameraOutOfWalls(camera, st.worldMap === "city", (camera as THREE.PerspectiveCamera).near, yaw.current, pitch.current);
     const c = controlsRef.current;
     if (c) {
       c.target.set(camera.position.x + fx, camera.position.y, camera.position.z + fz);
@@ -1767,7 +1808,36 @@ function makeDoorMarker(label: string, color: number) {
 
 function HomeExitDoor() {
   const world = useStudio((s) => s.worldMap);
-  const group = useMemo(() => makeDoorMarker("HomeExit", 0x7ad0ff), []);
+  const group = useMemo(() => {
+    const g = makeDoorMarker("HomeExit", 0x7ad0ff);
+    const pad = new THREE.Mesh(
+      new THREE.CircleGeometry(1.35, 24),
+      new THREE.MeshBasicMaterial({
+        color: 0x243848,
+        transparent: true,
+        opacity: 0.55,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    pad.rotation.x = -Math.PI / 2;
+    pad.position.y = 0.02;
+    g.add(pad);
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(1.18, 1.38, 28),
+      new THREE.MeshBasicMaterial({
+        color: 0x7ad0ff,
+        transparent: true,
+        opacity: 0.5,
+        depthWrite: false,
+        side: THREE.DoubleSide,
+      }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.03;
+    g.add(ring);
+    return g;
+  }, []);
   useFrame(({ clock }) => {
     const pulse = 0.38 + Math.sin(clock.elapsedTime * 3.2) * 0.16;
     const pane = group.children[0] as THREE.Mesh;

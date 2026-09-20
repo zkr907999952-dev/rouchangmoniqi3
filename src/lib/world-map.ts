@@ -6,8 +6,8 @@ export const CITY_BYTES = 8_037_544;
 export const CITY_SCALE = 1;
 export const CITY_BAKE_ID = "house-v10";
 
-export const HOME_EXIT = { x: -2.16, y: 0, z: 0.12, r: 1.28 };
-export const HOME_RETURN_SPAWN = { x: -1.28, y: 0, z: 0.12, yaw: -Math.PI / 2, pitch: -0.08 };
+export const HOME_EXIT = { x: -3.58, y: 0, z: 0.12, r: 0.92 };
+export const HOME_RETURN_SPAWN = { x: -1.22, y: 0, z: 0.12, yaw: -Math.PI / 2, pitch: -0.08 };
 
 export const PLAYER_R = 0.3;
 export const CITY_MAP_H_MIN = 36;
@@ -506,6 +506,7 @@ export function cityMoveCapsule(
   dx: number,
   dy: number,
   dz: number,
+  snapGround = true,
 ): CapsuleHit {
   let x = px + dx;
   let y = py + dy;
@@ -586,7 +587,7 @@ export function cityMoveCapsule(
   x = THREE.MathUtils.clamp(x, city.minX, city.maxX);
   z = THREE.MathUtils.clamp(z, city.minZ, city.maxZ);
 
-  if (dy < 0) {
+  if (dy < 0 && snapGround) {
     const gy = cityRayDown(x, y + Math.max(capH, 1.35), z, Math.max(capH + 0.85, 2.2));
     if (gy != null && y - gy <= 0.55 && y - gy >= -0.4) {
       y = gy;

@@ -1,10 +1,10 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { a as require_jsx_runtime, o as require_react } from "../_libs/@radix-ui/react-collection+[...].mjs";
-import { B as LinearFilter, Dt as SphereGeometry, Ft as Vector2, G as MOUSE, It as Vector3, J as Matrix3, L as LineBasicMaterial, Lt as Vector4, Mt as TorusGeometry, Ot as Spherical, Q as MeshLambertMaterial, S as Euler, T as Group, V as LinearMipmapLinearFilter, X as Mesh, Y as Matrix4, Z as MeshBasicMaterial, _ as Color, _t as Ray, bt as RingGeometry, d as BufferAttribute, dt as PointLight, et as MeshStandardMaterial, f as BufferGeometry, g as ClampToEdgeWrapping, h as CapsuleGeometry, ht as Quaternion, i as useThree, l as Box3, lt as Plane, m as CanvasTexture, n as Canvas, q as MathUtils, r as useFrame, t as OrbitControls, u as BoxGeometry, ut as PlaneGeometry, v as ConeGeometry, vt as Raycaster, w as Fog, x as DynamicDrawUsage, xt as SRGBColorSpace, y as CylinderGeometry, z as LineSegments } from "../_libs/@react-three/drei+[...].mjs";
+import { $ as MeshLambertMaterial, B as LineSegments, C as Euler, E as Group, H as LinearMipmapLinearFilter, It as Vector2, J as MathUtils, K as MOUSE, Lt as Vector3, Nt as TorusGeometry, Ot as SphereGeometry, Q as MeshBasicMaterial, R as LineBasicMaterial, Rt as Vector4, S as DynamicDrawUsage, St as SRGBColorSpace, T as Fog, V as LinearFilter, X as Matrix4, Y as Matrix3, Z as Mesh, _ as ClampToEdgeWrapping, b as CylinderGeometry, d as BufferAttribute, dt as PlaneGeometry, f as BufferGeometry, ft as PointLight, g as CircleGeometry, gt as Quaternion, h as CapsuleGeometry, i as useThree, kt as Spherical, l as Box3, m as CanvasTexture, n as Canvas, r as useFrame, t as OrbitControls, tt as MeshStandardMaterial, u as BoxGeometry, ut as Plane, v as Color, vt as Ray, xt as RingGeometry, y as ConeGeometry, yt as Raycaster } from "../_libs/@react-three/drei+[...].mjs";
 import { n as SkeletonUtils } from "../_libs/three-stdlib.mjs";
 import { t as Reflector } from "../_libs/three.mjs";
-import { C as isLocoPose, S as isDancePose, _ as getCitySpawn, a as navelInsertMorph, b as LOCO_POSES, c as HOME_EXIT, d as cityMoveCapsule, f as cityRayDown, g as getCityRuntime, h as getCityDebugAabbs, i as FpInput, l as HOME_RETURN_SPAWN, m as citySurfaceAt, n as loadCityModel, o as useStudio, p as cityRayPick, r as CrouchHold, u as bakeCityCollision, v as nearCityPortal, x as SoftSkeleton, y as nearHomeExit } from "./routes-D669OK6D.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/scene-BfqJXc4A.js
+import { C as isLocoPose, S as isDancePose, _ as getCitySpawn, a as navelInsertMorph, b as LOCO_POSES, c as HOME_EXIT, d as cityMoveCapsule, f as cityRayDown, g as getCityRuntime, h as getCityDebugAabbs, i as FpInput, l as HOME_RETURN_SPAWN, m as citySurfaceAt, n as loadCityModel, o as useStudio, p as cityRayPick, r as CrouchHold, u as bakeCityCollision, v as nearCityPortal, x as SoftSkeleton, y as nearHomeExit } from "./routes-BkKcuB_H.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/scene-BdB2aTF5.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var nude_rig_data_default = {
@@ -5642,12 +5642,16 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 			const lookYaw = fpLive.yaw;
 			let bodyYaw = bodyYawRef.current;
 			const delta = shortestAng(lookYaw - bodyYaw);
-			if (Math.hypot(fpLive.moveFwd, fpLive.moveSide) > .1 || !fpLive.grounded) bodyYaw += shortestAng(lookYaw - bodyYaw) * (1 - Math.exp(-10 * dt));
+			const moving = Math.hypot(fpLive.moveFwd, fpLive.moveSide) > .1 || !fpLive.grounded;
+			if (moving) bodyYaw += shortestAng(lookYaw - bodyYaw) * (1 - Math.exp(-10 * dt));
 			else if (Math.abs(delta) > BODY_LOOK_DEAD) bodyYaw = lookYaw - Math.sign(delta) * BODY_LOOK_DEAD;
 			bodyYaw = shortestAng(bodyYaw);
 			bodyYawRef.current = bodyYaw;
 			fpLive.bodyYaw = bodyYaw;
-			setup.root.position.set(fpLive.x, fpLive.y, fpLive.z);
+			const locoBack = fpLive.sprinting ? .18 : moving && !fpLive.prone ? .06 : .02;
+			const backFx = -Math.sin(bodyYaw);
+			const backFz = -Math.cos(bodyYaw);
+			setup.root.position.set(fpLive.x - backFx * locoBack, fpLive.y, fpLive.z - backFz * locoBack);
 			_bodyE.set(0, bodyYaw + Math.PI, 0, "YXZ");
 			setup.root.quaternion.setFromEuler(_bodyE);
 			setup.root.updateMatrixWorld(true);
@@ -5658,11 +5662,14 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 				fwd: fpLive.moveFwd,
 				side: fpLive.moveSide,
 				mag: Math.min(1, Math.hypot(fpLive.moveFwd, fpLive.moveSide)),
-				speedMps: fpLive.sprinting ? 3.135 : 1.65,
+				speedMps: fpLive.sprinting ? 4.125 : 1.65,
 				airborne: !fpLive.grounded,
 				airTime: fpLive.airTime,
 				sprint: fpLive.sprinting
 			});
+			setup.root.userData.locoBack = locoBack;
+			setup.root.userData.backFx = backFx;
+			setup.root.userData.backFz = backFz;
 		} else {
 			if (s.worldMap === "city") {
 				const sp = getCitySpawn();
@@ -6018,11 +6025,15 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 			eyeSmooth.current.lerp(_eye, k);
 			_eye.copy(eyeSmooth.current);
 			setup.root.localToWorld(_eye);
+			const locoBack = Number(setup.root.userData.locoBack) || 0;
+			const backFx = Number(setup.root.userData.backFx) || 0;
+			const backFz = Number(setup.root.userData.backFz) || 0;
+			_eye.x += backFx * locoBack;
+			_eye.z += backFz * locoBack;
 			const moving = Math.hypot(fpLive.moveFwd, fpLive.moveSide) > .12;
-			const push = fpLive.sprinting ? .13 : moving ? .07 : .045;
+			const push = fpLive.sprinting ? .05 : moving ? .035 : .028;
 			_eye.x += -Math.sin(fpLive.yaw) * push;
 			_eye.z += -Math.cos(fpLive.yaw) * push;
-			if (fpLive.sprinting) _eye.y += .02;
 			fpLive.eyeX = _eye.x;
 			fpLive.eyeY = _eye.y;
 			fpLive.eyeZ = _eye.z;
@@ -7324,12 +7335,14 @@ var FP_SENS = .0017;
 var FP_TOUCH_SENS = .00305;
 var FP_PITCH_LIM = Math.PI / 2 - .02;
 var FP_BOUNDS = {
-	xMin: -2.48,
+	xMin: -4.35,
 	xMax: 1.85,
 	zMin: -1.55,
 	zMax: 2.85,
 	bodyR: .28
 };
+var CITY_WALK = 5.8;
+var CITY_RUN = 11;
 var ORBIT_HOME = {
 	px: .28,
 	py: 1.18,
@@ -7344,6 +7357,7 @@ var _fpFwd = new Vector3();
 var _fpUp = new Vector3();
 var _fpZ = new Vector3();
 var _fpMat = new Matrix4();
+var _camHit = new Vector3();
 function lookDirFromYawPitch(yaw, pitch, out) {
 	const cy = Math.cos(pitch);
 	out.set(-Math.sin(yaw) * cy, Math.sin(pitch), -Math.cos(yaw) * cy);
@@ -7379,6 +7393,33 @@ function applyLookDir(camera, dir, yaw) {
 }
 function applyFpLook(camera, yaw, pitch) {
 	applyLookDir(camera, lookDirFromYawPitch(yaw, pitch, _fpFwd), yaw);
+}
+function pullCameraOutOfWalls(camera, city, near, yaw, pitch) {
+	const p = camera.position;
+	if (city && getCityRuntime().ready) {
+		const r = near + .08;
+		const y0 = p.y;
+		const pushed = cityMoveCapsule(p.x, p.y - r, p.z, r, r * 2.08, 0, 0, 0);
+		p.x = pushed.x;
+		p.z = pushed.z;
+		p.y = MathUtils.clamp(pushed.y + r, y0 - .1, y0 + .1);
+		lookDirFromYawPitch(yaw, pitch, _fpFwd);
+		const hit = cityRayPick(p, _fpFwd, r + .16);
+		if (hit) {
+			_camHit.set(hit.x, hit.y, hit.z);
+			const dist = p.distanceTo(_camHit);
+			const need = near + .07;
+			if (dist < need) p.addScaledVector(_fpFwd, dist - need);
+		}
+	} else {
+		const skin = near + .08;
+		if (!(p.x > -2.02 && p.x < 3.62 && p.z > -3.36 && p.z < 1.02 && p.y < 2.48)) return;
+		if (p.x < -1.96 + skin) p.x = -1.96 + skin;
+		if (p.x > 3.52 - skin) p.x = 3.52 - skin;
+		if (p.z < -3.28 + skin) p.z = -3.28 + skin;
+		if (p.z > .9 - skin) p.z = .9 - skin;
+		if (p.y > 2.3 - skin) p.y = 2.3 - skin;
+	}
 }
 function FirstPersonRig({ controlsRef }) {
 	const { camera, gl } = useThree();
@@ -7731,6 +7772,8 @@ function FirstPersonRig({ controlsRef }) {
 				world: useStudio.getState().worldMap,
 				grounded: grounded.current,
 				posY: pos.current.y,
+				velY: velY.current,
+				airTime: fpLive.airTime,
 				cityReady: getCityRuntime().ready,
 				cityCols: getCityRuntime().colliders.length,
 				citySkip: getCityRuntime().skipped,
@@ -7850,7 +7893,7 @@ function FirstPersonRig({ controlsRef }) {
 		const rz = -Math.sin(yaw.current);
 		const cityOn = live.worldMap === "city" && getCityRuntime().ready;
 		const sprint = Boolean(act.sprint) && !crouched && !prone && !mapOpen;
-		const maxSpeed = grounded.current ? prone ? FP_WALK * .28 : crouched ? FP_WALK * .45 : cityOn ? sprint ? FP_WALK * 8.2 : FP_WALK * 4.6 : sprint ? FP_WALK * 1.9 : FP_WALK : cityOn ? sprint ? FP_WALK * 8.2 : FP_WALK * 4.6 : sprint ? FP_AIR * 1.35 : FP_AIR;
+		const maxSpeed = grounded.current ? prone ? FP_WALK * .28 : crouched ? FP_WALK * .45 : cityOn ? sprint ? FP_WALK * CITY_RUN : FP_WALK * CITY_WALK : sprint ? FP_WALK * 1.9 : FP_WALK : cityOn ? sprint ? FP_WALK * CITY_RUN : FP_WALK * CITY_WALK : sprint ? FP_AIR * 1.35 : FP_AIR;
 		const wishX = mapOpen ? 0 : rx * act.moveX + fx * act.moveY;
 		const wishZ = mapOpen ? 0 : rz * act.moveX + fz * act.moveY;
 		const wishLen = Math.hypot(wishX, wishZ);
@@ -7903,8 +7946,8 @@ function FirstPersonRig({ controlsRef }) {
 				coyote.current = 0;
 				jumpBuf.current = 0;
 			}
-			velY.current -= FP_GRAV * stepDt;
-			if (velY.current < -28) velY.current = -28;
+			velY.current -= FP_GRAV * (grounded.current || velY.current > -14 && fpLive.airTime < 1.05 ? 1 : 1 + Math.min(1.8, Math.max(0, fpLive.airTime - 1.05) * 1.15 + Math.max(0, -velY.current - 14) * .04)) * stepDt;
+			if (velY.current < -58) velY.current = -58;
 			const dx = velX.current * stepDt;
 			const dz = velZ.current * stepDt;
 			const dy = velY.current * stepDt;
@@ -7913,14 +7956,15 @@ function FirstPersonRig({ controlsRef }) {
 			let z = pos.current.z;
 			if (cityOn) {
 				const wasGround = grounded.current;
-				let hor = cityMoveCapsule(x, y, z, capR, capH, dx, 0, dz);
+				const snapGround = wasGround || velY.current > -9;
+				let hor = cityMoveCapsule(x, y, z, capR, capH, dx, 0, dz, snapGround);
 				const wishDx = x + dx;
 				const wishDz = z + dz;
 				if (Math.hypot(hor.x - wishDx, hor.z - wishDz) > .012 && Math.hypot(dx, dz) > .008 && wasGround && velY.current <= .4) {
 					const stepped = cityMoveCapsule(x, y + FP_STEP, z, capR, capH, dx, 0, dz);
 					if (Math.hypot(stepped.x - wishDx, stepped.z - wishDz) + .01 < Math.hypot(hor.x - wishDx, hor.z - wishDz)) hor = stepped;
 				}
-				const vert = cityMoveCapsule(hor.x, hor.y, hor.z, capR, capH, 0, dy, 0);
+				const vert = cityMoveCapsule(hor.x, hor.y, hor.z, capR, capH, 0, dy, 0, snapGround);
 				x = vert.x;
 				y = vert.y;
 				z = vert.z;
@@ -8011,6 +8055,7 @@ function FirstPersonRig({ controlsRef }) {
 			camera.position.set(pos.current.x, lookY, pos.current.z);
 			applyFpLook(camera, yaw.current, pitch.current);
 		}
+		pullCameraOutOfWalls(camera, st.worldMap === "city", camera.near, yaw.current, pitch.current);
 		const c = controlsRef.current;
 		if (c) {
 			c.target.set(camera.position.x + fx, camera.position.y, camera.position.z + fz);
@@ -8411,7 +8456,30 @@ function makeDoorMarker(label, color) {
 }
 function HomeExitDoor() {
 	const world = useStudio((s) => s.worldMap);
-	const group = (0, import_react.useMemo)(() => makeDoorMarker("HomeExit", 8048895), []);
+	const group = (0, import_react.useMemo)(() => {
+		const g = makeDoorMarker("HomeExit", 8048895);
+		const pad = new Mesh(new CircleGeometry(1.35, 24), new MeshBasicMaterial({
+			color: 2373704,
+			transparent: true,
+			opacity: .55,
+			depthWrite: false,
+			side: 2
+		}));
+		pad.rotation.x = -Math.PI / 2;
+		pad.position.y = .02;
+		g.add(pad);
+		const ring = new Mesh(new RingGeometry(1.18, 1.38, 28), new MeshBasicMaterial({
+			color: 8048895,
+			transparent: true,
+			opacity: .5,
+			depthWrite: false,
+			side: 2
+		}));
+		ring.rotation.x = -Math.PI / 2;
+		ring.position.y = .03;
+		g.add(ring);
+		return g;
+	}, []);
 	useFrame(({ clock }) => {
 		const pulse = .38 + Math.sin(clock.elapsedTime * 3.2) * .16;
 		const mat = group.children[0].material;

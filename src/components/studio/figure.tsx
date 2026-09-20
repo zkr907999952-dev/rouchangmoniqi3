@@ -1756,7 +1756,10 @@ function FittedFigure({
       bodyYaw = shortestAng(bodyYaw);
       bodyYawRef.current = bodyYaw;
       fpLive.bodyYaw = bodyYaw;
-      setup.root.position.set(fpLive.x, fpLive.y, fpLive.z);
+      const locoBack = fpLive.sprinting ? 0.18 : moving && !fpLive.prone ? 0.06 : 0.02;
+      const backFx = -Math.sin(bodyYaw);
+      const backFz = -Math.cos(bodyYaw);
+      setup.root.position.set(fpLive.x - backFx * locoBack, fpLive.y, fpLive.z - backFz * locoBack);
       _bodyE.set(0, bodyYaw + Math.PI, 0, "YXZ");
       setup.root.quaternion.setFromEuler(_bodyE);
       setup.root.updateMatrixWorld(true);
@@ -1767,11 +1770,14 @@ function FittedFigure({
         fwd: fpLive.moveFwd,
         side: fpLive.moveSide,
         mag: Math.min(1, Math.hypot(fpLive.moveFwd, fpLive.moveSide)),
-        speedMps: fpLive.sprinting ? 1.65 * 1.9 : 1.65,
+        speedMps: fpLive.sprinting ? 1.65 * 2.5 : 1.65,
         airborne: !fpLive.grounded,
         airTime: fpLive.airTime,
         sprint: fpLive.sprinting,
       });
+      setup.root.userData.locoBack = locoBack;
+      setup.root.userData.backFx = backFx;
+      setup.root.userData.backFz = backFz;
     } else {
       if (s.worldMap === "city") {
         const sp = getCitySpawn();
@@ -2163,11 +2169,15 @@ function FittedFigure({
       eyeSmooth.current.lerp(_eye, k);
       _eye.copy(eyeSmooth.current);
       setup.root.localToWorld(_eye);
+      const locoBack = Number(setup.root.userData.locoBack) || 0;
+      const backFx = Number(setup.root.userData.backFx) || 0;
+      const backFz = Number(setup.root.userData.backFz) || 0;
+      _eye.x += backFx * locoBack;
+      _eye.z += backFz * locoBack;
       const moving = Math.hypot(fpLive.moveFwd, fpLive.moveSide) > 0.12;
-      const push = fpLive.sprinting ? 0.13 : moving ? 0.07 : 0.045;
+      const push = fpLive.sprinting ? 0.05 : moving ? 0.035 : 0.028;
       _eye.x += -Math.sin(fpLive.yaw) * push;
       _eye.z += -Math.cos(fpLive.yaw) * push;
-      if (fpLive.sprinting) _eye.y += 0.02;
       fpLive.eyeX = _eye.x;
       fpLive.eyeY = _eye.y;
       fpLive.eyeZ = _eye.z;
