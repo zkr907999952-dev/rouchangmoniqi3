@@ -1959,7 +1959,9 @@ function CityLights() {
 
 function BodyFillLight() {
   const ref = useRef<THREE.PointLight>(null);
+  const { camera } = useThree();
   const on = useStudio((s) => s.firstPerson && s.fpView === "body");
+  const city = useStudio((s) => s.worldMap === "city");
   useFrame(() => {
     const l = ref.current;
     if (!l) return;
@@ -1967,22 +1969,17 @@ function BodyFillLight() {
       l.intensity = 0;
       return;
     }
-    const yaw = fpLive.yaw;
-    const fx = -Math.sin(yaw);
-    const fz = -Math.cos(yaw);
-    l.intensity = 1.05;
-    l.position.set(
-      fpLive.chestX + fx * 0.32,
-      fpLive.chestY + 0.02,
-      fpLive.chestZ + fz * 0.32,
-    );
+    l.position.copy(camera.position);
+    const moving = Math.hypot(fpLive.moveFwd, fpLive.moveSide) > 0.1 || fpLive.sprinting;
+    const base = city ? 0.06 : 0.18;
+    l.intensity = moving ? base * 0.45 : base;
   });
   return (
     <pointLight
       ref={ref}
       name="BodyFillLight"
-      color="#ffd2b6"
-      distance={1.15}
+      color="#e6d4c6"
+      distance={2.6}
       decay={2}
       intensity={0}
     />

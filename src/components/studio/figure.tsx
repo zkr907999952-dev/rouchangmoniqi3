@@ -2198,7 +2198,7 @@ function FittedFigure({
       s.navelInsert > 0.03 ||
       s.navelThrust ||
       s.navelStir;
-    if (deforming || energyTick.current % 2 === 0) {
+    if (deforming || bodyOn || energyTick.current % 2 === 0) {
       for (const geo of setup.boundGeos) {
         geo.computeVertexNormals();
       }

@@ -3,8 +3,8 @@ import { a as require_jsx_runtime, o as require_react } from "../_libs/@radix-ui
 import { $ as MeshLambertMaterial, B as LineSegments, C as Euler, E as Group, H as LinearMipmapLinearFilter, It as Vector2, J as MathUtils, K as MOUSE, Lt as Vector3, Nt as TorusGeometry, Ot as SphereGeometry, Q as MeshBasicMaterial, R as LineBasicMaterial, Rt as Vector4, S as DynamicDrawUsage, St as SRGBColorSpace, T as Fog, V as LinearFilter, X as Matrix4, Y as Matrix3, Z as Mesh, _ as ClampToEdgeWrapping, b as CylinderGeometry, d as BufferAttribute, dt as PlaneGeometry, f as BufferGeometry, ft as PointLight, g as CircleGeometry, gt as Quaternion, h as CapsuleGeometry, i as useThree, kt as Spherical, l as Box3, m as CanvasTexture, n as Canvas, r as useFrame, t as OrbitControls, tt as MeshStandardMaterial, u as BoxGeometry, ut as Plane, v as Color, vt as Ray, xt as RingGeometry, y as ConeGeometry, yt as Raycaster } from "../_libs/@react-three/drei+[...].mjs";
 import { n as SkeletonUtils } from "../_libs/three-stdlib.mjs";
 import { t as Reflector } from "../_libs/three.mjs";
-import { C as isLocoPose, S as isDancePose, _ as getCitySpawn, a as navelInsertMorph, b as LOCO_POSES, c as HOME_EXIT, d as cityMoveCapsule, f as cityRayDown, g as getCityRuntime, h as getCityDebugAabbs, i as FpInput, l as HOME_RETURN_SPAWN, m as citySurfaceAt, n as loadCityModel, o as useStudio, p as cityRayPick, r as CrouchHold, u as bakeCityCollision, v as nearCityPortal, x as SoftSkeleton, y as nearHomeExit } from "./routes-BkKcuB_H.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/scene-BdB2aTF5.js
+import { C as isLocoPose, S as isDancePose, _ as getCitySpawn, a as navelInsertMorph, b as LOCO_POSES, c as HOME_EXIT, d as cityMoveCapsule, f as cityRayDown, g as getCityRuntime, h as getCityDebugAabbs, i as FpInput, l as HOME_RETURN_SPAWN, m as citySurfaceAt, n as loadCityModel, o as useStudio, p as cityRayPick, r as CrouchHold, u as bakeCityCollision, v as nearCityPortal, x as SoftSkeleton, y as nearHomeExit } from "./routes-B-QwxdJc.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/scene-0zSDavV6.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var nude_rig_data_default = {
@@ -6045,7 +6045,7 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 			fpLive.headReady = true;
 		}
 		if (energyTick.current % 8 === 0) s.setEnergy(setup.skeleton.energy);
-		if (Boolean(grab.current?.active) || setup.skeleton.hasDents || Math.abs(s.bellyInflate) > .04 || s.navelDepth > .03 || s.navelDiameter > .03 || s.navelInsert > .03 || s.navelThrust || s.navelStir || energyTick.current % 2 === 0) for (const geo of setup.boundGeos) geo.computeVertexNormals();
+		if (Boolean(grab.current?.active) || setup.skeleton.hasDents || Math.abs(s.bellyInflate) > .04 || s.navelDepth > .03 || s.navelDiameter > .03 || s.navelInsert > .03 || s.navelThrust || s.navelStir || bodyOn || energyTick.current % 2 === 0) for (const geo of setup.boundGeos) geo.computeVertexNormals();
 		const xray = s.abdomenXray;
 		setup.skeleton.posedNavel(setup.navel, _navelW);
 		setup.skeleton.abdomenAxes(_abRight, _abUp, _abFwd);
@@ -8709,7 +8709,9 @@ function CityLights() {
 }
 function BodyFillLight() {
 	const ref = (0, import_react.useRef)(null);
+	const { camera } = useThree();
 	const on = useStudio((s) => s.firstPerson && s.fpView === "body");
+	const city = useStudio((s) => s.worldMap === "city");
 	useFrame(() => {
 		const l = ref.current;
 		if (!l) return;
@@ -8717,17 +8719,16 @@ function BodyFillLight() {
 			l.intensity = 0;
 			return;
 		}
-		const yaw = fpLive.yaw;
-		const fx = -Math.sin(yaw);
-		const fz = -Math.cos(yaw);
-		l.intensity = 1.05;
-		l.position.set(fpLive.chestX + fx * .32, fpLive.chestY + .02, fpLive.chestZ + fz * .32);
+		l.position.copy(camera.position);
+		const moving = Math.hypot(fpLive.moveFwd, fpLive.moveSide) > .1 || fpLive.sprinting;
+		const base = city ? .06 : .18;
+		l.intensity = moving ? base * .45 : base;
 	});
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("pointLight", {
 		ref,
 		name: "BodyFillLight",
-		color: "#ffd2b6",
-		distance: 1.15,
+		color: "#e6d4c6",
+		distance: 2.6,
 		decay: 2,
 		intensity: 0
 	});

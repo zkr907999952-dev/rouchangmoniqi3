@@ -9,7 +9,7 @@ import { n as MeshoptDecoder } from "../_libs/three.mjs";
 import { i as SliderTrack, n as SliderRange, r as SliderThumb, t as Slider } from "../_libs/@radix-ui/react-slider+[...].mjs";
 import { t as clsx } from "../_libs/clsx.mjs";
 import { t as twMerge } from "../_libs/tailwind-merge.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-BkKcuB_H.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-B-QwxdJc.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -7701,7 +7701,7 @@ function Toggle({ active, onClick, icon, label }) {
 		children: [icon, label]
 	});
 }
-var Scene = (0, import_react.lazy)(() => import("./scene-BdB2aTF5.mjs"));
+var Scene = (0, import_react.lazy)(() => import("./scene-0zSDavV6.mjs"));
 function StudioApp() {
 	const [mounted, setMounted] = (0, import_react.useState)(false);
 	(0, import_react.useEffect)(() => setMounted(true), []);
