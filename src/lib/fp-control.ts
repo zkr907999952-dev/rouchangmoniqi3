@@ -268,6 +268,9 @@ declare global {
       setStick?: (x: number, y: number) => void;
       setSteer?: (v: number) => void;
       setFirstPerson?: (on: boolean, view?: "observe" | "body") => void;
+      warp?: (x: number, y: number, z: number) => void;
+      interact?: () => void;
+      getDebug?: () => Record<string, unknown>;
     };
   }
 }

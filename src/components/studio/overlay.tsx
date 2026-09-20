@@ -5,6 +5,7 @@ import {
   ArrowLeft,
   ArrowRight,
   ArrowUp,
+  Box,
   Camera,
   ChevronsDown,
   ChevronsUpDown,
@@ -33,12 +34,15 @@ import {
   Zap,
   ZoomIn,
   User,
+  Map,
 } from "lucide-react";
 import * as Slider from "@radix-ui/react-slider";
 import { cn } from "@/lib/utils";
 import { PRESETS, useStudio, type CamFocus, type PresetId, type StudioParams, FP_FOV_MIN, FP_FOV_MAX, FP_LOOK_SPEED_MIN, FP_LOOK_SPEED_MAX, MIRROR_RES_MIN, MIRROR_RES_MAX, FP_BREAST_JIGGLE_MIN, FP_BREAST_JIGGLE_MAX } from "@/lib/studio-store";
 import { ANIMATIONS, EXPRESSIONS, HAND_GESTURES, POSES } from "@/lib/softbody/soft-skeleton";
 import { STICK_SPRINT } from "@/lib/fp-control";
+import { CITY_MAP_H_MAX, CITY_MAP_H_MIN, citySurfaceAt, getCityRuntime } from "@/lib/world-map";
+import { fpLive } from "@/lib/fp-pose";
 
 const SLIDERS: {
   id: keyof Pick<
@@ -102,6 +106,8 @@ export function Overlay() {
   const slowMo = useStudio((s) => s.slowMo);
   const showLattice = useStudio((s) => s.showLattice);
   const showWeights = useStudio((s) => s.showWeights);
+  const showCollision = useStudio((s) => s.showCollision);
+  const setShowCollision = useStudio((s) => s.setShowCollision);
   const expression = useStudio((s) => s.expression);
   const pose = useStudio((s) => s.pose);
   const setExpression = useStudio((s) => s.setExpression);
@@ -116,6 +122,9 @@ export function Overlay() {
   const showGutHp = useStudio((s) => s.showGutHp);
   const uiHidden = useStudio((s) => s.uiHidden);
   const firstPerson = useStudio((s) => s.firstPerson);
+  const worldMap = useStudio((s) => s.worldMap);
+  const cityMapOpen = useStudio((s) => s.cityMapOpen);
+  const setCityMapOpen = useStudio((s) => s.setCityMapOpen);
   const abdomenXray = useStudio((s) => s.abdomenXray);
   const bedStance = useStudio((s) => s.bedStance);
   const interactMode = useStudio((s) => s.interactMode);
@@ -193,6 +202,24 @@ export function Overlay() {
     const onKey = (e: KeyboardEvent) => {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
+      if (e.code === "KeyM") {
+        const s = useStudio.getState();
+        if (s.worldMap === "city" && getCityRuntime().ready) {
+          e.preventDefault();
+          const next = !s.cityMapOpen;
+          s.setCityMapOpen(next);
+          if (next) {
+            s.setFpLookLocked(false);
+            if (document.pointerLockElement) document.exitPointerLock();
+          }
+        }
+        return;
+      }
+      if (e.code === "Escape" && useStudio.getState().cityMapOpen) {
+        e.preventDefault();
+        useStudio.getState().setCityMapOpen(false);
+        return;
+      }
       if (useStudio.getState().firstPerson) {
         if (
           e.code === "KeyW" ||
@@ -285,6 +312,29 @@ export function Overlay() {
           </div>
         </div>
       ) : null}
+
+      {worldMap === "city" ? (
+        <button
+          type="button"
+          aria-label="打开地图"
+          onClick={() => {
+            const next = !cityMapOpen;
+            setCityMapOpen(next);
+            if (next) {
+              useStudio.getState().setFpLookLocked(false);
+              if (document.pointerLockElement) document.exitPointerLock();
+            }
+          }}
+          className={cn(
+            "pointer-events-auto absolute top-4 left-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border sm:top-6 sm:left-6",
+            cityMapOpen ? "border-accent bg-accent text-accent-fg" : "border-border bg-surface text-fg",
+          )}
+          style={{ marginTop: "env(safe-area-inset-top)" }}
+        >
+          <Map className="size-4" />
+        </button>
+      ) : null}
+      <CityMapPanel />
 
       <div className="pointer-events-auto absolute top-4 right-4 z-20 flex gap-2 sm:top-6 sm:right-6">
         <button
@@ -484,6 +534,12 @@ export function Overlay() {
                   onClick={() => setParam("showWeights", !showWeights)}
                   icon={<Scan className="size-3.5" />}
                   label="显示绑定"
+                />
+                <Toggle
+                  active={showCollision}
+                  onClick={() => setShowCollision(!showCollision)}
+                  icon={<Box className="size-3.5" />}
+                  label="显示碰撞"
                 />
                 <Toggle
                   active={autoRotate}
@@ -1513,6 +1569,8 @@ function CameraMenu({ onClose }: { onClose: () => void }) {
   const fpLookLocked = useStudio((s) => s.fpLookLocked);
   const abdomenXray = useStudio((s) => s.abdomenXray);
   const setParam = useStudio((s) => s.setParam);
+  const showCollision = useStudio((s) => s.showCollision);
+  const setShowCollision = useStudio((s) => s.setShowCollision);
   const dist = Math.hypot(live.px - live.tx, live.py - live.ty, live.pz - live.tz);
   const focuses: { id: CamFocus; label: string }[] = [
     { id: "face", label: "面部" },
@@ -1614,16 +1672,29 @@ function CameraMenu({ onClose }: { onClose: () => void }) {
             ? fpView === "body"
               ? fpLookLocked
                 ? "角色视角已锁定 · 再点右键或 Esc 解除 · 低头可见身体"
-                : "控制角色 · WASD 移动 · Shift 奔跑 · 空格跳 · C 蹲 · 低头看身体 · 右键锁定视角"
+                : "控制角色 · WASD 移动 · Shift 奔跑 · M 地图 · 空格跳 · C 蹲 · 低头看身体 · 右键锁定视角"
               : fpLookLocked
                 ? "观察视角已锁定 · 再点右键或 Esc 解除"
-                : "WASD 移动 · Shift 奔跑 · 空格跳 · C 点按蹲 · 长按匍匐 · 滚轮缩放 · 右键锁定视角"
+                : "WASD 移动 · Shift 奔跑 · M 地图 · 空格跳 · C 点按蹲 · 长按匍匐 · 滚轮缩放 · 右键锁定视角"
             : "观察：在房间走动看角色。角色视角：以角色头部为镜头，身体跟随转向。左侧发光门为出门。"}
         </p>
         <FpFovSlider />
         <FpLookSlider />
         <MirrorResSlider />
         <FpBreastJiggleSlider />
+        <button
+          type="button"
+          onClick={() => setShowCollision(!showCollision)}
+          className={cn(
+            "mb-3 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md border text-xs font-medium",
+            showCollision
+              ? "border-accent bg-accent/80 text-accent-fg"
+              : "border-border/40 bg-surface/30 text-muted hover:text-fg",
+          )}
+        >
+          <Box className="size-3.5" />
+          {showCollision ? "碰撞箱 · 开" : "显示碰撞箱"}
+        </button>
         {firstPerson ? null : (
           <>
         <p className="mb-1.5 text-xs text-muted">视角预设</p>
@@ -1770,12 +1841,80 @@ function CameraMenu({ onClose }: { onClose: () => void }) {
   );
 }
 
+function CityMapPanel() {
+  const open = useStudio((s) => s.cityMapOpen);
+  const marker = useStudio((s) => s.cityMapMarker);
+  const setOpen = useStudio((s) => s.setCityMapOpen);
+  const setMarker = useStudio((s) => s.setCityMapMarker);
+  const warpFp = useStudio((s) => s.warpFp);
+  const height = useStudio((s) => s.cityMapHeight);
+
+  if (!open) return null;
+
+  const teleport = () => {
+    if (!marker) return;
+    const y = citySurfaceAt(marker.x, marker.z);
+    warpFp(marker.x, y, marker.z);
+  };
+
+  return (
+    <div className="pointer-events-none absolute inset-0 z-40">
+      <div
+        className="pointer-events-auto absolute top-16 right-4 left-4 mx-auto flex max-w-lg items-center justify-between gap-3 rounded-xl border border-border/50 bg-surface/70 px-4 py-3 backdrop-blur-[2px] sm:top-6"
+        style={{ marginTop: "env(safe-area-inset-top)" }}
+      >
+        <div>
+          <p className="font-display text-lg tracking-display">城市俯视</p>
+          <p className="mt-0.5 text-[11px] text-muted">拖动平移 · 滚轮 / 侧栏缩放 · 点击选点 · M / Esc 关闭</p>
+        </div>
+        <button
+          type="button"
+          className="inline-flex h-9 items-center rounded-md border border-border px-3 text-xs font-medium text-muted hover:text-fg"
+          onClick={() => setOpen(false)}
+        >
+          关闭
+        </button>
+      </div>
+      <div
+        className="pointer-events-auto absolute right-4 bottom-4 left-4 mx-auto flex max-w-lg flex-wrap items-center justify-between gap-2 rounded-xl border border-border/50 bg-surface/70 px-4 py-3 backdrop-blur-[2px]"
+        style={{ marginBottom: "env(safe-area-inset-bottom)" }}
+      >
+        <p className="text-[11px] tabular-nums text-muted">
+          {marker
+            ? `光标 ${marker.x.toFixed(1)} , ${marker.z.toFixed(1)} · 高度 ${Math.round(height)}m`
+            : `点击地面选择传送点 · 高度 ${Math.round(height)}m`}
+        </p>
+        <div className="flex items-center gap-2">
+          {marker ? (
+            <button
+              type="button"
+              onClick={() => setMarker(null)}
+              className="inline-flex h-11 items-center rounded-md border border-border px-3 text-xs font-medium text-muted hover:text-fg"
+            >
+              清除
+            </button>
+          ) : null}
+          <button
+            type="button"
+            disabled={!marker}
+            onClick={teleport}
+            className="inline-flex h-11 min-w-28 items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg disabled:opacity-40"
+          >
+            传送
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function FirstPersonHud() {
   const firstPerson = useStudio((s) => s.firstPerson);
   const fpView = useStudio((s) => s.fpView);
   const lookLocked = useStudio((s) => s.fpLookLocked);
   const crouch = useStudio((s) => s.fpCrouch);
   const prone = useStudio((s) => s.fpProne);
+  const cityMapOpen = useStudio((s) => s.cityMapOpen);
   const setFpStick = useStudio((s) => s.setFpStick);
   const setFpCrouchHeld = useStudio((s) => s.setFpCrouchHeld);
   const tapFpJump = useStudio((s) => s.tapFpJump);
@@ -1804,7 +1943,10 @@ function FirstPersonHud() {
     }
   }, [firstPerson, setFpStick, setFpCrouchHeld]);
 
-  if (!firstPerson) return null;
+  if (!firstPerson) {
+    if (cityMapOpen) return <FpZoomBar />;
+    return null;
+  }
 
   const stickTo = (clientX: number, clientY: number) => {
     const el = stickRef.current;
@@ -1848,20 +1990,24 @@ function FirstPersonHud() {
 
   return (
     <>
-      <div className="pointer-events-none absolute top-1/2 left-1/2 z-20 size-4 -translate-x-1/2 -translate-y-1/2">
-        <span className="absolute top-1/2 left-0 h-px w-full bg-fg/70" />
-        <span className="absolute top-0 left-1/2 h-full w-px bg-fg/70" />
-      </div>
-      <p className="pointer-events-none absolute top-5 left-1/2 z-20 -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-2.5 py-0.5 text-[10px] tracking-wide text-muted">
-        {fpView === "body" ? "角色视角" : "观察"}
-      </p>
-      {portalHint ? (
+      {cityMapOpen ? null : (
+        <div className="pointer-events-none absolute top-1/2 left-1/2 z-20 size-4 -translate-x-1/2 -translate-y-1/2">
+          <span className="absolute top-1/2 left-0 h-px w-full bg-fg/70" />
+          <span className="absolute top-0 left-1/2 h-full w-px bg-fg/70" />
+        </div>
+      )}
+      {cityMapOpen ? null : (
+        <p className="pointer-events-none absolute top-5 left-1/2 z-20 -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-2.5 py-0.5 text-[10px] tracking-wide text-muted">
+          {fpView === "body" ? "角色视角" : "观察"}
+        </p>
+      )}
+      {cityMapOpen || !portalHint ? null : (
         <p className="pointer-events-none absolute top-14 left-1/2 z-20 -translate-x-1/2 rounded-full border border-accent/50 bg-accent/80 px-3 py-1 text-[12px] font-medium text-accent-fg">
           {portalHint}
         </p>
-      ) : null}
+      )}
       <FpZoomBar />
-      {lookLocked ? (
+      {cityMapOpen ? null : lookLocked ? (
         <p className="pointer-events-none absolute bottom-6 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-3 py-1 text-[11px] text-muted sm:block">
           右键解除视角锁定
         </p>
@@ -1871,10 +2017,10 @@ function FirstPersonHud() {
             ? "匍匐中 · 点按 C 起身 · 长按取消匍匐"
             : crouch
               ? "下蹲中 · C 起身 · 长按匍匐"
-              : "右键锁定视角 · WASD 移动 · Shift 奔跑 · C 点按蹲 · 长按匍匐"}
+              : "右键锁定视角 · WASD 移动 · Shift 奔跑 · M 地图 · C 点按蹲 · 长按匍匐"}
         </p>
       )}
-      {touchUi ? (
+      {cityMapOpen || !touchUi ? null : (
         <>
           <div
             ref={stickRef}
@@ -1948,7 +2094,7 @@ function FirstPersonHud() {
             </button>
           </div>
         </>
-      ) : null}
+      )}
     </>
   );
 }
@@ -2068,8 +2214,13 @@ function FpBreastJiggleSlider() {
 function FpZoomBar() {
   const fpFov = useStudio((s) => s.fpFov);
   const setFpFov = useStudio((s) => s.setFpFov);
+  const mapOpen = useStudio((s) => s.cityMapOpen);
+  const mapH = useStudio((s) => s.cityMapHeight);
+  const setMapH = useStudio((s) => s.setCityMapHeight);
   const boxRef = useRef<HTMLDivElement>(null);
-  const zoom = FP_FOV_MAX + FP_FOV_MIN - fpFov;
+  const zoom = mapOpen ? CITY_MAP_H_MAX + CITY_MAP_H_MIN - mapH : FP_FOV_MAX + FP_FOV_MIN - fpFov;
+  const zMin = mapOpen ? CITY_MAP_H_MIN : FP_FOV_MIN;
+  const zMax = mapOpen ? CITY_MAP_H_MAX : FP_FOV_MAX;
   useEffect(() => {
     const el = boxRef.current;
     if (!el) return;
@@ -2077,6 +2228,10 @@ function FpZoomBar() {
       e.preventDefault();
       const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
       const st = useStudio.getState();
+      if (st.cityMapOpen) {
+        st.setCityMapHeight(st.cityMapHeight * Math.exp(dy * 0.0016));
+        return;
+      }
       st.setFpFov(st.fpFov + dy * 0.045);
     };
     el.addEventListener("wheel", onWheel, { passive: false });
@@ -2091,21 +2246,25 @@ function FpZoomBar() {
       <Slider.Root
         orientation="vertical"
         value={[zoom]}
-        min={FP_FOV_MIN}
-        max={FP_FOV_MAX}
-        step={1}
+        min={zMin}
+        max={zMax}
+        step={mapOpen ? 2 : 1}
         onValueChange={([v]) => {
-          if (typeof v === "number") setFpFov(FP_FOV_MAX + FP_FOV_MIN - v);
+          if (typeof v !== "number") return;
+          if (mapOpen) setMapH(CITY_MAP_H_MAX + CITY_MAP_H_MIN - v);
+          else setFpFov(FP_FOV_MAX + FP_FOV_MIN - v);
         }}
         className="relative flex w-8 flex-1 touch-none flex-col items-center"
-        aria-label="第一人称缩放"
+        aria-label={mapOpen ? "地图缩放" : "第一人称缩放"}
       >
         <Slider.Track className="relative w-1 grow rounded-full bg-surface-2/70">
           <Slider.Range className="absolute w-full rounded-full bg-accent" />
         </Slider.Track>
         <Slider.Thumb className="block size-5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" />
       </Slider.Root>
-      <span className="shrink-0 text-[10px] tabular-nums text-muted">{Math.round(fpFov)}°</span>
+      <span className="shrink-0 text-[10px] tabular-nums text-muted">
+        {mapOpen ? `${Math.round(mapH)}m` : `${Math.round(fpFov)}°`}
+      </span>
     </div>
   );
 }

@@ -1,3 +1,4 @@
+import { CITY_MAP_H_DEFAULT, CITY_MAP_H_MAX, CITY_MAP_H_MIN } from "@/lib/world-map";
 import { create } from "zustand";
 import type { ExpressionId, HandGesture, HandSide, PoseId } from "@/lib/softbody/soft-skeleton";
 import type { FpViewMode } from "@/lib/fp-pose";
@@ -398,6 +399,14 @@ type StudioState = StudioParams & {
   fpBreastJiggle: number;
   worldMap: WorldId;
   portalHint: string;
+  cityMapOpen: boolean;
+  cityMapMarker: { x: number; z: number } | null;
+  cityMapHeight: number;
+  showCollision: boolean;
+  fpWarpNonce: number;
+  fpWarpX: number;
+  fpWarpY: number;
+  fpWarpZ: number;
   setParam: <K extends keyof StudioParams>(key: K, value: StudioParams[K]) => void;
   applyPreset: (id: PresetId) => void;
   setInteractMode: (mode: InteractMode) => void;
@@ -450,6 +459,11 @@ type StudioState = StudioParams & {
   setFpBreastJiggle: (v: number) => void;
   setWorldMap: (v: WorldId) => void;
   setPortalHint: (v: string) => void;
+  setCityMapOpen: (v: boolean) => void;
+  setCityMapMarker: (v: { x: number; z: number } | null) => void;
+  setCityMapHeight: (v: number) => void;
+  setShowCollision: (v: boolean) => void;
+  warpFp: (x: number, y: number, z: number) => void;
   shake: () => void;
   fireStrike: (point?: [number, number, number] | null) => void;
   resetSim: () => void;
@@ -518,6 +532,14 @@ export const useStudio = create<StudioState>((set) => ({
   fpBreastJiggle: FP_BREAST_JIGGLE_DEFAULT,
   worldMap: "home",
   portalHint: "",
+  cityMapOpen: false,
+  cityMapMarker: null,
+  cityMapHeight: CITY_MAP_H_DEFAULT,
+  showCollision: false,
+  fpWarpNonce: 0,
+  fpWarpX: 0,
+  fpWarpY: 0,
+  fpWarpZ: 0,
   setParam: (key, value) =>
     set((s) => ({
       ...s,
@@ -823,8 +845,17 @@ export const useStudio = create<StudioState>((set) => ({
     set({
       fpBreastJiggle: Math.max(FP_BREAST_JIGGLE_MIN, Math.min(FP_BREAST_JIGGLE_MAX, fpBreastJiggle)),
     }),
-  setWorldMap: (worldMap) => set({ worldMap, portalHint: "" }),
+  setWorldMap: (worldMap) => set({ worldMap, portalHint: "", cityMapOpen: false, cityMapMarker: null }),
   setPortalHint: (portalHint) => set({ portalHint }),
+  setCityMapOpen: (cityMapOpen) => set({ cityMapOpen }),
+  setCityMapMarker: (cityMapMarker) => set({ cityMapMarker }),
+  setCityMapHeight: (cityMapHeight) =>
+    set({
+      cityMapHeight: Math.max(CITY_MAP_H_MIN, Math.min(CITY_MAP_H_MAX, cityMapHeight)),
+    }),
+  setShowCollision: (showCollision) => set({ showCollision }),
+  warpFp: (fpWarpX, fpWarpY, fpWarpZ) =>
+    set((s) => ({ fpWarpNonce: s.fpWarpNonce + 1, fpWarpX, fpWarpY, fpWarpZ, cityMapOpen: false })),
   shake: () => set((s) => ({ shakeNonce: s.shakeNonce + 1 })),
   fireStrike: (point = null) =>
     set((s) => ({ strikeNonce: s.strikeNonce + 1, strikePoint: point ?? null })),

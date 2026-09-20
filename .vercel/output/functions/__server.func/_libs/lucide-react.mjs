@@ -154,6 +154,26 @@ var Bone = createLucideIcon("bone", [["path", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var Box = createLucideIcon("box", [
+	["path", {
+		d: "M21 8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16Z",
+		key: "hh9hay"
+	}],
+	["path", {
+		d: "m3.3 7 8.7 5 8.7-5",
+		key: "g66t2b"
+	}],
+	["path", {
+		d: "M12 22V12",
+		key: "d0xqtd"
+	}]
+]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var Camera = createLucideIcon("camera", [["path", {
 	d: "M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z",
 	key: "1tc9qg"
@@ -408,6 +428,26 @@ var Heart = createLucideIcon("heart", [["path", {
 	d: "M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z",
 	key: "c3ymky"
 }]]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var Map = createLucideIcon("map", [
+	["path", {
+		d: "M14.106 5.553a2 2 0 0 0 1.788 0l3.659-1.83A1 1 0 0 1 21 4.619v12.764a1 1 0 0 1-.553.894l-4.553 2.277a2 2 0 0 1-1.788 0l-4.212-2.106a2 2 0 0 0-1.788 0l-3.659 1.83A1 1 0 0 1 3 19.381V6.618a1 1 0 0 1 .553-.894l4.553-2.277a2 2 0 0 1 1.788 0z",
+		key: "169xi5"
+	}],
+	["path", {
+		d: "M15 5.764v15",
+		key: "1pn4in"
+	}],
+	["path", {
+		d: "M9 3.236v15",
+		key: "1uimfh"
+	}]
+]);
 /**
 * @license lucide-react v0.510.0 - ISC
 *
@@ -755,4 +795,4 @@ var ZoomIn = createLucideIcon("zoom-in", [
 	}]
 ]);
 //#endregion
-export { ArrowRight as A, EyeOff as C, Camera as D, ChevronsDown as E, ArrowDown as M, Activity as N, Bone as O, Eye as S, ChevronsUpDown as T, Heart as _, User as a, Grid3x3 as b, Settings2 as c, RotateCcw as d, Rotate3d as f, Move as g, Pause as h, Wind as i, ArrowLeft as j, ArrowUp as k, Scan as l, Pointer as m, Zap as n, TriangleAlert as o, Repeat as p, Wrench as r, Sword as s, ZoomIn as t, RotateCw as u, Hand as v, Crosshair as w, Grab as x, GripHorizontal as y };
+export { Bone as A, Eye as C, ChevronsDown as D, ChevronsUpDown as E, Activity as F, ArrowRight as M, ArrowLeft as N, Camera as O, ArrowDown as P, Grab as S, Crosshair as T, Map as _, User as a, GripHorizontal as b, Settings2 as c, RotateCcw as d, Rotate3d as f, Move as g, Pause as h, Wind as i, ArrowUp as j, Box as k, Scan as l, Pointer as m, Zap as n, TriangleAlert as o, Repeat as p, Wrench as r, Sword as s, ZoomIn as t, RotateCw as u, Heart as v, EyeOff as w, Grid3x3 as x, Hand as y };

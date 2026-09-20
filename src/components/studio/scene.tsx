@@ -11,14 +11,19 @@ import { fpLive } from "@/lib/fp-pose";
 import { loadCityModel } from "@/lib/load-models";
 import {
   bakeCityCollision,
-  cityGroundY,
-  cityResolve,
+  cityMoveCapsule,
+  cityRayDown,
+  cityRayPick,
+  citySurfaceAt,
+  getCityDebugAabbs,
   getCityRuntime,
   getCitySpawn,
   HOME_EXIT,
   HOME_RETURN_SPAWN,
   nearCityPortal,
   nearHomeExit,
+  CITY_MAP_H_DEFAULT,
+  CITY_BAKE_ID,
 } from "@/lib/world-map";
 
 export default function Scene({
@@ -65,6 +70,10 @@ export default function Scene({
         <Suspense fallback={null}>
           <Bedroom room={room} />
           <CityWorld />
+          <CityMapBake />
+          <CityMapRig />
+          <CityMapGizmos />
+          <CollisionDebug />
           <WallMirror />
           <HomeExitDoor />
           <CityReturnDoor />
@@ -245,6 +254,7 @@ function ControlsBridge({
   const autoRotate = useStudio((s) => s.autoRotate);
   const grabbing = useStudio((s) => s.grabbing);
   const firstPerson = useStudio((s) => s.firstPerson);
+  const cityMapOpen = useStudio((s) => s.cityMapOpen);
   const { gl, camera } = useThree();
 
   useEffect(() => {
@@ -490,13 +500,13 @@ function ControlsBridge({
     <OrbitControls
       ref={controlsRef}
       makeDefault
-      enabled={!firstPerson}
-      enableRotate={!grabbing && !firstPerson}
-      enablePan={!grabbing && !firstPerson}
-      enableDamping={!firstPerson}
-      enableZoom={!firstPerson}
+      enabled={!firstPerson && !cityMapOpen}
+      enableRotate={!grabbing && !firstPerson && !cityMapOpen}
+      enablePan={!grabbing && !firstPerson && !cityMapOpen}
+      enableDamping={!firstPerson && !cityMapOpen}
+      enableZoom={!firstPerson && !cityMapOpen}
       dampingFactor={0.08}
-      autoRotate={autoRotate && !grabbing && !firstPerson}
+      autoRotate={autoRotate && !grabbing && !firstPerson && !cityMapOpen}
       autoRotateSpeed={0.45}
       minDistance={0.12}
       maxDistance={6.2}
@@ -601,8 +611,13 @@ const FP_CROUCH = 0.86;
 const FP_PRONE = 0.28;
 const FP_WALK = 1.65;
 const FP_AIR = 1.55;
-const FP_JUMP = 6.9;
-const FP_GRAV = 13;
+const FP_JUMP = 8.5;
+const FP_GRAV = 20;
+const FP_MAX_FALL = 28;
+const FP_FRICTION = 6.4;
+const FP_ACCEL = 12;
+const FP_AIR_ACCEL = 3.4;
+const FP_STEP = 0.4;
 const FP_SENS = 0.0017;
 const FP_TOUCH_SENS = 0.00305;
 const FP_PITCH_LIM = Math.PI / 2 - 0.02;
@@ -656,7 +671,9 @@ function FirstPersonRig({
   const lookLocked = useStudio((s) => s.fpLookLocked);
   const fpFov = useStudio((s) => s.fpFov);
   const pos = useRef(new THREE.Vector3(0.12, 0, 1.92));
+  const velX = useRef(0);
   const velY = useRef(0);
+  const velZ = useRef(0);
   const yaw = useRef(0);
   const pitch = useRef(-0.08);
   const grounded = useRef(true);
@@ -681,6 +698,7 @@ function FirstPersonRig({
   } | null>(null);
   const lastJumpNonce = useRef(0);
   const lastInteractNonce = useRef(0);
+  const lastWarpNonce = useRef(0);
   const speedRef = useRef(0);
   const crouchGate = useRef<CrouchHold | null>(null);
   const wasFp = useRef(false);
@@ -777,6 +795,8 @@ function FirstPersonRig({
           camera.lookAt(0.12, FP_STAND - 0.08, 0.92);
         }
         velY.current = 0;
+        velX.current = 0;
+        velZ.current = 0;
         eye.current = FP_STAND;
         eyeFrom.current = FP_STAND;
         eyeTarget.current = FP_STAND;
@@ -785,7 +805,7 @@ function FirstPersonRig({
       }
       persp.fov = useStudio.getState().fpFov;
       persp.near = city ? 0.12 : body ? 0.04 : 0.08;
-      persp.far = city ? 1400 : 40;
+      persp.far = city ? 2200 : 40;
       persp.updateProjectionMatrix();
       fpLive.active = true;
       fpLive.view = fpView;
@@ -829,6 +849,7 @@ function FirstPersonRig({
     if (!firstPerson) return;
     const el = gl.domElement;
     const onWheel = (e: WheelEvent) => {
+      if (useStudio.getState().cityMapOpen) return;
       e.preventDefault();
       e.stopPropagation();
       const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
@@ -886,6 +907,7 @@ function FirstPersonRig({
       /* iframe preview often rejects — software look stays via store flag */
     };
     const onMouseMove = (e: MouseEvent) => {
+      if (useStudio.getState().cityMapOpen) return;
       if (!useStudio.getState().fpLookLocked) return;
       const sens = FP_SENS * useStudio.getState().fpLookSpeed;
       yaw.current -= e.movementX * sens;
@@ -893,6 +915,7 @@ function FirstPersonRig({
       pitch.current = THREE.MathUtils.clamp(pitch.current, -FP_PITCH_LIM, FP_PITCH_LIM);
     };
     const onPointerDown = (e: PointerEvent) => {
+      if (useStudio.getState().cityMapOpen) return;
       if (e.button === 2) {
         e.preventDefault();
         e.stopPropagation();
@@ -918,6 +941,7 @@ function FirstPersonRig({
       }
     };
     const onPointerMove = (e: PointerEvent) => {
+      if (useStudio.getState().cityMapOpen) return;
       const t = lookTouch.current;
       if (!t || e.pointerId !== t.id) return;
       const dx = e.clientX - t.x;
@@ -1003,6 +1027,49 @@ function FirstPersonRig({
         canvas: [gl.domElement.width, gl.domElement.height, gl.domElement.clientWidth, gl.domElement.clientHeight],
         tri: gl.info.render.triangles,
         calls: gl.info.render.calls,
+        world: useStudio.getState().worldMap,
+        grounded: grounded.current,
+        posY: pos.current.y,
+        cityReady: getCityRuntime().ready,
+        cityCols: getCityRuntime().colliders.length,
+        citySkip: getCityRuntime().skipped,
+        bakeId: getCityRuntime().bakeId,
+        houseCount: getCityRuntime().houseCount,
+        probeN: getCityRuntime().probeN,
+        probeY: getCityRuntime().probeY,
+        sampleV: getCityRuntime().sampleV,
+        sampleBB: getCityRuntime().sampleBB,
+        colNear: getCityDebugAabbs(pos.current.x, pos.current.z, 24, 4),
+        citySpawn: getCityRuntime().spawn,
+        cityMinY: getCityRuntime().minY,
+        cityVis: (() => {
+          const rt = getCityRuntime();
+          const g = rt.group;
+          const col = rt.colliders[0];
+          const mesh = col?.mesh;
+          const mat = mesh ? ((Array.isArray(mesh.material) ? mesh.material[0] : mesh.material) as THREE.MeshStandardMaterial) : null;
+          const wp = mesh ? mesh.getWorldPosition(new THREE.Vector3()) : null;
+          return {
+            group: !!g,
+            groupVis: g?.visible ?? null,
+            parent: !!g?.parent,
+            kids: g?.children.length ?? 0,
+            meshVis: mesh?.visible ?? null,
+            meshName: mesh?.name ?? null,
+            wp: wp ? [wp.x, wp.y, wp.z] : null,
+            color: mat?.color ? mat.color.getHexString() : null,
+            metal: mat?.metalness ?? null,
+            rough: mat?.roughness ?? null,
+            map: !!mat?.map,
+            side: mat?.side ?? null,
+            opacity: mat?.opacity ?? null,
+          };
+        })(),
+        mapOpen: useStudio.getState().cityMapOpen,
+        showCollision: useStudio.getState().showCollision,
+        loading: useStudio.getState().loading,
+        loadHint: useStudio.getState().loadHint,
+        loadProgress: useStudio.getState().loadProgress,
       }),
       setCrouchHeld: (v: boolean) => crouchGate.current?.setHeld(v),
       setKeys: (codes: string[]) => input.current.setKeys(codes),
@@ -1016,6 +1083,12 @@ function FirstPersonRig({
       setFirstPerson: (on: boolean, view?: "observe" | "body") => {
         useStudio.getState().setFirstPerson(on, view);
       },
+      warp: (x: number, y: number, z: number) => {
+        useStudio.getState().warpFp(x, y, z);
+      },
+      interact: () => {
+        window.dispatchEvent(new Event("studio-fp-interact"));
+      },
     };
     window.__controlsTest = probe;
     return () => {
@@ -1024,16 +1097,28 @@ function FirstPersonRig({
   }, []);
 
   useFrame((_, dt) => {
+    const st = useStudio.getState();
+    if (st.fpWarpNonce !== lastWarpNonce.current) {
+      lastWarpNonce.current = st.fpWarpNonce;
+      pos.current.set(st.fpWarpX, st.fpWarpY, st.fpWarpZ);
+      velX.current = 0;
+      velY.current = 0;
+      velZ.current = 0;
+      grounded.current = true;
+      fpLive.x = st.fpWarpX;
+      fpLive.y = st.fpWarpY;
+      fpLive.z = st.fpWarpZ;
+    }
     if (!firstPerson) return;
     const d = Math.min(0.05, Math.max(0.001, dt));
-    const st = useStudio.getState();
     const body = st.fpView === "body";
-    input.current.stickX = st.fpStickX;
-    input.current.stickY = st.fpStickY;
+    const mapOpen = st.cityMapOpen;
+    input.current.stickX = mapOpen ? 0 : st.fpStickX;
+    input.current.stickY = mapOpen ? 0 : st.fpStickY;
     input.current.crouchHold = st.fpCrouchHeld;
     if (st.fpJumpNonce !== lastJumpNonce.current) {
       lastJumpNonce.current = st.fpJumpNonce;
-      input.current.jumpTap = true;
+      if (!mapOpen) input.current.jumpTap = true;
     }
     const act = input.current.poll();
     crouchGate.current?.setHeld(act.crouchHeld);
@@ -1043,7 +1128,7 @@ function FirstPersonRig({
     if (st.fpInteractNonce !== lastInteractNonce.current) {
       lastInteractNonce.current = st.fpInteractNonce;
       window.dispatchEvent(new Event("studio-fp-interact"));
-    } else if (act.interact) {
+    } else if (act.interact && !mapOpen) {
       window.dispatchEvent(new Event("studio-fp-interact"));
     }
 
@@ -1067,78 +1152,167 @@ function FirstPersonRig({
     const rx = Math.cos(yaw.current);
     const rz = -Math.sin(yaw.current);
     const cityOn = live.worldMap === "city" && getCityRuntime().ready;
-    const sprint = Boolean(act.sprint) && !crouched && !prone;
-    const speed = grounded.current
+    const sprint = Boolean(act.sprint) && !crouched && !prone && !mapOpen;
+    const maxSpeed = grounded.current
       ? prone
         ? FP_WALK * 0.28
         : crouched
           ? FP_WALK * 0.45
           : cityOn
             ? sprint
-              ? FP_WALK * 5.6
-              : FP_WALK * 3.05
+              ? FP_WALK * 8.2
+              : FP_WALK * 4.6
             : sprint
               ? FP_WALK * 1.9
               : FP_WALK
-      : sprint
-        ? FP_AIR * 1.35
-        : FP_AIR;
-    const wishX = rx * act.moveX + fx * act.moveY;
-    const wishZ = rz * act.moveX + fz * act.moveY;
+      : cityOn
+        ? sprint
+          ? FP_WALK * 8.2
+          : FP_WALK * 4.6
+        : sprint
+          ? FP_AIR * 1.35
+          : FP_AIR;
+    const wishX = mapOpen ? 0 : rx * act.moveX + fx * act.moveY;
+    const wishZ = mapOpen ? 0 : rz * act.moveX + fz * act.moveY;
     const wishLen = Math.hypot(wishX, wishZ);
     const nx = wishLen > 1e-5 ? wishX / wishLen : 0;
     const nz = wishLen > 1e-5 ? wishZ / wishLen : 0;
-    const step = speed * Math.min(1, wishLen) * d;
+    const wishSpeed = maxSpeed * Math.min(1, wishLen);
+
+    const sub = Math.max(1, Math.min(4, Math.ceil(d / 0.0167)));
+    const stepDt = d / sub;
+    const capR = prone ? 0.22 : crouched ? 0.26 : 0.3;
+    const capH = prone ? 0.42 : crouched ? 0.94 : 1.64;
     const prevX = pos.current.x;
     const prevZ = pos.current.z;
-    let x = pos.current.x + nx * step;
-    let z = pos.current.z + nz * step;
-    if (cityOn) {
-      const hit = cityResolve(x, pos.current.y, z);
-      x = hit.x;
-      z = hit.z;
-    } else {
-      x = THREE.MathUtils.clamp(x, -FP_BOUNDS.x, FP_BOUNDS.x);
-      z = THREE.MathUtils.clamp(z, FP_BOUNDS.zMin, FP_BOUNDS.zMax);
-      const br = FP_BOUNDS.bodyR;
-      const r2 = x * x + z * z;
-      if (!body && r2 < br * br && pos.current.y < 1.75) {
-        const r = Math.sqrt(r2) || 1e-6;
-        x = (x / r) * br;
-        z = (z / r) * br;
-      }
-    }
-    pos.current.x = x;
-    pos.current.z = z;
-    speedRef.current = wishLen * speed;
-    const stepDist = Math.hypot(x - prevX, z - prevZ);
 
-    if (grounded.current) coyote.current = 0.12;
-    else coyote.current = Math.max(0, coyote.current - d);
-    if (act.jump && prone) {
+    if (!mapOpen && act.jump && prone) {
       useStudio.getState().setFpProne(false);
       useStudio.getState().setFpCrouch(false);
     }
-    if (act.jump) jumpBuf.current = 0.12;
+    if (!mapOpen && act.jump) jumpBuf.current = 0.14;
     else jumpBuf.current = Math.max(0, jumpBuf.current - d);
-    if (jumpBuf.current > 0 && coyote.current > 0) {
-      velY.current = FP_JUMP;
-      grounded.current = false;
-      coyote.current = 0;
-      jumpBuf.current = 0;
-    }
-    velY.current -= FP_GRAV * d;
-    pos.current.y += velY.current * d;
-    const floorY = cityOn ? cityGroundY(pos.current.x, pos.current.z) : 0;
-    if (pos.current.y <= floorY) {
-      pos.current.y = floorY;
-      velY.current = 0;
-      grounded.current = true;
-    } else {
-      grounded.current = false;
+
+    for (let si = 0; si < sub; si++) {
+      let vx = velX.current;
+      let vz = velZ.current;
+      const speed2 = Math.hypot(vx, vz);
+      if (grounded.current) {
+        if (speed2 > 0.05) {
+          const drop = speed2 * FP_FRICTION * stepDt;
+          const k = Math.max(0, speed2 - drop) / speed2;
+          vx *= k;
+          vz *= k;
+        } else {
+          vx = 0;
+          vz = 0;
+        }
+      }
+      if (wishSpeed > 1e-4) {
+        const accel = (grounded.current ? FP_ACCEL : FP_AIR_ACCEL) * wishSpeed * stepDt;
+        const current = vx * nx + vz * nz;
+        const add = wishSpeed - current;
+        if (add > 0) {
+          const acc = Math.min(accel, add);
+          vx += nx * acc;
+          vz += nz * acc;
+        }
+      }
+      velX.current = vx;
+      velZ.current = vz;
+
+      if (grounded.current) coyote.current = 0.14;
+      else coyote.current = Math.max(0, coyote.current - stepDt);
+      if (!mapOpen && jumpBuf.current > 0 && coyote.current > 0) {
+        velY.current = FP_JUMP;
+        grounded.current = false;
+        coyote.current = 0;
+        jumpBuf.current = 0;
+      }
+      velY.current -= FP_GRAV * stepDt;
+      if (velY.current < -FP_MAX_FALL) velY.current = -FP_MAX_FALL;
+
+      const dx = velX.current * stepDt;
+      const dz = velZ.current * stepDt;
+      const dy = velY.current * stepDt;
+      let x = pos.current.x;
+      let y = pos.current.y;
+      let z = pos.current.z;
+      if (cityOn) {
+        const wasGround = grounded.current;
+        let hor = cityMoveCapsule(x, y, z, capR, capH, dx, 0, dz);
+        const wishDx = x + dx;
+        const wishDz = z + dz;
+        const blocked =
+          Math.hypot(hor.x - wishDx, hor.z - wishDz) > 0.012 && Math.hypot(dx, dz) > 0.008;
+        if (blocked && wasGround && velY.current <= 0.4) {
+          const stepped = cityMoveCapsule(x, y + FP_STEP, z, capR, capH, dx, 0, dz);
+          if (
+            Math.hypot(stepped.x - wishDx, stepped.z - wishDz) + 0.01 <
+            Math.hypot(hor.x - wishDx, hor.z - wishDz)
+          ) {
+            hor = stepped;
+          }
+        }
+        const vert = cityMoveCapsule(hor.x, hor.y, hor.z, capR, capH, 0, dy, 0);
+        x = vert.x;
+        y = vert.y;
+        z = vert.z;
+        if (vert.grounded && velY.current <= 0) {
+          velY.current = 0;
+          grounded.current = true;
+        } else if (dy > 0 && vert.y < hor.y + dy - 0.01) {
+          velY.current = 0;
+          grounded.current = false;
+        } else {
+          grounded.current = vert.grounded && velY.current <= 0.2;
+        }
+        if (wasGround && velY.current <= 0) {
+          const gy = cityRayDown(x, y + 1.15, z, FP_STEP + 1.35);
+          if (gy != null && y - gy > -0.12 && y - gy < FP_STEP + 0.2) {
+            y = gy;
+            velY.current = 0;
+            grounded.current = true;
+          }
+        }
+        if (!grounded.current && velY.current < -8 && y < getCityRuntime().minY + 6) {
+          const gy = citySurfaceAt(x, z);
+          if (Number.isFinite(gy)) {
+            y = gy;
+            velY.current = 0;
+            grounded.current = true;
+          }
+        }
+      } else {
+        x += dx;
+        z += dz;
+        x = THREE.MathUtils.clamp(x, -FP_BOUNDS.x, FP_BOUNDS.x);
+        z = THREE.MathUtils.clamp(z, FP_BOUNDS.zMin, FP_BOUNDS.zMax);
+        const br = FP_BOUNDS.bodyR;
+        const r2 = x * x + z * z;
+        if (!body && r2 < br * br && y < 1.75) {
+          const r = Math.sqrt(r2) || 1e-6;
+          x = (x / r) * br;
+          z = (z / r) * br;
+        }
+        y += dy;
+        if (y <= 0) {
+          y = 0;
+          velY.current = 0;
+          grounded.current = true;
+        } else {
+          grounded.current = false;
+        }
+      }
+      pos.current.x = x;
+      pos.current.y = y;
+      pos.current.z = z;
     }
 
-    if (grounded.current && wishLen > 0.12) distWalk.current += step;
+    const stepDist = Math.hypot(pos.current.x - prevX, pos.current.z - prevZ);
+    speedRef.current = Math.hypot(velX.current, velZ.current);
+
+    if (grounded.current && wishLen > 0.12) distWalk.current += stepDist;
     else distWalk.current *= 1 - d * 4;
     const bobAmp =
       grounded.current && wishLen > 0.12
@@ -1155,9 +1329,9 @@ function FirstPersonRig({
     fpLive.pitch = pitch.current;
     fpLive.crouched = crouched;
     fpLive.prone = prone;
-    fpLive.moveFwd = act.moveY;
-    fpLive.moveSide = act.moveX;
-    fpLive.speedMps = speed;
+    fpLive.moveFwd = mapOpen ? 0 : act.moveY;
+    fpLive.moveSide = mapOpen ? 0 : act.moveX;
+    fpLive.speedMps = maxSpeed;
     fpLive.stepDist = grounded.current ? stepDist : 0;
     fpLive.grounded = grounded.current;
     fpLive.velY = velY.current;
@@ -1168,6 +1342,7 @@ function FirstPersonRig({
 
   useFrame(() => {
     if (!firstPerson) return;
+    if (useStudio.getState().cityMapOpen) return;
     const body = useStudio.getState().fpView === "body";
     const fx = -Math.sin(yaw.current);
     const fz = -Math.cos(yaw.current);
@@ -1195,7 +1370,7 @@ function WorldClip() {
   useEffect(() => {
     const p = camera as THREE.PerspectiveCamera;
     const city = world === "city";
-    p.far = city ? 1400 : 40;
+    p.far = city ? 2200 : 40;
     if (!useStudio.getState().firstPerson) p.near = city ? 0.2 : 0.05;
     p.updateProjectionMatrix();
     const bg = city ? "#7eafd0" : "#1a1614";
@@ -1208,9 +1383,316 @@ function WorldClip() {
 
 function CityWorld() {
   const world = useStudio((s) => s.worldMap);
-  const group = getCityRuntime().group;
+  const [group, setGroup] = useState<THREE.Group | null>(() => getCityRuntime().group);
+  useEffect(() => {
+    if (world !== "city") return;
+    let n = 0;
+    const id = window.setInterval(() => {
+      const g = getCityRuntime().group;
+      setGroup(g);
+      if (g || ++n > 50) window.clearInterval(id);
+    }, 80);
+    return () => window.clearInterval(id);
+  }, [world]);
   if (!group) return null;
   return <primitive object={group} visible={world === "city"} />;
+}
+
+function CityMapBake() {
+  const world = useStudio((s) => s.worldMap);
+  useEffect(() => {
+    if (world !== "city") return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const model = await loadCityModel(() => {});
+        if (cancelled) return;
+        if (!getCityRuntime().ready || getCityRuntime().group !== model || getCityRuntime().bakeId !== CITY_BAKE_ID) bakeCityCollision(model);
+      } catch {
+        /* keep last world */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [world]);
+  return null;
+}
+
+const _mapNdc = new THREE.Vector2();
+const _mapRay = new THREE.Raycaster();
+const cityMapPan = { x: 0, z: 0 };
+
+function CityMapRig() {
+  const open = useStudio((s) => s.cityMapOpen);
+  const height = useStudio((s) => s.cityMapHeight);
+  const { camera, gl, scene, size } = useThree();
+  const drag = useRef<{ id: number; x: number; y: number; moved: boolean } | null>(null);
+  const prevFog = useRef<THREE.Fog | THREE.FogExp2 | null>(null);
+  const prevUp = useRef(new THREE.Vector3(0, 1, 0));
+
+  useEffect(() => {
+    if (!open) return;
+    cityMapPan.x = fpLive.x;
+    cityMapPan.z = fpLive.z;
+    const st = useStudio.getState();
+    if (st.cityMapHeight < 50 || st.cityMapHeight > 400) st.setCityMapHeight(CITY_MAP_H_DEFAULT);
+    prevFog.current = scene.fog;
+    prevUp.current.copy(camera.up);
+    scene.fog = null;
+    const el = gl.domElement;
+    el.style.cursor = "grab";
+
+    const vis = (h: number) => {
+      const persp = camera as THREE.PerspectiveCamera;
+      const fov = (persp.fov * Math.PI) / 180;
+      const halfH = Math.tan(fov * 0.5) * h;
+      const halfW = halfH * (size.width / Math.max(1, size.height));
+      return { halfW, halfH };
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+      const cur = useStudio.getState().cityMapHeight;
+      const next = cur * Math.exp(dy * 0.0016);
+      useStudio.getState().setCityMapHeight(next);
+    };
+
+    const onDown = (e: PointerEvent) => {
+      if (e.button !== 0 && e.pointerType === "mouse") return;
+      drag.current = { id: e.pointerId, x: e.clientX, y: e.clientY, moved: false };
+      try {
+        el.setPointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      el.style.cursor = "grabbing";
+      e.preventDefault();
+    };
+
+    const onMove = (e: PointerEvent) => {
+      const d = drag.current;
+      if (!d || d.id !== e.pointerId) return;
+      const dx = e.clientX - d.x;
+      const dy = e.clientY - d.y;
+      if (!d.moved && Math.hypot(dx, dy) > 7) d.moved = true;
+      if (!d.moved) return;
+      d.x = e.clientX;
+      d.y = e.clientY;
+      const h = useStudio.getState().cityMapHeight;
+      const { halfW, halfH } = vis(h);
+      cityMapPan.x -= (dx / Math.max(1, size.width)) * halfW * 2;
+      cityMapPan.z -= (dy / Math.max(1, size.height)) * halfH * 2;
+      const rt = getCityRuntime();
+      cityMapPan.x = THREE.MathUtils.clamp(cityMapPan.x, rt.minX, rt.maxX);
+      cityMapPan.z = THREE.MathUtils.clamp(cityMapPan.z, rt.minZ, rt.maxZ);
+    };
+
+    const pickAt = (clientX: number, clientY: number) => {
+      const rect = el.getBoundingClientRect();
+      _mapNdc.set(((clientX - rect.left) / rect.width) * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+      _mapRay.setFromCamera(_mapNdc, camera);
+      const hit = cityRayPick(_mapRay.ray.origin, _mapRay.ray.direction, camera.position.y + 900);
+      if (hit) {
+        useStudio.getState().setCityMapMarker({ x: hit.x, z: hit.z });
+        return;
+      }
+      const dir = _mapRay.ray.direction;
+      if (Math.abs(dir.y) < 1e-5) return;
+      const t = -_mapRay.ray.origin.y / dir.y;
+      if (t <= 0) return;
+      const x = _mapRay.ray.origin.x + dir.x * t;
+      const z = _mapRay.ray.origin.z + dir.z * t;
+      useStudio.getState().setCityMapMarker({ x, z });
+    };
+
+    const onUp = (e: PointerEvent) => {
+      const d = drag.current;
+      if (!d || d.id !== e.pointerId) return;
+      const moved = d.moved;
+      drag.current = null;
+      try {
+        if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+      } catch {
+        /* ignore */
+      }
+      el.style.cursor = "grab";
+      if (!moved) pickAt(e.clientX, e.clientY);
+    };
+
+    el.addEventListener("wheel", onWheel, { passive: false });
+    el.addEventListener("pointerdown", onDown);
+    window.addEventListener("pointermove", onMove);
+    window.addEventListener("pointerup", onUp);
+    window.addEventListener("pointercancel", onUp);
+    return () => {
+      el.removeEventListener("wheel", onWheel);
+      el.removeEventListener("pointerdown", onDown);
+      window.removeEventListener("pointermove", onMove);
+      window.removeEventListener("pointerup", onUp);
+      window.removeEventListener("pointercancel", onUp);
+      el.style.cursor = "";
+      camera.up.copy(prevUp.current);
+      scene.fog = prevFog.current;
+    };
+  }, [open, camera, gl, scene, size.width, size.height]);
+
+  useFrame(() => {
+    if (!open) return;
+    const persp = camera as THREE.PerspectiveCamera;
+    camera.up.set(0, 0, -1);
+    camera.position.set(cityMapPan.x, height, cityMapPan.z);
+    camera.lookAt(cityMapPan.x, 0, cityMapPan.z);
+    persp.fov = 52;
+    persp.near = Math.max(1, height * 0.04);
+    persp.far = height + 900;
+    persp.updateProjectionMatrix();
+    if (scene.fog) scene.fog = null;
+  });
+
+  return null;
+}
+
+function makeArrowMesh() {
+  const g = new THREE.Group();
+  const mat = new THREE.MeshBasicMaterial({ color: 0xd4b5a0, depthTest: false, depthWrite: false });
+  const body = new THREE.Mesh(new THREE.ConeGeometry(1.1, 3.4, 3), mat);
+  body.rotation.x = -Math.PI / 2;
+  body.position.z = -0.4;
+  g.add(body);
+  const core = new THREE.Mesh(
+    new THREE.SphereGeometry(0.55, 10, 8),
+    new THREE.MeshBasicMaterial({ color: 0xf2efe9, depthTest: false, depthWrite: false }),
+  );
+  g.add(core);
+  g.renderOrder = 12;
+  return g;
+}
+
+function CityMapGizmos() {
+  const open = useStudio((s) => s.cityMapOpen);
+  const marker = useStudio((s) => s.cityMapMarker);
+  const arrow = useMemo(() => makeArrowMesh(), []);
+  const pin = useMemo(() => {
+    const g = new THREE.Group();
+    const ring = new THREE.Mesh(
+      new THREE.RingGeometry(0.7, 1.35, 24),
+      new THREE.MeshBasicMaterial({ color: 0xd4b5a0, side: THREE.DoubleSide, depthTest: false, depthWrite: false }),
+    );
+    ring.rotation.x = -Math.PI / 2;
+    g.add(ring);
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.12, 0.12, 3.2, 8),
+      new THREE.MeshBasicMaterial({ color: 0xf2efe9, depthTest: false, depthWrite: false }),
+    );
+    pole.position.y = 1.6;
+    g.add(pole);
+    g.renderOrder = 13;
+    return g;
+  }, []);
+
+  useFrame(() => {
+    arrow.visible = open;
+    pin.visible = open && !!marker;
+    if (!open) return;
+    const gy = citySurfaceAt(fpLive.x, fpLive.z);
+    const h = useStudio.getState().cityMapHeight;
+    const sc = THREE.MathUtils.clamp(h * 0.018, 1.6, 28);
+    arrow.position.set(fpLive.x, gy + 0.15, fpLive.z);
+    arrow.scale.setScalar(sc);
+    arrow.rotation.set(0, fpLive.yaw, 0);
+    if (marker) {
+      const my = citySurfaceAt(marker.x, marker.z);
+      pin.position.set(marker.x, my, marker.z);
+      pin.scale.setScalar(sc);
+    }
+  });
+
+  return (
+    <>
+      <primitive object={arrow} />
+      <primitive object={pin} />
+    </>
+  );
+}
+
+function CollisionDebug() {
+  const on = useStudio((s) => s.showCollision);
+  const world = useStudio((s) => s.worldMap);
+  const boxes = useMemo(() => {
+    const group = new THREE.Group();
+    group.name = "CollisionDebug";
+    group.frustumCulled = false;
+    const mat = new THREE.MeshBasicMaterial({
+      color: 0xffcc33,
+      wireframe: true,
+      transparent: true,
+      opacity: 0.9,
+      depthTest: false,
+      depthWrite: false,
+    });
+    for (let i = 0; i < 56; i++) {
+      const mesh = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), mat);
+      mesh.visible = false;
+      mesh.frustumCulled = false;
+      mesh.renderOrder = 10;
+      group.add(mesh);
+    }
+    return group;
+  }, []);
+  const cap = useMemo(() => {
+    const mesh = new THREE.Mesh(
+      new THREE.CapsuleGeometry(0.3, 1.04, 3, 8),
+      new THREE.MeshBasicMaterial({
+        color: 0xffe08a,
+        wireframe: true,
+        depthTest: false,
+        depthWrite: false,
+        transparent: true,
+        opacity: 0.95,
+      }),
+    );
+    mesh.frustumCulled = false;
+    mesh.renderOrder = 11;
+    return mesh;
+  }, []);
+
+  useFrame(() => {
+    const show = on && world === "city" && getCityRuntime().ready;
+    boxes.visible = show;
+    cap.visible = show;
+    if (!show) return;
+    const list = getCityDebugAabbs(fpLive.x, fpLive.z, 28, 56);
+    for (let i = 0; i < boxes.children.length; i++) {
+      const mesh = boxes.children[i] as THREE.Mesh;
+      const box = list[i];
+      if (!box) {
+        mesh.visible = false;
+        continue;
+      }
+      mesh.visible = true;
+      const w = Math.max(0.04, box.maxX - box.minX);
+      const h = Math.max(0.04, box.maxY - box.minY);
+      const d = Math.max(0.04, box.maxZ - box.minZ);
+      mesh.position.set((box.minX + box.maxX) * 0.5, (box.minY + box.maxY) * 0.5, (box.minZ + box.maxZ) * 0.5);
+      mesh.scale.set(w, h, d);
+    }
+    const r = fpLive.prone ? 0.22 : fpLive.crouched ? 0.26 : 0.3;
+    const h = fpLive.prone ? 0.42 : fpLive.crouched ? 0.94 : 1.64;
+    cap.scale.set(r / 0.3, h / 1.64, r / 0.3);
+    cap.position.set(fpLive.x, fpLive.y + h * 0.5, fpLive.z);
+    const mat = cap.material as THREE.MeshBasicMaterial;
+    mat.color.setHex(fpLive.grounded ? 0x7cff9a : 0xff6b5a);
+  });
+
+  return (
+    <>
+      <primitive object={boxes} />
+      <primitive object={cap} />
+    </>
+  );
 }
 
 function makeDoorMarker(label: string, color: number) {
@@ -1291,8 +1773,8 @@ function WorldGate() {
           const model = await loadCityModel((pct, hint) => {
             useStudio.setState({ loading: true, loadProgress: pct, loadHint: hint, loadError: null });
           });
-          useStudio.setState({ loadProgress: 94, loadHint: "绘制城市碰撞" });
-          if (!getCityRuntime().ready || getCityRuntime().group !== model) bakeCityCollision(model);
+          useStudio.setState({ loadProgress: 94, loadHint: "生成贴合模型的碰撞" });
+          if (!getCityRuntime().ready || getCityRuntime().group !== model || getCityRuntime().bakeId !== CITY_BAKE_ID) bakeCityCollision(model);
           useStudio.setState({ worldMap: "city", portalHint: "", loadProgress: 100, loadHint: "进入城市" });
           bump((n) => n + 1);
           requestAnimationFrame(() => {

@@ -1,10 +1,10 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { a as require_jsx_runtime, o as require_react } from "../_libs/@radix-ui/react-collection+[...].mjs";
-import { At as TorusGeometry, C as Fog, Et as Spherical, F as LineBasicMaterial, G as MathUtils, J as Mesh, K as Matrix3, L as LineSegments, Mt as Vector2, Nt as Vector3, Pt as Vector4, Q as MeshStandardMaterial, R as LinearFilter, Tt as SphereGeometry, U as MOUSE, X as MeshLambertMaterial, Y as MeshBasicMaterial, _ as ConeGeometry, b as DynamicDrawUsage, ct as PlaneGeometry, d as BufferAttribute, f as BufferGeometry, g as Color, gt as Raycaster, h as ClampToEdgeWrapping, ht as Ray, i as useThree, l as Box3, lt as PointLight, m as CanvasTexture, n as Canvas, pt as Quaternion, q as Matrix4, r as useFrame, st as Plane, t as OrbitControls, u as BoxGeometry, v as CylinderGeometry, vt as RingGeometry, w as Group, x as Euler, yt as SRGBColorSpace, z as LinearMipmapLinearFilter } from "../_libs/@react-three/drei+[...].mjs";
+import { B as LinearFilter, Dt as SphereGeometry, Ft as Vector2, G as MOUSE, It as Vector3, J as Matrix3, L as LineBasicMaterial, Lt as Vector4, Mt as TorusGeometry, Ot as Spherical, Q as MeshLambertMaterial, S as Euler, T as Group, V as LinearMipmapLinearFilter, X as Mesh, Y as Matrix4, Z as MeshBasicMaterial, _ as Color, _t as Ray, bt as RingGeometry, d as BufferAttribute, dt as PointLight, et as MeshStandardMaterial, f as BufferGeometry, g as ClampToEdgeWrapping, h as CapsuleGeometry, ht as Quaternion, i as useThree, l as Box3, lt as Plane, m as CanvasTexture, n as Canvas, q as MathUtils, r as useFrame, t as OrbitControls, u as BoxGeometry, ut as PlaneGeometry, v as ConeGeometry, vt as Raycaster, w as Fog, x as DynamicDrawUsage, xt as SRGBColorSpace, y as CylinderGeometry, z as LineSegments } from "../_libs/@react-three/drei+[...].mjs";
 import { n as SkeletonUtils } from "../_libs/three-stdlib.mjs";
 import { t as Reflector } from "../_libs/three.mjs";
-import { a as navelInsertMorph, c as SoftSkeleton, i as FpInput, l as isDancePose, n as loadCityModel, o as useStudio, r as CrouchHold, s as LOCO_POSES, u as isLocoPose } from "./routes-BgQXMseR.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/scene-HP9qxEtu.js
+import { C as isLocoPose, S as isDancePose, _ as getCitySpawn, a as navelInsertMorph, b as LOCO_POSES, c as HOME_EXIT, d as cityMoveCapsule, f as cityRayDown, g as getCityRuntime, h as getCityDebugAabbs, i as FpInput, l as HOME_RETURN_SPAWN, m as citySurfaceAt, n as loadCityModel, o as useStudio, p as cityRayPick, r as CrouchHold, u as bakeCityCollision, v as nearCityPortal, x as SoftSkeleton, y as nearHomeExit } from "./routes-1RYC3LC1.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/scene-EGrwH2vi.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var nude_rig_data_default = {
@@ -4028,271 +4028,6 @@ var fpLive = {
 	velY: 0,
 	sprinting: false
 };
-var HOME_EXIT = {
-	x: -1.62,
-	y: 0,
-	z: .12,
-	r: 1.05
-};
-var HOME_RETURN_SPAWN = {
-	x: -1.12,
-	y: 0,
-	z: .12,
-	yaw: -Math.PI / 2,
-	pitch: -.08
-};
-var CELL = 8;
-var HCELL = 4;
-var PLAYER_R = .32;
-var city = {
-	group: null,
-	solids: [],
-	hash: /* @__PURE__ */ new Map(),
-	heights: /* @__PURE__ */ new Map(),
-	spawn: {
-		x: 42.5,
-		y: 0,
-		z: 40.2,
-		yaw: 0,
-		pitch: -.06
-	},
-	portal: {
-		x: 42.5,
-		z: 40.2,
-		r: 1.8
-	},
-	minX: -1800,
-	maxX: 1300,
-	minZ: -1500,
-	maxZ: 1550,
-	ready: false
-};
-function getCityRuntime() {
-	return city;
-}
-function getCitySpawn() {
-	return city.spawn;
-}
-function cellKey(ix, iz) {
-	return ix + 32768 << 16 | iz + 32768;
-}
-function kindOf(name) {
-	const n = name.toLowerCase();
-	if (/water/.test(n) && !/ground/.test(n)) return "skip";
-	if (/grass|green_|garden|ground|boulevard_ground|docks_ground|island_ground|hotel_ground|richarea|businessdistrict|sidewalk/.test(n)) return "ground";
-	if (/palm|tree|parasol|flag|golf|lightpole|radar|crane/.test(n)) return "skip";
-	return "solid";
-}
-function collectName(obj) {
-	const parts = [];
-	let o = obj;
-	while (o) {
-		if (o.name) parts.push(o.name);
-		o = o.parent;
-	}
-	return parts.join(" ");
-}
-function fillHeightBox(b, y) {
-	const x0 = Math.floor(b.minX / HCELL);
-	const x1 = Math.floor(b.maxX / HCELL);
-	const z0 = Math.floor(b.minZ / HCELL);
-	const z1 = Math.floor(b.maxZ / HCELL);
-	for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
-		const k = cellKey(ix, iz);
-		const prev = city.heights.get(k);
-		if (prev === void 0 || y > prev) city.heights.set(k, y);
-	}
-}
-function addSolid(b) {
-	const i = city.solids.length;
-	city.solids.push(b);
-	const x0 = Math.floor(b.minX / CELL);
-	const x1 = Math.floor(b.maxX / CELL);
-	const z0 = Math.floor(b.minZ / CELL);
-	const z1 = Math.floor(b.maxZ / CELL);
-	for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
-		const k = cellKey(ix, iz);
-		let list = city.hash.get(k);
-		if (!list) {
-			list = [];
-			city.hash.set(k, list);
-		}
-		list.push(i);
-	}
-}
-function mergeBoxes(list) {
-	if (!list.length) return null;
-	const b = { ...list[0] };
-	for (let i = 1; i < list.length; i++) {
-		const n = list[i];
-		b.minX = Math.min(b.minX, n.minX);
-		b.minY = Math.min(b.minY, n.minY);
-		b.minZ = Math.min(b.minZ, n.minZ);
-		b.maxX = Math.max(b.maxX, n.maxX);
-		b.maxY = Math.max(b.maxY, n.maxY);
-		b.maxZ = Math.max(b.maxZ, n.maxZ);
-	}
-	return b;
-}
-function bakeCityCollision(root) {
-	city.group = root;
-	city.solids = [];
-	city.hash = /* @__PURE__ */ new Map();
-	city.heights = /* @__PURE__ */ new Map();
-	city.ready = false;
-	root.updateMatrixWorld(true);
-	const _box = new Box3();
-	const houseBoxes = [];
-	let minX = Infinity;
-	let maxX = -Infinity;
-	let minZ = Infinity;
-	let maxZ = -Infinity;
-	root.traverse((obj) => {
-		const mesh = obj;
-		if (!mesh.isMesh) return;
-		mesh.castShadow = false;
-		mesh.receiveShadow = false;
-		mesh.frustumCulled = true;
-		const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
-		for (const mat of mats) {
-			const std = mat;
-			if ("envMapIntensity" in std) std.envMapIntensity = .55;
-			if (std.transparent && (std.opacity ?? 1) > .92 && !std.alphaMap) {
-				std.transparent = false;
-				std.depthWrite = true;
-			}
-		}
-		if (!mesh.geometry.boundingBox) mesh.geometry.computeBoundingBox();
-		_box.copy(mesh.geometry.boundingBox).applyMatrix4(mesh.matrixWorld);
-		if (!Number.isFinite(_box.min.x) || _box.isEmpty()) return;
-		const aabb = {
-			minX: _box.min.x,
-			minY: _box.min.y,
-			minZ: _box.min.z,
-			maxX: _box.max.x,
-			maxY: _box.max.y,
-			maxZ: _box.max.z
-		};
-		minX = Math.min(minX, aabb.minX);
-		maxX = Math.max(maxX, aabb.maxX);
-		minZ = Math.min(minZ, aabb.minZ);
-		maxZ = Math.max(maxZ, aabb.maxZ);
-		const w = aabb.maxX - aabb.minX;
-		const h = aabb.maxY - aabb.minY;
-		const d = aabb.maxZ - aabb.minZ;
-		const name = collectName(mesh);
-		const kind = kindOf(name);
-		if (kind === "ground") {
-			fillHeightBox(aabb, aabb.maxY);
-			return;
-		}
-		if (kind === "skip") return;
-		if (h < .48 && aabb.maxY < .7) {
-			fillHeightBox(aabb, aabb.maxY);
-			return;
-		}
-		if (h < .55 && Math.max(w, d) < .7) return;
-		addSolid(aabb);
-		if (/\bHouse_2B\b/.test(name) && !/fence/i.test(name)) houseBoxes.push(aabb);
-	});
-	city.minX = Number.isFinite(minX) ? minX + 4 : -1800;
-	city.maxX = Number.isFinite(maxX) ? maxX - 4 : 1300;
-	city.minZ = Number.isFinite(minZ) ? minZ + 4 : -1500;
-	city.maxZ = Number.isFinite(maxZ) ? maxZ - 4 : 1550;
-	const home = mergeBoxes(houseBoxes);
-	if (home) {
-		const cx = (home.minX + home.maxX) * .5;
-		const cz = home.maxZ + 3.4;
-		city.spawn = {
-			x: cx,
-			y: cityGroundY(cx, cz),
-			z: cz,
-			yaw: 0,
-			pitch: -.06
-		};
-		city.portal = {
-			x: cx,
-			z: cz,
-			r: 1.85
-		};
-	} else {
-		city.spawn.y = cityGroundY(city.spawn.x, city.spawn.z);
-		city.portal.x = city.spawn.x;
-		city.portal.z = city.spawn.z;
-	}
-	city.ready = true;
-}
-function cityGroundY(x, z) {
-	const ix = Math.floor(x / HCELL);
-	const iz = Math.floor(z / HCELL);
-	let best = Number.NEGATIVE_INFINITY;
-	for (let dx = -1; dx <= 1; dx++) for (let dz = -1; dz <= 1; dz++) {
-		const y = city.heights.get(cellKey(ix + dx, iz + dz));
-		if (y !== void 0 && y > best) best = y;
-	}
-	if (best === Number.NEGATIVE_INFINITY) return 0;
-	return best;
-}
-function cityResolve(x, y, z, radius = PLAYER_R) {
-	x = MathUtils.clamp(x, city.minX, city.maxX);
-	z = MathUtils.clamp(z, city.minZ, city.maxZ);
-	const ix0 = Math.floor((x - radius) / CELL);
-	const ix1 = Math.floor((x + radius) / CELL);
-	const iz0 = Math.floor((z - radius) / CELL);
-	const iz1 = Math.floor((z + radius) / CELL);
-	const seen = /* @__PURE__ */ new Set();
-	const head = y + 1.55;
-	const feet = y + .12;
-	for (let pass = 0; pass < 3; pass++) for (let ix = ix0; ix <= ix1; ix++) for (let iz = iz0; iz <= iz1; iz++) {
-		const list = city.hash.get(cellKey(ix, iz));
-		if (!list) continue;
-		for (const i of list) {
-			if (pass === 0 && seen.has(i)) continue;
-			seen.add(i);
-			const b = city.solids[i];
-			if (head < b.minY || feet > b.maxY) continue;
-			const nx = MathUtils.clamp(x, b.minX, b.maxX);
-			const nz = MathUtils.clamp(z, b.minZ, b.maxZ);
-			const dx = x - nx;
-			const dz = z - nz;
-			const d2 = dx * dx + dz * dz;
-			if (d2 >= radius * radius) continue;
-			if (d2 < 1e-8) {
-				const left = x - b.minX;
-				const right = b.maxX - x;
-				const back = z - b.minZ;
-				const fwd = b.maxZ - z;
-				const m = Math.min(left, right, back, fwd);
-				if (m === left) x = b.minX - radius;
-				else if (m === right) x = b.maxX + radius;
-				else if (m === back) z = b.minZ - radius;
-				else z = b.maxZ + radius;
-			} else {
-				const d = Math.sqrt(d2);
-				const k = (radius - d) / d;
-				x += dx * k;
-				z += dz * k;
-			}
-		}
-	}
-	x = MathUtils.clamp(x, city.minX, city.maxX);
-	z = MathUtils.clamp(z, city.minZ, city.maxZ);
-	return {
-		x,
-		z
-	};
-}
-function nearHomeExit(x, z) {
-	const dx = x - HOME_EXIT.x;
-	const dz = z - HOME_EXIT.z;
-	return dx * dx + dz * dz <= HOME_EXIT.r * HOME_EXIT.r;
-}
-function nearCityPortal(x, z) {
-	const dx = x - city.portal.x;
-	const dz = z - city.portal.z;
-	const r = city.portal.r;
-	return dx * dx + dz * dz <= r * r;
-}
 var _hit = new Vector3();
 var _normal = new Vector3();
 var _target = new Vector3();
@@ -5923,8 +5658,7 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 				fwd: fpLive.moveFwd,
 				side: fpLive.moveSide,
 				mag: Math.min(1, Math.hypot(fpLive.moveFwd, fpLive.moveSide)),
-				speedMps: fpLive.speedMps,
-				stepDist: fpLive.stepDist,
+				speedMps: fpLive.sprinting ? 3.135 : 1.65,
 				airborne: !fpLive.grounded,
 				airTime: fpLive.airTime,
 				sprint: fpLive.sprinting
@@ -7049,6 +6783,10 @@ function Scene({ character, intestines, pelvis, arm, bayonet, bayonetLong, room 
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Bedroom, { room }),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CityWorld, {}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CityMapBake, {}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CityMapRig, {}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CityMapGizmos, {}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CollisionDebug, {}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(WallMirror, {}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(HomeExitDoor, {}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CityReturnDoor, {}),
@@ -7206,6 +6944,7 @@ function ControlsBridge({ controlsRef }) {
 	const autoRotate = useStudio((s) => s.autoRotate);
 	const grabbing = useStudio((s) => s.grabbing);
 	const firstPerson = useStudio((s) => s.firstPerson);
+	const cityMapOpen = useStudio((s) => s.cityMapOpen);
 	const { gl, camera } = useThree();
 	(0, import_react.useEffect)(() => {
 		const canvas = gl.domElement;
@@ -7449,13 +7188,13 @@ function ControlsBridge({ controlsRef }) {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(OrbitControls, {
 		ref: controlsRef,
 		makeDefault: true,
-		enabled: !firstPerson,
-		enableRotate: !grabbing && !firstPerson,
-		enablePan: !grabbing && !firstPerson,
-		enableDamping: !firstPerson,
-		enableZoom: !firstPerson,
+		enabled: !firstPerson && !cityMapOpen,
+		enableRotate: !grabbing && !firstPerson && !cityMapOpen,
+		enablePan: !grabbing && !firstPerson && !cityMapOpen,
+		enableDamping: !firstPerson && !cityMapOpen,
+		enableZoom: !firstPerson && !cityMapOpen,
 		dampingFactor: .08,
-		autoRotate: autoRotate && !grabbing && !firstPerson,
+		autoRotate: autoRotate && !grabbing && !firstPerson && !cityMapOpen,
 		autoRotateSpeed: .45,
 		minDistance: .12,
 		maxDistance: 6.2,
@@ -7570,8 +7309,12 @@ var FP_CROUCH = .86;
 var FP_PRONE = .28;
 var FP_WALK = 1.65;
 var FP_AIR = 1.55;
-var FP_JUMP = 6.9;
-var FP_GRAV = 13;
+var FP_JUMP = 8.5;
+var FP_GRAV = 20;
+var FP_FRICTION = 6.4;
+var FP_ACCEL = 12;
+var FP_AIR_ACCEL = 3.4;
+var FP_STEP = .4;
 var FP_SENS = .0017;
 var FP_TOUCH_SENS = .00305;
 var FP_PITCH_LIM = Math.PI / 2 - .02;
@@ -7628,7 +7371,9 @@ function FirstPersonRig({ controlsRef }) {
 	const lookLocked = useStudio((s) => s.fpLookLocked);
 	const fpFov = useStudio((s) => s.fpFov);
 	const pos = (0, import_react.useRef)(new Vector3(.12, 0, 1.92));
+	const velX = (0, import_react.useRef)(0);
 	const velY = (0, import_react.useRef)(0);
+	const velZ = (0, import_react.useRef)(0);
 	const yaw = (0, import_react.useRef)(0);
 	const pitch = (0, import_react.useRef)(-.08);
 	const grounded = (0, import_react.useRef)(true);
@@ -7645,6 +7390,7 @@ function FirstPersonRig({ controlsRef }) {
 	const orbitSnap = (0, import_react.useRef)(null);
 	const lastJumpNonce = (0, import_react.useRef)(0);
 	const lastInteractNonce = (0, import_react.useRef)(0);
+	const lastWarpNonce = (0, import_react.useRef)(0);
 	const speedRef = (0, import_react.useRef)(0);
 	const crouchGate = (0, import_react.useRef)(null);
 	const wasFp = (0, import_react.useRef)(false);
@@ -7731,6 +7477,8 @@ function FirstPersonRig({ controlsRef }) {
 					camera.lookAt(.12, 1.5, .92);
 				}
 				velY.current = 0;
+				velX.current = 0;
+				velZ.current = 0;
 				eye.current = FP_STAND;
 				eyeFrom.current = FP_STAND;
 				eyeTarget.current = FP_STAND;
@@ -7739,7 +7487,7 @@ function FirstPersonRig({ controlsRef }) {
 			}
 			persp.fov = useStudio.getState().fpFov;
 			persp.near = city ? .12 : body ? .04 : .08;
-			persp.far = city ? 1400 : 40;
+			persp.far = city ? 2200 : 40;
 			persp.updateProjectionMatrix();
 			fpLive.active = true;
 			fpLive.view = fpView;
@@ -7790,6 +7538,7 @@ function FirstPersonRig({ controlsRef }) {
 		if (!firstPerson) return;
 		const el = gl.domElement;
 		const onWheel = (e) => {
+			if (useStudio.getState().cityMapOpen) return;
 			e.preventDefault();
 			e.stopPropagation();
 			const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
@@ -7841,6 +7590,7 @@ function FirstPersonRig({ controlsRef }) {
 		};
 		const onPointerLockError = () => {};
 		const onMouseMove = (e) => {
+			if (useStudio.getState().cityMapOpen) return;
 			if (!useStudio.getState().fpLookLocked) return;
 			const sens = FP_SENS * useStudio.getState().fpLookSpeed;
 			yaw.current -= e.movementX * sens;
@@ -7848,6 +7598,7 @@ function FirstPersonRig({ controlsRef }) {
 			pitch.current = MathUtils.clamp(pitch.current, -FP_PITCH_LIM, FP_PITCH_LIM);
 		};
 		const onPointerDown = (e) => {
+			if (useStudio.getState().cityMapOpen) return;
 			if (e.button === 2) {
 				e.preventDefault();
 				e.stopPropagation();
@@ -7875,6 +7626,7 @@ function FirstPersonRig({ controlsRef }) {
 			}
 		};
 		const onPointerMove = (e) => {
+			if (useStudio.getState().cityMapOpen) return;
 			const t = lookTouch.current;
 			if (!t || e.pointerId !== t.id) return;
 			const dx = e.clientX - t.x;
@@ -7961,7 +7713,27 @@ function FirstPersonRig({ controlsRef }) {
 					gl.domElement.clientHeight
 				],
 				tri: gl.info.render.triangles,
-				calls: gl.info.render.calls
+				calls: gl.info.render.calls,
+				world: useStudio.getState().worldMap,
+				grounded: grounded.current,
+				posY: pos.current.y,
+				cityReady: getCityRuntime().ready,
+				cityCols: getCityRuntime().colliders.length,
+				citySkip: getCityRuntime().skipped,
+				bakeId: getCityRuntime().bakeId,
+				houseCount: getCityRuntime().houseCount,
+				probeN: getCityRuntime().probeN,
+				probeY: getCityRuntime().probeY,
+				sampleV: getCityRuntime().sampleV,
+				sampleBB: getCityRuntime().sampleBB,
+				colNear: getCityDebugAabbs(pos.current.x, pos.current.z, 24, 4),
+				citySpawn: getCityRuntime().spawn,
+				cityMinY: getCityRuntime().minY,
+				mapOpen: useStudio.getState().cityMapOpen,
+				showCollision: useStudio.getState().showCollision,
+				loading: useStudio.getState().loading,
+				loadHint: useStudio.getState().loadHint,
+				loadProgress: useStudio.getState().loadProgress
 			}),
 			setCrouchHeld: (v) => crouchGate.current?.setHeld(v),
 			setKeys: (codes) => input.current.setKeys(codes),
@@ -7974,6 +7746,12 @@ function FirstPersonRig({ controlsRef }) {
 			},
 			setFirstPerson: (on, view) => {
 				useStudio.getState().setFirstPerson(on, view);
+			},
+			warp: (x, y, z) => {
+				useStudio.getState().warpFp(x, y, z);
+			},
+			interact: () => {
+				window.dispatchEvent(new Event("studio-fp-interact"));
 			}
 		};
 		window.__controlsTest = probe;
@@ -7982,16 +7760,28 @@ function FirstPersonRig({ controlsRef }) {
 		};
 	}, []);
 	useFrame((_, dt) => {
+		const st = useStudio.getState();
+		if (st.fpWarpNonce !== lastWarpNonce.current) {
+			lastWarpNonce.current = st.fpWarpNonce;
+			pos.current.set(st.fpWarpX, st.fpWarpY, st.fpWarpZ);
+			velX.current = 0;
+			velY.current = 0;
+			velZ.current = 0;
+			grounded.current = true;
+			fpLive.x = st.fpWarpX;
+			fpLive.y = st.fpWarpY;
+			fpLive.z = st.fpWarpZ;
+		}
 		if (!firstPerson) return;
 		const d = Math.min(.05, Math.max(.001, dt));
-		const st = useStudio.getState();
 		const body = st.fpView === "body";
-		input.current.stickX = st.fpStickX;
-		input.current.stickY = st.fpStickY;
+		const mapOpen = st.cityMapOpen;
+		input.current.stickX = mapOpen ? 0 : st.fpStickX;
+		input.current.stickY = mapOpen ? 0 : st.fpStickY;
 		input.current.crouchHold = st.fpCrouchHeld;
 		if (st.fpJumpNonce !== lastJumpNonce.current) {
 			lastJumpNonce.current = st.fpJumpNonce;
-			input.current.jumpTap = true;
+			if (!mapOpen) input.current.jumpTap = true;
 		}
 		const act = input.current.poll();
 		crouchGate.current?.setHeld(act.crouchHeld);
@@ -8001,7 +7791,7 @@ function FirstPersonRig({ controlsRef }) {
 		if (st.fpInteractNonce !== lastInteractNonce.current) {
 			lastInteractNonce.current = st.fpInteractNonce;
 			window.dispatchEvent(new Event("studio-fp-interact"));
-		} else if (act.interact) window.dispatchEvent(new Event("studio-fp-interact"));
+		} else if (act.interact && !mapOpen) window.dispatchEvent(new Event("studio-fp-interact"));
 		const wantEye = prone ? FP_PRONE : crouched ? FP_CROUCH : FP_STAND;
 		if (wantEye !== eyeTarget.current) {
 			eyeFrom.current = eye.current;
@@ -8019,60 +7809,130 @@ function FirstPersonRig({ controlsRef }) {
 		const rx = Math.cos(yaw.current);
 		const rz = -Math.sin(yaw.current);
 		const cityOn = live.worldMap === "city" && getCityRuntime().ready;
-		const sprint = Boolean(act.sprint) && !crouched && !prone;
-		const speed = grounded.current ? prone ? FP_WALK * .28 : crouched ? FP_WALK * .45 : cityOn ? sprint ? FP_WALK * 5.6 : FP_WALK * 3.05 : sprint ? FP_WALK * 1.9 : FP_WALK : sprint ? FP_AIR * 1.35 : FP_AIR;
-		const wishX = rx * act.moveX + fx * act.moveY;
-		const wishZ = rz * act.moveX + fz * act.moveY;
+		const sprint = Boolean(act.sprint) && !crouched && !prone && !mapOpen;
+		const maxSpeed = grounded.current ? prone ? FP_WALK * .28 : crouched ? FP_WALK * .45 : cityOn ? sprint ? FP_WALK * 8.2 : FP_WALK * 4.6 : sprint ? FP_WALK * 1.9 : FP_WALK : cityOn ? sprint ? FP_WALK * 8.2 : FP_WALK * 4.6 : sprint ? FP_AIR * 1.35 : FP_AIR;
+		const wishX = mapOpen ? 0 : rx * act.moveX + fx * act.moveY;
+		const wishZ = mapOpen ? 0 : rz * act.moveX + fz * act.moveY;
 		const wishLen = Math.hypot(wishX, wishZ);
 		const nx = wishLen > 1e-5 ? wishX / wishLen : 0;
 		const nz = wishLen > 1e-5 ? wishZ / wishLen : 0;
-		const step = speed * Math.min(1, wishLen) * d;
+		const wishSpeed = maxSpeed * Math.min(1, wishLen);
+		const sub = Math.max(1, Math.min(4, Math.ceil(d / .0167)));
+		const stepDt = d / sub;
+		const capR = prone ? .22 : crouched ? .26 : .3;
+		const capH = prone ? .42 : crouched ? .94 : 1.64;
 		const prevX = pos.current.x;
 		const prevZ = pos.current.z;
-		let x = pos.current.x + nx * step;
-		let z = pos.current.z + nz * step;
-		if (cityOn) {
-			const hit = cityResolve(x, pos.current.y, z);
-			x = hit.x;
-			z = hit.z;
-		} else {
-			x = MathUtils.clamp(x, -FP_BOUNDS.x, FP_BOUNDS.x);
-			z = MathUtils.clamp(z, FP_BOUNDS.zMin, FP_BOUNDS.zMax);
-			const br = FP_BOUNDS.bodyR;
-			const r2 = x * x + z * z;
-			if (!body && r2 < br * br && pos.current.y < 1.75) {
-				const r = Math.sqrt(r2) || 1e-6;
-				x = x / r * br;
-				z = z / r * br;
-			}
-		}
-		pos.current.x = x;
-		pos.current.z = z;
-		speedRef.current = wishLen * speed;
-		const stepDist = Math.hypot(x - prevX, z - prevZ);
-		if (grounded.current) coyote.current = .12;
-		else coyote.current = Math.max(0, coyote.current - d);
-		if (act.jump && prone) {
+		if (!mapOpen && act.jump && prone) {
 			useStudio.getState().setFpProne(false);
 			useStudio.getState().setFpCrouch(false);
 		}
-		if (act.jump) jumpBuf.current = .12;
+		if (!mapOpen && act.jump) jumpBuf.current = .14;
 		else jumpBuf.current = Math.max(0, jumpBuf.current - d);
-		if (jumpBuf.current > 0 && coyote.current > 0) {
-			velY.current = FP_JUMP;
-			grounded.current = false;
-			coyote.current = 0;
-			jumpBuf.current = 0;
+		for (let si = 0; si < sub; si++) {
+			let vx = velX.current;
+			let vz = velZ.current;
+			const speed2 = Math.hypot(vx, vz);
+			if (grounded.current) {
+				if (speed2 > .05) {
+					const drop = speed2 * FP_FRICTION * stepDt;
+					const k = Math.max(0, speed2 - drop) / speed2;
+					vx *= k;
+					vz *= k;
+				} else {
+					vx = 0;
+					vz = 0;
+				}
+			}
+			if (wishSpeed > 1e-4) {
+				const accel = (grounded.current ? FP_ACCEL : FP_AIR_ACCEL) * wishSpeed * stepDt;
+				const add = wishSpeed - (vx * nx + vz * nz);
+				if (add > 0) {
+					const acc = Math.min(accel, add);
+					vx += nx * acc;
+					vz += nz * acc;
+				}
+			}
+			velX.current = vx;
+			velZ.current = vz;
+			if (grounded.current) coyote.current = .14;
+			else coyote.current = Math.max(0, coyote.current - stepDt);
+			if (!mapOpen && jumpBuf.current > 0 && coyote.current > 0) {
+				velY.current = FP_JUMP;
+				grounded.current = false;
+				coyote.current = 0;
+				jumpBuf.current = 0;
+			}
+			velY.current -= FP_GRAV * stepDt;
+			if (velY.current < -28) velY.current = -28;
+			const dx = velX.current * stepDt;
+			const dz = velZ.current * stepDt;
+			const dy = velY.current * stepDt;
+			let x = pos.current.x;
+			let y = pos.current.y;
+			let z = pos.current.z;
+			if (cityOn) {
+				const wasGround = grounded.current;
+				let hor = cityMoveCapsule(x, y, z, capR, capH, dx, 0, dz);
+				const wishDx = x + dx;
+				const wishDz = z + dz;
+				if (Math.hypot(hor.x - wishDx, hor.z - wishDz) > .012 && Math.hypot(dx, dz) > .008 && wasGround && velY.current <= .4) {
+					const stepped = cityMoveCapsule(x, y + FP_STEP, z, capR, capH, dx, 0, dz);
+					if (Math.hypot(stepped.x - wishDx, stepped.z - wishDz) + .01 < Math.hypot(hor.x - wishDx, hor.z - wishDz)) hor = stepped;
+				}
+				const vert = cityMoveCapsule(hor.x, hor.y, hor.z, capR, capH, 0, dy, 0);
+				x = vert.x;
+				y = vert.y;
+				z = vert.z;
+				if (vert.grounded && velY.current <= 0) {
+					velY.current = 0;
+					grounded.current = true;
+				} else if (dy > 0 && vert.y < hor.y + dy - .01) {
+					velY.current = 0;
+					grounded.current = false;
+				} else grounded.current = vert.grounded && velY.current <= .2;
+				if (wasGround && velY.current <= 0) {
+					const gy = cityRayDown(x, y + 1.15, z, 1.75);
+					if (gy != null && y - gy > -.12 && y - gy < .6000000000000001) {
+						y = gy;
+						velY.current = 0;
+						grounded.current = true;
+					}
+				}
+				if (!grounded.current && velY.current < -8 && y < getCityRuntime().minY + 6) {
+					const gy = citySurfaceAt(x, z);
+					if (Number.isFinite(gy)) {
+						y = gy;
+						velY.current = 0;
+						grounded.current = true;
+					}
+				}
+			} else {
+				x += dx;
+				z += dz;
+				x = MathUtils.clamp(x, -FP_BOUNDS.x, FP_BOUNDS.x);
+				z = MathUtils.clamp(z, FP_BOUNDS.zMin, FP_BOUNDS.zMax);
+				const br = FP_BOUNDS.bodyR;
+				const r2 = x * x + z * z;
+				if (!body && r2 < br * br && y < 1.75) {
+					const r = Math.sqrt(r2) || 1e-6;
+					x = x / r * br;
+					z = z / r * br;
+				}
+				y += dy;
+				if (y <= 0) {
+					y = 0;
+					velY.current = 0;
+					grounded.current = true;
+				} else grounded.current = false;
+			}
+			pos.current.x = x;
+			pos.current.y = y;
+			pos.current.z = z;
 		}
-		velY.current -= FP_GRAV * d;
-		pos.current.y += velY.current * d;
-		const floorY = cityOn ? cityGroundY(pos.current.x, pos.current.z) : 0;
-		if (pos.current.y <= floorY) {
-			pos.current.y = floorY;
-			velY.current = 0;
-			grounded.current = true;
-		} else grounded.current = false;
-		if (grounded.current && wishLen > .12) distWalk.current += step;
+		const stepDist = Math.hypot(pos.current.x - prevX, pos.current.z - prevZ);
+		speedRef.current = Math.hypot(velX.current, velZ.current);
+		if (grounded.current && wishLen > .12) distWalk.current += stepDist;
 		else distWalk.current *= 1 - d * 4;
 		const bobAmp = grounded.current && wishLen > .12 ? prone ? .006 : crouched ? .01 : sprint ? .028 : .018 : 0;
 		bob.current = Math.sin(distWalk.current * 14) * bobAmp;
@@ -8085,9 +7945,9 @@ function FirstPersonRig({ controlsRef }) {
 		fpLive.pitch = pitch.current;
 		fpLive.crouched = crouched;
 		fpLive.prone = prone;
-		fpLive.moveFwd = act.moveY;
-		fpLive.moveSide = act.moveX;
-		fpLive.speedMps = speed;
+		fpLive.moveFwd = mapOpen ? 0 : act.moveY;
+		fpLive.moveSide = mapOpen ? 0 : act.moveX;
+		fpLive.speedMps = maxSpeed;
 		fpLive.stepDist = grounded.current ? stepDist : 0;
 		fpLive.grounded = grounded.current;
 		fpLive.velY = velY.current;
@@ -8097,6 +7957,7 @@ function FirstPersonRig({ controlsRef }) {
 	}, -1);
 	useFrame(() => {
 		if (!firstPerson) return;
+		if (useStudio.getState().cityMapOpen) return;
 		const body = useStudio.getState().fpView === "body";
 		const fx = -Math.sin(yaw.current);
 		const fz = -Math.cos(yaw.current);
@@ -8122,7 +7983,7 @@ function WorldClip() {
 	(0, import_react.useEffect)(() => {
 		const p = camera;
 		const city = world === "city";
-		p.far = city ? 1400 : 40;
+		p.far = city ? 2200 : 40;
 		if (!useStudio.getState().firstPerson) p.near = city ? .2 : .05;
 		p.updateProjectionMatrix();
 		const bg = city ? "#7eafd0" : "#1a1614";
@@ -8139,12 +8000,308 @@ function WorldClip() {
 }
 function CityWorld() {
 	const world = useStudio((s) => s.worldMap);
-	const group = getCityRuntime().group;
+	const [group, setGroup] = (0, import_react.useState)(() => getCityRuntime().group);
+	(0, import_react.useEffect)(() => {
+		if (world !== "city") return;
+		let n = 0;
+		const id = window.setInterval(() => {
+			const g = getCityRuntime().group;
+			setGroup(g);
+			if (g || ++n > 50) window.clearInterval(id);
+		}, 80);
+		return () => window.clearInterval(id);
+	}, [world]);
 	if (!group) return null;
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("primitive", {
 		object: group,
 		visible: world === "city"
 	});
+}
+function CityMapBake() {
+	const world = useStudio((s) => s.worldMap);
+	(0, import_react.useEffect)(() => {
+		if (world !== "city") return;
+		let cancelled = false;
+		(async () => {
+			try {
+				const model = await loadCityModel(() => {});
+				if (cancelled) return;
+				if (!getCityRuntime().ready || getCityRuntime().group !== model || getCityRuntime().bakeId !== "house-v10") bakeCityCollision(model);
+			} catch {}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [world]);
+	return null;
+}
+var _mapNdc = new Vector2();
+var _mapRay = new Raycaster();
+var cityMapPan = {
+	x: 0,
+	z: 0
+};
+function CityMapRig() {
+	const open = useStudio((s) => s.cityMapOpen);
+	const height = useStudio((s) => s.cityMapHeight);
+	const { camera, gl, scene, size } = useThree();
+	const drag = (0, import_react.useRef)(null);
+	const prevFog = (0, import_react.useRef)(null);
+	const prevUp = (0, import_react.useRef)(new Vector3(0, 1, 0));
+	(0, import_react.useEffect)(() => {
+		if (!open) return;
+		cityMapPan.x = fpLive.x;
+		cityMapPan.z = fpLive.z;
+		const st = useStudio.getState();
+		if (st.cityMapHeight < 50 || st.cityMapHeight > 400) st.setCityMapHeight(120);
+		prevFog.current = scene.fog;
+		prevUp.current.copy(camera.up);
+		scene.fog = null;
+		const el = gl.domElement;
+		el.style.cursor = "grab";
+		const vis = (h) => {
+			const fov = camera.fov * Math.PI / 180;
+			const halfH = Math.tan(fov * .5) * h;
+			return {
+				halfW: halfH * (size.width / Math.max(1, size.height)),
+				halfH
+			};
+		};
+		const onWheel = (e) => {
+			e.preventDefault();
+			e.stopPropagation();
+			const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+			const next = useStudio.getState().cityMapHeight * Math.exp(dy * .0016);
+			useStudio.getState().setCityMapHeight(next);
+		};
+		const onDown = (e) => {
+			if (e.button !== 0 && e.pointerType === "mouse") return;
+			drag.current = {
+				id: e.pointerId,
+				x: e.clientX,
+				y: e.clientY,
+				moved: false
+			};
+			try {
+				el.setPointerCapture(e.pointerId);
+			} catch {}
+			el.style.cursor = "grabbing";
+			e.preventDefault();
+		};
+		const onMove = (e) => {
+			const d = drag.current;
+			if (!d || d.id !== e.pointerId) return;
+			const dx = e.clientX - d.x;
+			const dy = e.clientY - d.y;
+			if (!d.moved && Math.hypot(dx, dy) > 7) d.moved = true;
+			if (!d.moved) return;
+			d.x = e.clientX;
+			d.y = e.clientY;
+			const h = useStudio.getState().cityMapHeight;
+			const { halfW, halfH } = vis(h);
+			cityMapPan.x -= dx / Math.max(1, size.width) * halfW * 2;
+			cityMapPan.z -= dy / Math.max(1, size.height) * halfH * 2;
+			const rt = getCityRuntime();
+			cityMapPan.x = MathUtils.clamp(cityMapPan.x, rt.minX, rt.maxX);
+			cityMapPan.z = MathUtils.clamp(cityMapPan.z, rt.minZ, rt.maxZ);
+		};
+		const pickAt = (clientX, clientY) => {
+			const rect = el.getBoundingClientRect();
+			_mapNdc.set((clientX - rect.left) / rect.width * 2 - 1, -((clientY - rect.top) / rect.height) * 2 + 1);
+			_mapRay.setFromCamera(_mapNdc, camera);
+			const hit = cityRayPick(_mapRay.ray.origin, _mapRay.ray.direction, camera.position.y + 900);
+			if (hit) {
+				useStudio.getState().setCityMapMarker({
+					x: hit.x,
+					z: hit.z
+				});
+				return;
+			}
+			const dir = _mapRay.ray.direction;
+			if (Math.abs(dir.y) < 1e-5) return;
+			const t = -_mapRay.ray.origin.y / dir.y;
+			if (t <= 0) return;
+			const x = _mapRay.ray.origin.x + dir.x * t;
+			const z = _mapRay.ray.origin.z + dir.z * t;
+			useStudio.getState().setCityMapMarker({
+				x,
+				z
+			});
+		};
+		const onUp = (e) => {
+			const d = drag.current;
+			if (!d || d.id !== e.pointerId) return;
+			const moved = d.moved;
+			drag.current = null;
+			try {
+				if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+			} catch {}
+			el.style.cursor = "grab";
+			if (!moved) pickAt(e.clientX, e.clientY);
+		};
+		el.addEventListener("wheel", onWheel, { passive: false });
+		el.addEventListener("pointerdown", onDown);
+		window.addEventListener("pointermove", onMove);
+		window.addEventListener("pointerup", onUp);
+		window.addEventListener("pointercancel", onUp);
+		return () => {
+			el.removeEventListener("wheel", onWheel);
+			el.removeEventListener("pointerdown", onDown);
+			window.removeEventListener("pointermove", onMove);
+			window.removeEventListener("pointerup", onUp);
+			window.removeEventListener("pointercancel", onUp);
+			el.style.cursor = "";
+			camera.up.copy(prevUp.current);
+			scene.fog = prevFog.current;
+		};
+	}, [
+		open,
+		camera,
+		gl,
+		scene,
+		size.width,
+		size.height
+	]);
+	useFrame(() => {
+		if (!open) return;
+		const persp = camera;
+		camera.up.set(0, 0, -1);
+		camera.position.set(cityMapPan.x, height, cityMapPan.z);
+		camera.lookAt(cityMapPan.x, 0, cityMapPan.z);
+		persp.fov = 52;
+		persp.near = Math.max(1, height * .04);
+		persp.far = height + 900;
+		persp.updateProjectionMatrix();
+		if (scene.fog) scene.fog = null;
+	}, 8);
+	return null;
+}
+function makeArrowMesh() {
+	const g = new Group();
+	const mat = new MeshBasicMaterial({
+		color: 13940128,
+		depthTest: false,
+		depthWrite: false
+	});
+	const body = new Mesh(new ConeGeometry(1.1, 3.4, 3), mat);
+	body.rotation.x = -Math.PI / 2;
+	body.position.z = -.4;
+	g.add(body);
+	const core = new Mesh(new SphereGeometry(.55, 10, 8), new MeshBasicMaterial({
+		color: 15921129,
+		depthTest: false,
+		depthWrite: false
+	}));
+	g.add(core);
+	g.renderOrder = 12;
+	return g;
+}
+function CityMapGizmos() {
+	const open = useStudio((s) => s.cityMapOpen);
+	const marker = useStudio((s) => s.cityMapMarker);
+	const arrow = (0, import_react.useMemo)(() => makeArrowMesh(), []);
+	const pin = (0, import_react.useMemo)(() => {
+		const g = new Group();
+		const ring = new Mesh(new RingGeometry(.7, 1.35, 24), new MeshBasicMaterial({
+			color: 13940128,
+			side: 2,
+			depthTest: false,
+			depthWrite: false
+		}));
+		ring.rotation.x = -Math.PI / 2;
+		g.add(ring);
+		const pole = new Mesh(new CylinderGeometry(.12, .12, 3.2, 8), new MeshBasicMaterial({
+			color: 15921129,
+			depthTest: false,
+			depthWrite: false
+		}));
+		pole.position.y = 1.6;
+		g.add(pole);
+		g.renderOrder = 13;
+		return g;
+	}, []);
+	useFrame(() => {
+		arrow.visible = open;
+		pin.visible = open && !!marker;
+		if (!open) return;
+		const gy = citySurfaceAt(fpLive.x, fpLive.z);
+		const h = useStudio.getState().cityMapHeight;
+		const sc = MathUtils.clamp(h * .018, 1.6, 28);
+		arrow.position.set(fpLive.x, gy + .15, fpLive.z);
+		arrow.scale.setScalar(sc);
+		arrow.rotation.set(0, fpLive.yaw, 0);
+		if (marker) {
+			const my = citySurfaceAt(marker.x, marker.z);
+			pin.position.set(marker.x, my, marker.z);
+			pin.scale.setScalar(sc);
+		}
+	});
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("primitive", { object: arrow }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("primitive", { object: pin })] });
+}
+function CollisionDebug() {
+	const on = useStudio((s) => s.showCollision);
+	const world = useStudio((s) => s.worldMap);
+	const boxes = (0, import_react.useMemo)(() => {
+		const group = new Group();
+		group.name = "CollisionDebug";
+		group.frustumCulled = false;
+		const mat = new MeshBasicMaterial({
+			color: 16763955,
+			wireframe: true,
+			transparent: true,
+			opacity: .9,
+			depthTest: false,
+			depthWrite: false
+		});
+		for (let i = 0; i < 56; i++) {
+			const mesh = new Mesh(new BoxGeometry(1, 1, 1), mat);
+			mesh.visible = false;
+			mesh.frustumCulled = false;
+			mesh.renderOrder = 10;
+			group.add(mesh);
+		}
+		return group;
+	}, []);
+	const cap = (0, import_react.useMemo)(() => {
+		const mesh = new Mesh(new CapsuleGeometry(.3, 1.04, 3, 8), new MeshBasicMaterial({
+			color: 16769162,
+			wireframe: true,
+			depthTest: false,
+			depthWrite: false,
+			transparent: true,
+			opacity: .95
+		}));
+		mesh.frustumCulled = false;
+		mesh.renderOrder = 11;
+		return mesh;
+	}, []);
+	useFrame(() => {
+		const show = on && world === "city" && getCityRuntime().ready;
+		boxes.visible = show;
+		cap.visible = show;
+		if (!show) return;
+		const list = getCityDebugAabbs(fpLive.x, fpLive.z, 28, 56);
+		for (let i = 0; i < boxes.children.length; i++) {
+			const mesh = boxes.children[i];
+			const box = list[i];
+			if (!box) {
+				mesh.visible = false;
+				continue;
+			}
+			mesh.visible = true;
+			const w = Math.max(.04, box.maxX - box.minX);
+			const h = Math.max(.04, box.maxY - box.minY);
+			const d = Math.max(.04, box.maxZ - box.minZ);
+			mesh.position.set((box.minX + box.maxX) * .5, (box.minY + box.maxY) * .5, (box.minZ + box.maxZ) * .5);
+			mesh.scale.set(w, h, d);
+		}
+		const r = fpLive.prone ? .22 : fpLive.crouched ? .26 : .3;
+		const h = fpLive.prone ? .42 : fpLive.crouched ? .94 : 1.64;
+		cap.scale.set(r / .3, h / 1.64, r / .3);
+		cap.position.set(fpLive.x, fpLive.y + h * .5, fpLive.z);
+		cap.material.color.setHex(fpLive.grounded ? 8191898 : 16739162);
+	});
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("primitive", { object: boxes }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("primitive", { object: cap })] });
 }
 function makeDoorMarker(label, color) {
 	const g = new Group();
@@ -8249,9 +8406,9 @@ function WorldGate() {
 					});
 					useStudio.setState({
 						loadProgress: 94,
-						loadHint: "绘制城市碰撞"
+						loadHint: "生成贴合模型的碰撞"
 					});
-					if (!getCityRuntime().ready || getCityRuntime().group !== model) bakeCityCollision(model);
+					if (!getCityRuntime().ready || getCityRuntime().group !== model || getCityRuntime().bakeId !== "house-v10") bakeCityCollision(model);
 					useStudio.setState({
 						worldMap: "city",
 						portalHint: "",

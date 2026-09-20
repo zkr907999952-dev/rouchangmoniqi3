@@ -1,14 +1,15 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { a as require_jsx_runtime, o as require_react } from "../_libs/@radix-ui/react-collection+[...].mjs";
-import { G as MathUtils, Nt as Vector3, g as Color, p as Cache, pt as Quaternion, w as Group, x as Euler } from "../_libs/@react-three/drei+[...].mjs";
-import { A as ArrowRight, C as EyeOff, D as Camera, E as ChevronsDown, M as ArrowDown, N as Activity, O as Bone, S as Eye, T as ChevronsUpDown, _ as Heart, a as User, b as Grid3x3, c as Settings2, d as RotateCcw, f as Rotate3d, g as Move, h as Pause, i as Wind, j as ArrowLeft, k as ArrowUp, l as Scan, m as Pointer, n as Zap, p as Repeat, r as Wrench, s as Sword, t as ZoomIn, u as RotateCw, v as Hand, w as Crosshair, x as Grab, y as GripHorizontal } from "../_libs/lucide-react.mjs";
+import { I as Line3, It as Vector3, S as Euler, T as Group, Y as Matrix4, _ as Color, _t as Ray, d as BufferAttribute, f as BufferGeometry, ht as Quaternion, l as Box3, p as Cache, q as MathUtils } from "../_libs/@react-three/drei+[...].mjs";
+import { A as Bone, C as Eye, D as ChevronsDown, E as ChevronsUpDown, F as Activity, M as ArrowRight, N as ArrowLeft, O as Camera, P as ArrowDown, S as Grab, T as Crosshair, _ as Map$1, a as User, b as GripHorizontal, c as Settings2, d as RotateCcw, f as Rotate3d, g as Move, h as Pause, i as Wind, j as ArrowUp, k as Box, l as Scan, m as Pointer, n as Zap, p as Repeat, r as Wrench, s as Sword, t as ZoomIn, u as RotateCw, v as Heart, w as EyeOff, x as Grid3x3, y as Hand } from "../_libs/lucide-react.mjs";
 import { t as GLTFLoader } from "../_libs/three-stdlib.mjs";
+import { t as MeshBVH } from "../_libs/three-mesh-bvh.mjs";
 import { t as create } from "../_libs/zustand.mjs";
 import { n as MeshoptDecoder } from "../_libs/three.mjs";
 import { i as SliderTrack, n as SliderRange, r as SliderThumb, t as Slider } from "../_libs/@radix-ui/react-slider+[...].mjs";
 import { t as clsx } from "../_libs/clsx.mjs";
 import { t as twMerge } from "../_libs/tailwind-merge.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-BgQXMseR.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-1RYC3LC1.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -3236,6 +3237,581 @@ var SoftSkeleton = class {
 		}
 	}
 };
+var CITY_BAKE_ID = "house-v10";
+var HOME_EXIT = {
+	x: -1.62,
+	y: 0,
+	z: .12,
+	r: 1.05
+};
+var HOME_RETURN_SPAWN = {
+	x: -1.12,
+	y: 0,
+	z: .12,
+	yaw: -Math.PI / 2,
+	pitch: -.08
+};
+var CITY_MAP_H_MAX = 1600;
+var CELL = 16;
+var MAX_EXTRACT_VERTS = 9e5;
+var city = {
+	group: null,
+	colliders: [],
+	hash: /* @__PURE__ */ new Map(),
+	spawn: {
+		x: 42.5,
+		y: 0,
+		z: 40.2,
+		yaw: 0,
+		pitch: -.06
+	},
+	portal: {
+		x: 42.5,
+		z: 40.2,
+		r: 1.8
+	},
+	minX: -1800,
+	maxX: 1300,
+	minY: -8,
+	maxY: 220,
+	minZ: -1500,
+	maxZ: 1550,
+	ready: false,
+	mapUrl: "",
+	mapCx: 0,
+	mapCz: 0,
+	mapHalf: 1600,
+	skipped: 0,
+	bakeId: "",
+	houseCount: 0,
+	probeN: 0,
+	probeY: null,
+	sampleV: [],
+	sampleBB: []
+};
+function getCityRuntime() {
+	return city;
+}
+function getCitySpawn() {
+	return city.spawn;
+}
+function cellKey(ix, iz) {
+	return (ix + 2e4) * 4e4 + (iz + 2e4);
+}
+function collectName(obj) {
+	const parts = [];
+	let o = obj;
+	while (o) {
+		if (o.name) parts.push(o.name);
+		o = o.parent;
+	}
+	return parts.join(" ");
+}
+/** Plants / leaves / tree canopies — no collision. Buildings, ground, props stay. */
+function isFoliage(name) {
+	const n = name.toLowerCase();
+	if (/mat_trees|_trees_|palm|foliage|leaves|\bleaf\b|bush|hedge|\bplants?\b|flower|fern|weed/.test(n)) {
+		if (/miami_ground|boulevard_ground|docks_ground|island_ground|hotel_ground|sidewalk|pavement|asphalt|road/.test(n)) return false;
+		return true;
+	}
+	return false;
+}
+function addToHash(col) {
+	const x0 = Math.floor(col.box.minX / CELL);
+	const x1 = Math.floor(col.box.maxX / CELL);
+	const z0 = Math.floor(col.box.minZ / CELL);
+	const z1 = Math.floor(col.box.maxZ / CELL);
+	for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
+		const k = cellKey(ix, iz);
+		let list = city.hash.get(k);
+		if (!list) {
+			list = [];
+			city.hash.set(k, list);
+		}
+		list.push(col);
+	}
+}
+function gatherColliders(minX, maxX, minZ, maxZ, out) {
+	out.length = 0;
+	const seen = /* @__PURE__ */ new Set();
+	const x0 = Math.floor(minX / CELL);
+	const x1 = Math.floor(maxX / CELL);
+	const z0 = Math.floor(minZ / CELL);
+	const z1 = Math.floor(maxZ / CELL);
+	for (let ix = x0; ix <= x1; ix++) for (let iz = z0; iz <= z1; iz++) {
+		const list = city.hash.get(cellKey(ix, iz));
+		if (!list) continue;
+		for (const c of list) {
+			if (seen.has(c)) continue;
+			seen.add(c);
+			out.push(c);
+		}
+	}
+	return out;
+}
+function disposeColliders() {
+	for (const col of city.colliders) if (col.scratch) {
+		col.scratch.boundsTree = void 0;
+		col.scratch.dispose();
+	}
+	city.colliders = [];
+	city.hash = /* @__PURE__ */ new Map();
+}
+var _tv = new Vector3();
+/** Copy verts through matrixWorld into a fresh non-interleaved buffer. Meshopt/interleaved clone+applyMatrix4 is a no-op. */
+function extractWorldGeometry(mesh) {
+	const src = mesh.geometry;
+	const pos = src.getAttribute("position");
+	if (!pos || pos.count < 3) return null;
+	const idx = src.getIndex();
+	if ((idx ? idx.count : pos.count) > MAX_EXTRACT_VERTS) return null;
+	const n = pos.count;
+	const arr = new Float32Array(n * 3);
+	const m = mesh.matrixWorld;
+	for (let i = 0; i < n; i++) {
+		_tv.fromBufferAttribute(pos, i).applyMatrix4(m);
+		const o = i * 3;
+		arr[o] = _tv.x;
+		arr[o + 1] = _tv.y;
+		arr[o + 2] = _tv.z;
+	}
+	const g = new BufferGeometry();
+	g.setAttribute("position", new BufferAttribute(arr, 3));
+	if (idx) {
+		const ic = idx.count;
+		const ia = new Uint32Array(ic);
+		for (let i = 0; i < ic; i++) ia[i] = idx.getX(i);
+		g.setIndex(new BufferAttribute(ia, 1));
+	}
+	g.computeBoundingBox();
+	return g;
+}
+function meshScale(mesh) {
+	const e = mesh.matrixWorld.elements;
+	const sx = Math.hypot(e[0], e[1], e[2]);
+	const sy = Math.hypot(e[4], e[5], e[6]);
+	const sz = Math.hypot(e[8], e[9], e[10]);
+	return Math.max(1e-6, Math.min(Math.abs(sx), Math.abs(sy), Math.abs(sz)));
+}
+function bakeCityCollision(root) {
+	city.group = root;
+	disposeColliders();
+	city.ready = false;
+	city.mapUrl = "";
+	city.sampleV = [];
+	city.sampleBB = [];
+	root.updateMatrixWorld(true);
+	const _box3 = new Box3();
+	const houseBoxes = [];
+	let minX = Infinity;
+	let maxX = -Infinity;
+	let minY = Infinity;
+	let maxY = -Infinity;
+	let minZ = Infinity;
+	let maxZ = -Infinity;
+	let skipped = 0;
+	root.traverse((obj) => {
+		const mesh = obj;
+		if (!mesh.isMesh) return;
+		mesh.castShadow = false;
+		mesh.receiveShadow = false;
+		mesh.frustumCulled = true;
+		const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+		for (const mat of mats) {
+			const std = mat;
+			if ("envMapIntensity" in std) std.envMapIntensity = .55;
+			if (std.transparent && (std.opacity ?? 1) > .92 && !std.alphaMap) {
+				std.transparent = false;
+				std.depthWrite = true;
+			}
+		}
+		const geom = mesh.geometry;
+		if (!geom?.attributes?.position) return;
+		if (!geom.boundingBox) geom.computeBoundingBox();
+		_box3.copy(geom.boundingBox).applyMatrix4(mesh.matrixWorld);
+		if (!Number.isFinite(_box3.min.x) || _box3.isEmpty()) return;
+		const aabb = {
+			minX: _box3.min.x,
+			minY: _box3.min.y,
+			minZ: _box3.min.z,
+			maxX: _box3.max.x,
+			maxY: _box3.max.y,
+			maxZ: _box3.max.z
+		};
+		minX = Math.min(minX, aabb.minX);
+		maxX = Math.max(maxX, aabb.maxX);
+		minY = Math.min(minY, aabb.minY);
+		maxY = Math.max(maxY, aabb.maxY);
+		minZ = Math.min(minZ, aabb.minZ);
+		maxZ = Math.max(maxZ, aabb.maxZ);
+		const name = collectName(mesh);
+		if (/House_2B_MAT_Boulevard_Havana/.test(name) && !/House_2B_1/.test(name) && !/House_2B__1_/.test(name)) houseBoxes.push(aabb);
+		if (isFoliage(name)) return;
+		const h = aabb.maxY - aabb.minY;
+		const w = aabb.maxX - aabb.minX;
+		const d = aabb.maxZ - aabb.minZ;
+		if (w < .04 && d < .04 && h < .04) return;
+		try {
+			const worldGeom = extractWorldGeometry(mesh);
+			let bvh;
+			let scratch = null;
+			let world = true;
+			let scale = 1;
+			if (worldGeom) {
+				bvh = new MeshBVH(worldGeom, {
+					maxLeafTris: 12,
+					setBoundingBox: true
+				});
+				worldGeom.boundsTree = bvh;
+				scratch = worldGeom;
+				if (city.sampleV.length === 0 && aabb.minX < 50 && aabb.maxX > 35 && aabb.minZ < 35 && aabb.maxZ > 25) {
+					const pr = worldGeom.getAttribute("position");
+					city.sampleV = [
+						pr.getX(0),
+						pr.getY(0),
+						pr.getZ(0)
+					];
+					city.sampleBB = [
+						aabb.minX,
+						aabb.minY,
+						aabb.minZ,
+						aabb.maxX,
+						aabb.maxY,
+						aabb.maxZ
+					];
+				}
+			} else {
+				if (!geom.boundsTree) geom.boundsTree = new MeshBVH(geom, { maxLeafTris: 12 });
+				bvh = geom.boundsTree;
+				world = false;
+				scale = meshScale(mesh);
+				skipped++;
+			}
+			const col = {
+				mesh,
+				box: aabb,
+				bvh,
+				scratch,
+				world,
+				scale
+			};
+			city.colliders.push(col);
+			addToHash(col);
+		} catch {
+			skipped++;
+		}
+	});
+	city.skipped = skipped;
+	city.minX = Number.isFinite(minX) ? minX + 2 : -1800;
+	city.maxX = Number.isFinite(maxX) ? maxX - 2 : 1300;
+	city.minY = Number.isFinite(minY) ? minY : -8;
+	city.maxY = Number.isFinite(maxY) ? maxY : 220;
+	city.minZ = Number.isFinite(minZ) ? minZ + 2 : -1500;
+	city.maxZ = Number.isFinite(maxZ) ? maxZ - 2 : 1550;
+	city.mapCx = (city.minX + city.maxX) * .5;
+	city.mapCz = (city.minZ + city.maxZ) * .5;
+	city.mapHalf = Math.max(city.maxX - city.minX, city.maxZ - city.minZ) * .5 + 24;
+	city.ready = true;
+	city.bakeId = CITY_BAKE_ID;
+	city.houseCount = houseBoxes.length;
+	const fx = 40.97;
+	const fz = 30.6;
+	let sx = fx;
+	let sz = fz;
+	let sy = cityLowestSurface(fx, fz);
+	for (const [dx, dz] of [
+		[0, 0],
+		[0, 4],
+		[4, 0],
+		[-3, 2],
+		[0, -3],
+		[2, 3.4],
+		[-2, 3.4]
+	]) {
+		const y = cityLowestSurface(fx + dx, fz + dz);
+		if (y > .08 && y < 1.8) {
+			sx = fx + dx;
+			sz = fz + dz;
+			sy = y;
+			break;
+		}
+	}
+	city.spawn = {
+		x: sx,
+		y: sy,
+		z: sz,
+		yaw: 0,
+		pitch: -.06
+	};
+	city.portal = {
+		x: sx,
+		z: sz,
+		r: 1.85
+	};
+	gatherColliders(sx - 3, sx + 3, sz - 3, sz + 3, _query);
+	city.probeN = _query.length;
+	city.probeY = cityRayDown(sx, city.maxY + 80, sz, city.maxY + 220);
+}
+var _ray = new Ray();
+var _dirN = new Vector3();
+var _query = [];
+var _inv = new Matrix4();
+var _world = new Matrix4();
+var _hitP = new Vector3();
+var _worldDir = new Vector3();
+var _origin = new Vector3();
+function prepareRay(col, origin, dir) {
+	if (col.world) {
+		_ray.origin.copy(origin);
+		_ray.direction.copy(dir).normalize();
+		return 1;
+	}
+	_world.copy(col.mesh.matrixWorld);
+	_inv.copy(_world).invert();
+	_ray.origin.copy(origin).applyMatrix4(_inv);
+	_ray.direction.copy(dir).transformDirection(_inv).normalize();
+	return col.scale || meshScale(col.mesh);
+}
+function hitToWorld(col, hit, origin, dir, scale) {
+	if (hit.point) {
+		if (col.world) _hitP.copy(hit.point);
+		else _hitP.copy(hit.point).applyMatrix4(col.mesh.matrixWorld);
+	} else _hitP.copy(origin).addScaledVector(dir, hit.distance * scale);
+	return _hitP;
+}
+function cityRayDown(x, fromY, z, maxDist) {
+	if (!city.colliders.length) return null;
+	gatherColliders(x - 2.5, x + 2.5, z - 2.5, z + 2.5, _query);
+	if (!_query.length) return null;
+	let best = maxDist + 1;
+	let hitY = null;
+	_dirN.set(0, -1, 0);
+	const origin = _origin.set(x, fromY, z);
+	for (const col of _query) {
+		if (fromY < col.box.minY - .02) continue;
+		if (fromY - maxDist > col.box.maxY + .02) continue;
+		const s = prepareRay(col, origin, _dirN);
+		const far = col.world ? maxDist : maxDist / s;
+		const hit = col.bvh.raycastFirst(_ray, 2, 0, far);
+		if (!hit || hit.distance < 0) continue;
+		hitToWorld(col, hit, origin, _dirN, s);
+		const distW = fromY - _hitP.y;
+		if (distW < -.02 || distW > maxDist || distW >= best) continue;
+		if (Math.abs(_hitP.x - x) > 1.6 || Math.abs(_hitP.z - z) > 1.6) continue;
+		best = distW;
+		hitY = _hitP.y;
+	}
+	return hitY;
+}
+/** Lowest solid surface under (x,z) — lawn rather than an overhanging roof. */
+function cityLowestSurface(x, z, minY = .04, maxY = 8) {
+	const top = Math.max(city.maxY + 80, 80);
+	const span = top - city.minY + 40;
+	if (!city.colliders.length) return 0;
+	gatherColliders(x - 2.5, x + 2.5, z - 2.5, z + 2.5, _query);
+	_dirN.set(0, -1, 0);
+	const origin = _origin.set(x, top, z);
+	let lowest = null;
+	for (const col of _query) {
+		if (col.box.maxY < minY - .02) continue;
+		const s = prepareRay(col, origin, _dirN);
+		const hits = col.bvh.raycast(_ray, 2, 0, col.world ? span : span / s);
+		for (const hit of hits) {
+			if (!hit) continue;
+			hitToWorld(col, hit, origin, _dirN, s);
+			const y = _hitP.y;
+			if (y < minY || y > maxY) continue;
+			if (Math.abs(_hitP.x - x) > 1.8 || Math.abs(_hitP.z - z) > 1.8) continue;
+			if (lowest == null || y < lowest) lowest = y;
+		}
+	}
+	if (lowest != null) return lowest;
+	const y = cityRayDown(x, top, z, span);
+	return y != null ? y : 0;
+}
+function citySurfaceAt(x, z) {
+	const top = Math.max(city.maxY + 120, 120);
+	const span = top - city.minY + 80;
+	const y = cityRayDown(x, top, z, span);
+	if (y != null) return y;
+	for (const [dx, dz] of [
+		[0, 2],
+		[2, 0],
+		[0, -2],
+		[-2, 0],
+		[4, 0],
+		[0, 4],
+		[-4, 0],
+		[0, -4]
+	]) {
+		const alt = cityRayDown(x + dx, top, z + dz, span);
+		if (alt != null) return alt;
+	}
+	return 0;
+}
+function cityRayPick(origin, direction, maxDist = 4e3) {
+	if (!city.ready || !city.colliders.length) return null;
+	_dirN.copy(direction);
+	if (_dirN.lengthSq() < 1e-10) return null;
+	_dirN.normalize();
+	const endX = origin.x + _dirN.x * maxDist;
+	const endZ = origin.z + _dirN.z * maxDist;
+	gatherColliders(Math.min(origin.x, endX) - 4, Math.max(origin.x, endX) + 4, Math.min(origin.z, endZ) - 4, Math.max(origin.z, endZ) + 4, _query);
+	let best = maxDist + 1;
+	let point = null;
+	for (const col of _query) {
+		const s = prepareRay(col, origin, _dirN);
+		const far = col.world ? maxDist : maxDist / s;
+		const hit = col.bvh.raycastFirst(_ray, 2, 0, far);
+		if (!hit || hit.distance < 0) continue;
+		hitToWorld(col, hit, origin, _dirN, s);
+		const distW = origin.distanceTo(_hitP);
+		if (distW > maxDist || distW >= best) continue;
+		best = distW;
+		point = {
+			x: _hitP.x,
+			y: _hitP.y,
+			z: _hitP.z
+		};
+	}
+	return point;
+}
+var _seg = new Line3();
+var _box = new Box3();
+var _triPoint = new Vector3();
+var _capPoint = new Vector3();
+var _dir = new Vector3();
+/** Push a vertical capsule out of city triangles. Feet at (x,y,z). */
+function cityMoveCapsule(px, py, pz, radius, height, dx, dy, dz) {
+	let x = px + dx;
+	let y = py + dy;
+	let z = pz + dz;
+	x = MathUtils.clamp(x, city.minX, city.maxX);
+	z = MathUtils.clamp(z, city.minZ, city.maxZ);
+	if (!city.ready || !city.colliders.length) return {
+		x,
+		y,
+		z,
+		grounded: y <= city.minY + .04
+	};
+	const capH = Math.max(height, radius * 2.08);
+	const pad = radius + Math.max(Math.abs(dx), Math.abs(dz), Math.abs(dy)) + .45;
+	gatherColliders(x - pad, x + pad, z - pad, z + pad, _query);
+	let grounded = false;
+	for (let pass = 0; pass < 5; pass++) {
+		let moved = false;
+		for (const col of _query) {
+			const b = col.box;
+			if (y + capH < b.minY - .02 || y > b.maxY + .02) continue;
+			if (x + radius < b.minX - .02 || x - radius > b.maxX + .02) continue;
+			if (z + radius < b.minZ - .02 || z - radius > b.maxZ + .02) continue;
+			let localR = radius;
+			if (col.world) {
+				_seg.start.set(x, y + radius, z);
+				_seg.end.set(x, y + capH - radius, z);
+			} else {
+				_world.copy(col.mesh.matrixWorld);
+				_inv.copy(_world).invert();
+				localR = radius / (col.scale || meshScale(col.mesh));
+				_seg.start.set(x, y + radius, z).applyMatrix4(_inv);
+				_seg.end.set(x, y + capH - radius, z).applyMatrix4(_inv);
+			}
+			_box.makeEmpty();
+			_box.expandByPoint(_seg.start);
+			_box.expandByPoint(_seg.end);
+			_box.min.addScalar(-localR);
+			_box.max.addScalar(localR);
+			let hit = false;
+			col.bvh.shapecast({
+				intersectsBounds: (box) => box.intersectsBox(_box),
+				intersectsTriangle: (tri) => {
+					const dist = tri.closestPointToSegment(_seg, _triPoint, _capPoint);
+					if (dist < localR) {
+						const depth = localR - dist;
+						_dir.copy(_capPoint).sub(_triPoint);
+						if (_dir.lengthSq() < 1e-12) tri.getNormal(_dir);
+						else _dir.normalize();
+						_seg.start.addScaledVector(_dir, depth);
+						_seg.end.addScaledVector(_dir, depth);
+						hit = true;
+						if (col.world) {
+							if (_dir.y > .55) grounded = true;
+						} else {
+							_worldDir.copy(_dir).transformDirection(col.mesh.matrixWorld);
+							if (_worldDir.y > .55) grounded = true;
+						}
+					}
+					return false;
+				}
+			});
+			if (!hit) continue;
+			if (col.world) {
+				x = _seg.start.x;
+				y = _seg.start.y - radius;
+				z = _seg.start.z;
+			} else {
+				_seg.start.applyMatrix4(col.mesh.matrixWorld);
+				x = _seg.start.x;
+				y = _seg.start.y - radius;
+				z = _seg.start.z;
+			}
+			moved = true;
+		}
+		if (!moved) break;
+	}
+	x = MathUtils.clamp(x, city.minX, city.maxX);
+	z = MathUtils.clamp(z, city.minZ, city.maxZ);
+	if (dy < 0) {
+		const gy = cityRayDown(x, y + Math.max(capH, 1.35), z, Math.max(capH + .85, 2.2));
+		if (gy != null && y - gy <= .55 && y - gy >= -.4) {
+			y = gy;
+			grounded = true;
+		}
+	}
+	if (y < city.minY) {
+		y = city.minY;
+		grounded = true;
+	}
+	return {
+		x,
+		y,
+		z,
+		grounded
+	};
+}
+function getCityDebugAabbs(x, z, radius = 22, maxN = 56) {
+	if (!city.ready) return [];
+	gatherColliders(x - radius, x + radius, z - radius, z + radius, _query);
+	const scored = [];
+	for (const col of _query) {
+		const cx = (col.box.minX + col.box.maxX) * .5;
+		const cz = (col.box.minZ + col.box.maxZ) * .5;
+		const dx = cx - x;
+		const dz = cz - z;
+		scored.push({
+			col,
+			d: dx * dx + dz * dz
+		});
+	}
+	scored.sort((a, b) => a.d - b.d);
+	const out = [];
+	for (let i = 0; i < scored.length && out.length < maxN; i++) out.push({
+		...scored[i].col.box,
+		kind: "solid"
+	});
+	return out;
+}
+function nearHomeExit(x, z) {
+	const dx = x - HOME_EXIT.x;
+	const dz = z - HOME_EXIT.z;
+	return dx * dx + dz * dz <= HOME_EXIT.r * HOME_EXIT.r;
+}
+function nearCityPortal(x, z) {
+	const dx = x - city.portal.x;
+	const dz = z - city.portal.z;
+	const r = city.portal.r;
+	return dx * dx + dz * dz <= r * r;
+}
 /** Park fingertip is ~5cm in front of the navel; full insert is ~5cm in. Contact is halfway. */
 var NAVEL_CONTACT_T = .5;
 var FP_LOOK_SPEED_MIN = .25;
@@ -3551,6 +4127,14 @@ var useStudio = create((set) => ({
 	fpBreastJiggle: FP_BREAST_JIGGLE_DEFAULT,
 	worldMap: "home",
 	portalHint: "",
+	cityMapOpen: false,
+	cityMapMarker: null,
+	cityMapHeight: 120,
+	showCollision: false,
+	fpWarpNonce: 0,
+	fpWarpX: 0,
+	fpWarpY: 0,
+	fpWarpZ: 0,
 	setParam: (key, value) => set((s) => ({
 		...s,
 		[key]: value,
@@ -4215,9 +4799,22 @@ var useStudio = create((set) => ({
 	setFpBreastJiggle: (fpBreastJiggle) => set({ fpBreastJiggle: Math.max(0, Math.min(1, fpBreastJiggle)) }),
 	setWorldMap: (worldMap) => set({
 		worldMap,
-		portalHint: ""
+		portalHint: "",
+		cityMapOpen: false,
+		cityMapMarker: null
 	}),
 	setPortalHint: (portalHint) => set({ portalHint }),
+	setCityMapOpen: (cityMapOpen) => set({ cityMapOpen }),
+	setCityMapMarker: (cityMapMarker) => set({ cityMapMarker }),
+	setCityMapHeight: (cityMapHeight) => set({ cityMapHeight: Math.max(36, Math.min(CITY_MAP_H_MAX, cityMapHeight)) }),
+	setShowCollision: (showCollision) => set({ showCollision }),
+	warpFp: (fpWarpX, fpWarpY, fpWarpZ) => set((s) => ({
+		fpWarpNonce: s.fpWarpNonce + 1,
+		fpWarpX,
+		fpWarpY,
+		fpWarpZ,
+		cityMapOpen: false
+	})),
 	shake: () => set((s) => ({ shakeNonce: s.shakeNonce + 1 })),
 	fireStrike: (point = null) => set((s) => ({
 		strikeNonce: s.strikeNonce + 1,
@@ -4978,6 +5575,8 @@ function Overlay() {
 	const slowMo = useStudio((s) => s.slowMo);
 	const showLattice = useStudio((s) => s.showLattice);
 	const showWeights = useStudio((s) => s.showWeights);
+	const showCollision = useStudio((s) => s.showCollision);
+	const setShowCollision = useStudio((s) => s.setShowCollision);
 	const expression = useStudio((s) => s.expression);
 	const pose = useStudio((s) => s.pose);
 	const setExpression = useStudio((s) => s.setExpression);
@@ -4992,6 +5591,9 @@ function Overlay() {
 	const showGutHp = useStudio((s) => s.showGutHp);
 	const uiHidden = useStudio((s) => s.uiHidden);
 	const firstPerson = useStudio((s) => s.firstPerson);
+	const worldMap = useStudio((s) => s.worldMap);
+	const cityMapOpen = useStudio((s) => s.cityMapOpen);
+	const setCityMapOpen = useStudio((s) => s.setCityMapOpen);
 	useStudio((s) => s.abdomenXray);
 	const bedStance = useStudio((s) => s.bedStance);
 	const interactMode = useStudio((s) => s.interactMode);
@@ -5068,6 +5670,24 @@ function Overlay() {
 		const onKey = (e) => {
 			const tag = e.target?.tagName;
 			if (tag === "INPUT" || tag === "TEXTAREA") return;
+			if (e.code === "KeyM") {
+				const s = useStudio.getState();
+				if (s.worldMap === "city" && getCityRuntime().ready) {
+					e.preventDefault();
+					const next = !s.cityMapOpen;
+					s.setCityMapOpen(next);
+					if (next) {
+						s.setFpLookLocked(false);
+						if (document.pointerLockElement) document.exitPointerLock();
+					}
+				}
+				return;
+			}
+			if (e.code === "Escape" && useStudio.getState().cityMapOpen) {
+				e.preventDefault();
+				useStudio.getState().setCityMapOpen(false);
+				return;
+			}
 			if (useStudio.getState().firstPerson) {
 				if (e.code === "KeyW" || e.code === "KeyA" || e.code === "KeyS" || e.code === "KeyD" || e.code === "Space" || e.code === "KeyC" || e.code === "KeyE" || e.code === "KeyF" || e.code.startsWith("Arrow")) return;
 			}
@@ -5160,6 +5780,22 @@ function Overlay() {
 					] })]
 				})
 			}) : null,
+			worldMap === "city" ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+				type: "button",
+				"aria-label": "打开地图",
+				onClick: () => {
+					const next = !cityMapOpen;
+					setCityMapOpen(next);
+					if (next) {
+						useStudio.getState().setFpLookLocked(false);
+						if (document.pointerLockElement) document.exitPointerLock();
+					}
+				},
+				className: cn("pointer-events-auto absolute top-4 left-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border sm:top-6 sm:left-6", cityMapOpen ? "border-accent bg-accent text-accent-fg" : "border-border bg-surface text-fg"),
+				style: { marginTop: "env(safe-area-inset-top)" },
+				children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Map$1, { className: "size-4" })
+			}) : null,
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CityMapPanel, {}),
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 				className: "pointer-events-auto absolute top-4 right-4 z-20 flex gap-2 sm:top-6 sm:right-6",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
@@ -5347,6 +5983,12 @@ function Overlay() {
 												onClick: () => setParam("showWeights", !showWeights),
 												icon: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Scan, { className: "size-3.5" }),
 												label: "显示绑定"
+											}),
+											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Toggle, {
+												active: showCollision,
+												onClick: () => setShowCollision(!showCollision),
+												icon: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(Box, { className: "size-3.5" }),
+												label: "显示碰撞"
 											}),
 											/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Toggle, {
 												active: autoRotate,
@@ -6312,6 +6954,8 @@ function CameraMenu({ onClose }) {
 	const fpLookLocked = useStudio((s) => s.fpLookLocked);
 	const abdomenXray = useStudio((s) => s.abdomenXray);
 	const setParam = useStudio((s) => s.setParam);
+	const showCollision = useStudio((s) => s.showCollision);
+	const setShowCollision = useStudio((s) => s.setShowCollision);
 	const dist = Math.hypot(live.px - live.tx, live.py - live.ty, live.pz - live.tz);
 	const focuses = [
 		{
@@ -6415,12 +7059,18 @@ function CameraMenu({ onClose }) {
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 					className: "mb-3 text-[11px] leading-snug text-muted",
-					children: firstPerson ? fpView === "body" ? fpLookLocked ? "角色视角已锁定 · 再点右键或 Esc 解除 · 低头可见身体" : "控制角色 · WASD 移动 · Shift 奔跑 · 空格跳 · C 蹲 · 低头看身体 · 右键锁定视角" : fpLookLocked ? "观察视角已锁定 · 再点右键或 Esc 解除" : "WASD 移动 · Shift 奔跑 · 空格跳 · C 点按蹲 · 长按匍匐 · 滚轮缩放 · 右键锁定视角" : "观察：在房间走动看角色。角色视角：以角色头部为镜头，身体跟随转向。左侧发光门为出门。"
+					children: firstPerson ? fpView === "body" ? fpLookLocked ? "角色视角已锁定 · 再点右键或 Esc 解除 · 低头可见身体" : "控制角色 · WASD 移动 · Shift 奔跑 · M 地图 · 空格跳 · C 蹲 · 低头看身体 · 右键锁定视角" : fpLookLocked ? "观察视角已锁定 · 再点右键或 Esc 解除" : "WASD 移动 · Shift 奔跑 · M 地图 · 空格跳 · C 点按蹲 · 长按匍匐 · 滚轮缩放 · 右键锁定视角" : "观察：在房间走动看角色。角色视角：以角色头部为镜头，身体跟随转向。左侧发光门为出门。"
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FpFovSlider, {}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FpLookSlider, {}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(MirrorResSlider, {}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FpBreastJiggleSlider, {}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+					type: "button",
+					onClick: () => setShowCollision(!showCollision),
+					className: cn("mb-3 inline-flex h-9 w-full items-center justify-center gap-1.5 rounded-md border text-xs font-medium", showCollision ? "border-accent bg-accent/80 text-accent-fg" : "border-border/40 bg-surface/30 text-muted hover:text-fg"),
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Box, { className: "size-3.5" }), showCollision ? "碰撞箱 · 开" : "显示碰撞箱"]
+				}),
 				firstPerson ? null : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 						className: "mb-1.5 text-xs text-muted",
@@ -6580,12 +7230,67 @@ function CameraMenu({ onClose }) {
 		})]
 	});
 }
+function CityMapPanel() {
+	const open = useStudio((s) => s.cityMapOpen);
+	const marker = useStudio((s) => s.cityMapMarker);
+	const setOpen = useStudio((s) => s.setCityMapOpen);
+	const setMarker = useStudio((s) => s.setCityMapMarker);
+	const warpFp = useStudio((s) => s.warpFp);
+	const height = useStudio((s) => s.cityMapHeight);
+	if (!open) return null;
+	const teleport = () => {
+		if (!marker) return;
+		const y = citySurfaceAt(marker.x, marker.z);
+		warpFp(marker.x, y, marker.z);
+	};
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		className: "pointer-events-none absolute inset-0 z-40",
+		children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			className: "pointer-events-auto absolute top-16 right-4 left-4 mx-auto flex max-w-lg items-center justify-between gap-3 rounded-xl border border-border/50 bg-surface/70 px-4 py-3 backdrop-blur-[2px] sm:top-6",
+			style: { marginTop: "env(safe-area-inset-top)" },
+			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "font-display text-lg tracking-display",
+				children: "城市俯视"
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "mt-0.5 text-[11px] text-muted",
+				children: "拖动平移 · 滚轮 / 侧栏缩放 · 点击选点 · M / Esc 关闭"
+			})] }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+				type: "button",
+				className: "inline-flex h-9 items-center rounded-md border border-border px-3 text-xs font-medium text-muted hover:text-fg",
+				onClick: () => setOpen(false),
+				children: "关闭"
+			})]
+		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			className: "pointer-events-auto absolute right-4 bottom-4 left-4 mx-auto flex max-w-lg flex-wrap items-center justify-between gap-2 rounded-xl border border-border/50 bg-surface/70 px-4 py-3 backdrop-blur-[2px]",
+			style: { marginBottom: "env(safe-area-inset-bottom)" },
+			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+				className: "text-[11px] tabular-nums text-muted",
+				children: marker ? `光标 ${marker.x.toFixed(1)} , ${marker.z.toFixed(1)} · 高度 ${Math.round(height)}m` : `点击地面选择传送点 · 高度 ${Math.round(height)}m`
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "flex items-center gap-2",
+				children: [marker ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					onClick: () => setMarker(null),
+					className: "inline-flex h-11 items-center rounded-md border border-border px-3 text-xs font-medium text-muted hover:text-fg",
+					children: "清除"
+				}) : null, /* @__PURE__ */ (0, import_jsx_runtime.jsx)("button", {
+					type: "button",
+					disabled: !marker,
+					onClick: teleport,
+					className: "inline-flex h-11 min-w-28 items-center justify-center rounded-md bg-accent px-4 text-sm font-medium text-accent-fg disabled:opacity-40",
+					children: "传送"
+				})]
+			})]
+		})]
+	});
+}
 function FirstPersonHud() {
 	const firstPerson = useStudio((s) => s.firstPerson);
 	const fpView = useStudio((s) => s.fpView);
 	const lookLocked = useStudio((s) => s.fpLookLocked);
 	const crouch = useStudio((s) => s.fpCrouch);
 	const prone = useStudio((s) => s.fpProne);
+	const cityMapOpen = useStudio((s) => s.cityMapOpen);
 	const setFpStick = useStudio((s) => s.setFpStick);
 	const setFpCrouchHeld = useStudio((s) => s.setFpCrouchHeld);
 	const tapFpJump = useStudio((s) => s.tapFpJump);
@@ -6623,7 +7328,10 @@ function FirstPersonHud() {
 		setFpStick,
 		setFpCrouchHeld
 	]);
-	if (!firstPerson) return null;
+	if (!firstPerson) {
+		if (cityMapOpen) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(FpZoomBar, {});
+		return null;
+	}
 	const stickTo = (clientX, clientY) => {
 		const el = stickRef.current;
 		if (!el) return;
@@ -6669,27 +7377,27 @@ function FirstPersonHud() {
 	};
 	const btn = "pointer-events-auto inline-flex size-16 flex-col items-center justify-center gap-0.5 rounded-full border border-border/50 bg-surface/70 text-fg shadow-sm backdrop-blur-[2px] active:scale-[0.97]";
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-		/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		cityMapOpen ? null : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 			className: "pointer-events-none absolute top-1/2 left-1/2 z-20 size-4 -translate-x-1/2 -translate-y-1/2",
 			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "absolute top-1/2 left-0 h-px w-full bg-fg/70" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "absolute top-0 left-1/2 h-full w-px bg-fg/70" })]
 		}),
-		/* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+		cityMapOpen ? null : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 			className: "pointer-events-none absolute top-5 left-1/2 z-20 -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-2.5 py-0.5 text-[10px] tracking-wide text-muted",
 			children: fpView === "body" ? "角色视角" : "观察"
 		}),
-		portalHint ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+		cityMapOpen || !portalHint ? null : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 			className: "pointer-events-none absolute top-14 left-1/2 z-20 -translate-x-1/2 rounded-full border border-accent/50 bg-accent/80 px-3 py-1 text-[12px] font-medium text-accent-fg",
 			children: portalHint
-		}) : null,
+		}),
 		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FpZoomBar, {}),
-		lookLocked ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+		cityMapOpen ? null : lookLocked ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 			className: "pointer-events-none absolute bottom-6 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-3 py-1 text-[11px] text-muted sm:block",
 			children: "右键解除视角锁定"
 		}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 			className: "pointer-events-none absolute bottom-6 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-3 py-1 text-[11px] text-muted sm:block",
-			children: prone ? "匍匐中 · 点按 C 起身 · 长按取消匍匐" : crouch ? "下蹲中 · C 起身 · 长按匍匐" : "右键锁定视角 · WASD 移动 · Shift 奔跑 · C 点按蹲 · 长按匍匐"
+			children: prone ? "匍匐中 · 点按 C 起身 · 长按取消匍匐" : crouch ? "下蹲中 · C 起身 · 长按匍匐" : "右键锁定视角 · WASD 移动 · Shift 奔跑 · M 地图 · C 点按蹲 · 长按匍匐"
 		}),
-		touchUi ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		cityMapOpen || !touchUi ? null : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 			ref: stickRef,
 			className: cn("pointer-events-auto absolute bottom-8 left-5 z-20 grid size-32 place-items-center touch-none rounded-full border backdrop-blur-[2px]", knob.mag >= .72 ? "border-accent bg-accent/25" : "border-border/50 bg-surface/45"),
 			style: { marginBottom: "env(safe-area-inset-bottom)" },
@@ -6756,7 +7464,7 @@ function FirstPersonHud() {
 					})]
 				})
 			]
-		})] }) : null
+		})] })
 	] });
 }
 function FpFovSlider() {
@@ -6870,8 +7578,13 @@ function FpBreastJiggleSlider() {
 function FpZoomBar() {
 	const fpFov = useStudio((s) => s.fpFov);
 	const setFpFov = useStudio((s) => s.setFpFov);
+	const mapOpen = useStudio((s) => s.cityMapOpen);
+	const mapH = useStudio((s) => s.cityMapHeight);
+	const setMapH = useStudio((s) => s.setCityMapHeight);
 	const boxRef = (0, import_react.useRef)(null);
-	const zoom = 128 - fpFov;
+	const zoom = mapOpen ? CITY_MAP_H_MAX + 36 - mapH : 128 - fpFov;
+	const zMin = mapOpen ? 36 : 28;
+	const zMax = mapOpen ? CITY_MAP_H_MAX : 100;
 	(0, import_react.useEffect)(() => {
 		const el = boxRef.current;
 		if (!el) return;
@@ -6879,6 +7592,10 @@ function FpZoomBar() {
 			e.preventDefault();
 			const dy = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
 			const st = useStudio.getState();
+			if (st.cityMapOpen) {
+				st.setCityMapHeight(st.cityMapHeight * Math.exp(dy * .0016));
+				return;
+			}
 			st.setFpFov(st.fpFov + dy * .045);
 		};
 		el.addEventListener("wheel", onWheel, { passive: false });
@@ -6892,22 +7609,24 @@ function FpZoomBar() {
 			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)(Slider, {
 				orientation: "vertical",
 				value: [zoom],
-				min: 28,
-				max: 100,
-				step: 1,
+				min: zMin,
+				max: zMax,
+				step: mapOpen ? 2 : 1,
 				onValueChange: ([v]) => {
-					if (typeof v === "number") setFpFov(128 - v);
+					if (typeof v !== "number") return;
+					if (mapOpen) setMapH(CITY_MAP_H_MAX + 36 - v);
+					else setFpFov(128 - v);
 				},
 				className: "relative flex w-8 flex-1 touch-none flex-col items-center",
-				"aria-label": "第一人称缩放",
+				"aria-label": mapOpen ? "地图缩放" : "第一人称缩放",
 				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(SliderTrack, {
 					className: "relative w-1 grow rounded-full bg-surface-2/70",
 					children: /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SliderRange, { className: "absolute w-full rounded-full bg-accent" })
 				}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)(SliderThumb, { className: "block size-5 rounded-full bg-fg shadow-sm outline-none ring-2 ring-transparent focus-visible:ring-accent" })]
 			}),
-			/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+			/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 				className: "shrink-0 text-[10px] tabular-nums text-muted",
-				children: [Math.round(fpFov), "°"]
+				children: mapOpen ? `${Math.round(mapH)}m` : `${Math.round(fpFov)}°`
 			})
 		]
 	});
@@ -6947,7 +7666,7 @@ function Toggle({ active, onClick, icon, label }) {
 		children: [icon, label]
 	});
 }
-var Scene = (0, import_react.lazy)(() => import("./scene-HP9qxEtu.mjs"));
+var Scene = (0, import_react.lazy)(() => import("./scene-EGrwH2vi.mjs"));
 function StudioApp() {
 	const [mounted, setMounted] = (0, import_react.useState)(false);
 	(0, import_react.useEffect)(() => setMounted(true), []);
@@ -6973,4 +7692,4 @@ function Home() {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StudioApp, {});
 }
 //#endregion
-export { navelInsertMorph as a, SoftSkeleton as c, FpInput as i, isDancePose as l, loadCityModel as n, useStudio as o, CrouchHold as r, LOCO_POSES as s, routes_exports as t, isLocoPose as u };
+export { isLocoPose as C, isDancePose as S, getCitySpawn as _, navelInsertMorph as a, LOCO_POSES as b, HOME_EXIT as c, cityMoveCapsule as d, cityRayDown as f, getCityRuntime as g, getCityDebugAabbs as h, FpInput as i, HOME_RETURN_SPAWN as l, citySurfaceAt as m, loadCityModel as n, useStudio as o, cityRayPick as p, CrouchHold as r, routes_exports as t, bakeCityCollision as u, nearCityPortal as v, SoftSkeleton as x, nearHomeExit as y };
