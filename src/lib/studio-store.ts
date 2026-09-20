@@ -4,6 +4,8 @@ import type { ExpressionId, HandGesture, HandSide, PoseId } from "@/lib/softbody
 import type { FpViewMode } from "@/lib/fp-pose";
 
 export type WorldId = "home" | "city";
+export type VehicleCam = "third" | "first";
+export type VehicleKind = "car" | "plane";
 
 export type PresetId = "soft" | "firm" | "jelly" | "athletic";
 export type InteractMode = "drag" | "pose" | "strike" | "fist" | "bayonet" | "navel";
@@ -407,6 +409,18 @@ type StudioState = StudioParams & {
   fpWarpX: number;
   fpWarpY: number;
   fpWarpZ: number;
+  inVehicle: boolean;
+  vehicleKind: VehicleKind | null;
+  vehicleSpeed: number;
+  vehicleThrust: number;
+  vehicleNitro: boolean;
+  vehicleAirborne: boolean;
+  vehicleGear: boolean;
+  vehicleCam: VehicleCam;
+  vehNitroHeld: boolean;
+  vehDriftHeld: boolean;
+  vehYawHeld: number;
+  vehThrustSlider: number | null;
   setParam: <K extends keyof StudioParams>(key: K, value: StudioParams[K]) => void;
   applyPreset: (id: PresetId) => void;
   setInteractMode: (mode: InteractMode) => void;
@@ -464,6 +478,12 @@ type StudioState = StudioParams & {
   setCityMapHeight: (v: number) => void;
   setShowCollision: (v: boolean) => void;
   warpFp: (x: number, y: number, z: number) => void;
+  setVehNitroHeld: (v: boolean) => void;
+  setVehDriftHeld: (v: boolean) => void;
+  setVehYawHeld: (v: number) => void;
+  setVehThrustSlider: (v: number | null) => void;
+  toggleVehicleCam: () => void;
+  setVehicleCam: (v: VehicleCam) => void;
   shake: () => void;
   fireStrike: (point?: [number, number, number] | null) => void;
   resetSim: () => void;
@@ -540,6 +560,18 @@ export const useStudio = create<StudioState>((set) => ({
   fpWarpX: 0,
   fpWarpY: 0,
   fpWarpZ: 0,
+  inVehicle: false,
+  vehicleKind: null,
+  vehicleSpeed: 0,
+  vehicleThrust: 0,
+  vehicleNitro: false,
+  vehicleAirborne: false,
+  vehicleGear: true,
+  vehicleCam: "third",
+  vehNitroHeld: false,
+  vehDriftHeld: false,
+  vehYawHeld: 0,
+  vehThrustSlider: null,
   setParam: (key, value) =>
     set((s) => ({
       ...s,
@@ -845,7 +877,19 @@ export const useStudio = create<StudioState>((set) => ({
     set({
       fpBreastJiggle: Math.max(FP_BREAST_JIGGLE_MIN, Math.min(FP_BREAST_JIGGLE_MAX, fpBreastJiggle)),
     }),
-  setWorldMap: (worldMap) => set({ worldMap, portalHint: "", cityMapOpen: false, cityMapMarker: null }),
+  setWorldMap: (worldMap) =>
+    set({
+      worldMap,
+      portalHint: "",
+      cityMapOpen: false,
+      cityMapMarker: null,
+      inVehicle: false,
+      vehicleKind: null,
+      vehNitroHeld: false,
+      vehDriftHeld: false,
+      vehYawHeld: 0,
+      vehThrustSlider: null,
+    }),
   setPortalHint: (portalHint) => set({ portalHint }),
   setCityMapOpen: (cityMapOpen) => set({ cityMapOpen }),
   setCityMapMarker: (cityMapMarker) => set({ cityMapMarker }),
@@ -856,6 +900,12 @@ export const useStudio = create<StudioState>((set) => ({
   setShowCollision: (showCollision) => set({ showCollision }),
   warpFp: (fpWarpX, fpWarpY, fpWarpZ) =>
     set((s) => ({ fpWarpNonce: s.fpWarpNonce + 1, fpWarpX, fpWarpY, fpWarpZ, cityMapOpen: false })),
+  setVehNitroHeld: (vehNitroHeld) => set({ vehNitroHeld }),
+  setVehDriftHeld: (vehDriftHeld) => set({ vehDriftHeld }),
+  setVehYawHeld: (vehYawHeld) => set({ vehYawHeld: Math.max(-1, Math.min(1, vehYawHeld)) }),
+  setVehThrustSlider: (vehThrustSlider) => set({ vehThrustSlider }),
+  toggleVehicleCam: () => set((s) => ({ vehicleCam: s.vehicleCam === "first" ? "third" : "first" })),
+  setVehicleCam: (vehicleCam) => set({ vehicleCam }),
   shake: () => set((s) => ({ shakeNonce: s.shakeNonce + 1 })),
   fireStrike: (point = null) =>
     set((s) => ({ strikeNonce: s.strikeNonce + 1, strikePoint: point ?? null })),

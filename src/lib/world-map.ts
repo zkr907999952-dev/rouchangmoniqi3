@@ -4,7 +4,7 @@ import { MeshBVH } from "three-mesh-bvh";
 export const CITY_URL = "/models/city.glb";
 export const CITY_BYTES = 8_037_544;
 export const CITY_SCALE = 1;
-export const CITY_BAKE_ID = "house-v10";
+export const CITY_BAKE_ID = "house-v11";
 
 export const HOME_EXIT = { x: -3.58, y: 0, z: 0.12, r: 0.92 };
 export const HOME_RETURN_SPAWN = { x: -1.22, y: 0, z: 0.12, yaw: -Math.PI / 2, pitch: -0.08 };
@@ -49,6 +49,7 @@ type CityRuntime = {
   probeY: number | null;
   sampleV: number[];
   sampleBB: number[];
+  landmarks: Record<string, Aabb>;
 };
 
 const CELL = 16;
@@ -78,6 +79,7 @@ const city: CityRuntime = {
   probeY: null,
   sampleV: [],
   sampleBB: [],
+  landmarks: {},
 };
 
 export function getCityRuntime() {
@@ -162,6 +164,7 @@ function disposeColliders() {
   }
   city.colliders = [];
   city.hash = new Map();
+  city.landmarks = {};
 }
 
 const _tv = new THREE.Vector3();
@@ -342,6 +345,7 @@ export function bakeCityCollision(root: THREE.Group) {
   gatherColliders(sx - 3, sx + 3, sz - 3, sz + 3, _query);
   city.probeN = _query.length;
   city.probeY = cityRayDown(sx, city.maxY + 80, sz, city.maxY + 220);
+  captureLandmarks(root);
 }
 
 const _ray = new THREE.Ray();
@@ -459,6 +463,30 @@ export function cityRayPick(
   direction: THREE.Vector3,
   maxDist = 4000,
 ): { x: number; y: number; z: number } | null {
+  const hit = cityRayHit(origin, direction, maxDist);
+  if (!hit) return null;
+  return { x: hit.x, y: hit.y, z: hit.z };
+}
+
+export type CityRayHit = {
+  x: number;
+  y: number;
+  z: number;
+  nx: number;
+  ny: number;
+  nz: number;
+  dist: number;
+};
+
+const _hitN = new THREE.Vector3();
+const _faceN = new THREE.Vector3();
+
+/** MeshBVH raycast with world-space contact normal facing the incoming ray. */
+export function cityRayHit(
+  origin: THREE.Vector3,
+  direction: THREE.Vector3,
+  maxDist = 4000,
+): CityRayHit | null {
   if (!city.ready || !city.colliders.length) return null;
   _dirN.copy(direction);
   if (_dirN.lengthSq() < 1e-10) return null;
@@ -473,7 +501,7 @@ export function cityRayPick(
     _query,
   );
   let best = maxDist + 1;
-  let point: { x: number; y: number; z: number } | null = null;
+  let point: CityRayHit | null = null;
   for (const col of _query) {
     const s = prepareRay(col, origin, _dirN);
     const far = col.world ? maxDist : maxDist / s;
@@ -482,11 +510,24 @@ export function cityRayPick(
     hitToWorld(col, hit, origin, _dirN, s);
     const distW = origin.distanceTo(_hitP);
     if (distW > maxDist || distW >= best) continue;
+    if (hit.face) {
+      _faceN.copy(hit.face.normal);
+    } else if ((hit as THREE.Intersection).normal) {
+      _faceN.copy((hit as THREE.Intersection).normal!);
+    } else {
+      _faceN.copy(_dirN).negate();
+    }
+    if (col.world) _hitN.copy(_faceN);
+    else _hitN.copy(_faceN).transformDirection(col.mesh.matrixWorld);
+    if (_hitN.lengthSq() < 1e-10) _hitN.copy(_dirN).negate();
+    else _hitN.normalize();
+    if (_hitN.dot(_dirN) > 0) _hitN.negate();
     best = distW;
-    point = { x: _hitP.x, y: _hitP.y, z: _hitP.z };
+    point = { x: _hitP.x, y: _hitP.y, z: _hitP.z, nx: _hitN.x, ny: _hitN.y, nz: _hitN.z, dist: distW };
   }
   return point;
 }
+
 
 const _seg = new THREE.Line3();
 const _box = new THREE.Box3();
@@ -657,4 +698,94 @@ export function nearCityPortal(x: number, z: number) {
   const dz = z - city.portal.z;
   const r = city.portal.r;
   return dx * dx + dz * dz <= r * r;
+}
+
+const LANDMARK_RE =
+  /^(AirPort|AirPort_Track|Airport_Front|AirPort_Border|Boulevard_Ground[A-D]|Docks_Ground|Island_Ground|Miami_Ground)/;
+
+function captureLandmarks(root: THREE.Group) {
+  city.landmarks = {};
+  const box = new THREE.Box3();
+  root.traverse((obj) => {
+    if (!LANDMARK_RE.test(obj.name)) return;
+    box.setFromObject(obj);
+    if (box.isEmpty() || !Number.isFinite(box.min.x)) return;
+    city.landmarks[obj.name] = {
+      minX: box.min.x,
+      minY: box.min.y,
+      minZ: box.min.z,
+      maxX: box.max.x,
+      maxY: box.max.y,
+      maxZ: box.max.z,
+    };
+  });
+}
+
+export function getCityLandmark(name: string): Aabb | null {
+  return city.landmarks[name] ?? null;
+}
+
+export function getAirportSpawn(): { x: number; y: number; z: number; yaw: number } | null {
+  const track = city.landmarks.AirPort_Track ?? city.landmarks.Airport_Front ?? city.landmarks.AirPort;
+  const hangar = city.landmarks.AirPort ?? city.landmarks.Airport_Front;
+  if (!track) return null;
+  const alongX = track.maxX - track.minX > track.maxZ - track.minZ;
+  const hx = hangar ? (hangar.minX + hangar.maxX) * 0.5 : (track.minX + track.maxX) * 0.5;
+  const hz = hangar ? (hangar.minZ + hangar.maxZ) * 0.5 : (track.minZ + track.maxZ) * 0.5;
+  let best: { x: number; y: number; z: number; yaw: number } | null = null;
+  let bestScore = -1e9;
+  const n = 18;
+  for (let i = 0; i < n; i++) {
+    const u = (i + 0.35) / n;
+    const x = alongX
+      ? THREE.MathUtils.lerp(track.minX + 14, track.maxX - 14, u)
+      : THREE.MathUtils.clamp(hx + (i % 2 === 0 ? 18 : -18), track.minX + 10, track.maxX - 10);
+    const z = alongX
+      ? THREE.MathUtils.clamp(hz + (i % 2 === 0 ? 18 : -18), track.minZ + 10, track.maxZ - 10)
+      : THREE.MathUtils.lerp(track.minZ + 14, track.maxZ - 14, u);
+    if (
+      hangar &&
+      x > hangar.minX + 6 &&
+      x < hangar.maxX - 6 &&
+      z > hangar.minZ + 6 &&
+      z < hangar.maxZ - 6
+    ) {
+      continue;
+    }
+    const y = cityLowestSurface(x, z, -2, 10);
+    if (!(Number.isFinite(y) && y > -0.4 && y < 3.4)) continue;
+    const dH = Math.hypot(x - hx, z - hz);
+    const score = -dH * 0.35 + (y < 1.6 ? 24 : 0) + (dH > 16 && dH < 70 ? 12 : 0);
+    if (score > bestScore) {
+      bestScore = score;
+      const yaw = alongX ? (x >= hx ? -Math.PI / 2 : Math.PI / 2) : z >= hz ? Math.PI : 0;
+      best = { x, y, z, yaw };
+    }
+  }
+  if (best) return best;
+  const x = THREE.MathUtils.clamp((track.minX + track.maxX) * 0.5, track.minX + 8, track.maxX - 8);
+  const z = THREE.MathUtils.clamp((track.minZ + track.maxZ) * 0.5, track.minZ + 8, track.maxZ - 8);
+  return { x, y: cityLowestSurface(x, z, -2, 12), z, yaw: alongX ? -Math.PI / 2 : 0 };
+}
+
+export function sampleRoadPoints(count: number, avoid: { x: number; z: number; r: number }[]): { x: number; y: number; z: number; yaw: number }[] {
+  const grounds = Object.entries(city.landmarks).filter(([n]) => /^(Boulevard_Ground|Docks_Ground|Island_Ground|AirPort_Track)/.test(n));
+  const out: { x: number; y: number; z: number; yaw: number }[] = [];
+  if (!grounds.length) return out;
+  let guard = 0;
+  while (out.length < count && guard < count * 36) {
+    guard++;
+    const pair = grounds[guard % grounds.length]!;
+    const b = pair[1];
+    const pad = 8;
+    const x = THREE.MathUtils.lerp(b.minX + pad, b.maxX - pad, Math.abs(Math.sin(guard * 12.9898 + 0.37 + out.length * 1.7)));
+    const z = THREE.MathUtils.lerp(b.minZ + pad, b.maxZ - pad, Math.abs(Math.sin(guard * 78.233 + 1.11 + out.length * 2.3)));
+    if (avoid.some((a) => (x - a.x) ** 2 + (z - a.z) ** 2 < a.r * a.r)) continue;
+    if (out.some((p) => (x - p.x) ** 2 + (z - p.z) ** 2 < 14 * 14)) continue;
+    const y = cityLowestSurface(x, z, 0.02, 2.6);
+    if (!(y > 0.04 && y < 2.2)) continue;
+    const alongX = b.maxX - b.minX > b.maxZ - b.minZ;
+    out.push({ x, y, z, yaw: alongX ? -Math.PI / 2 : 0 });
+  }
+  return out;
 }

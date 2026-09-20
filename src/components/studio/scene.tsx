@@ -5,10 +5,22 @@ import * as THREE from "three";
 import { Reflector } from "three/examples/jsm/objects/Reflector.js";
 import type { OrbitControls as OrbitControlsImpl } from "three-stdlib";
 import { Figure } from "./figure";
+import { VehicleWorld } from "./vehicles";
 import { useStudio, type CamFocus } from "@/lib/studio-store";
 import { CrouchHold, FpInput } from "@/lib/fp-control";
 import { fpLive } from "@/lib/fp-pose";
 import { loadCityModel } from "@/lib/load-models";
+import {
+  approachVehicle,
+  getOccupied,
+  pushPlayerFromVehicles,
+  resetVehicles,
+  stepVehicles,
+  tryEnterVehicle,
+  tryExitVehicle,
+  vehicleHintAt,
+  vehLive,
+} from "@/lib/vehicle-sim";
 import {
   bakeCityCollision,
   cityMoveCapsule,
@@ -70,6 +82,7 @@ export default function Scene({
         <Suspense fallback={null}>
           <Bedroom room={room} />
           <CityWorld />
+          <VehicleWorld />
           <CityMapBake />
           <CityMapRig />
           <CityMapGizmos />
@@ -631,6 +644,9 @@ const _fpUp = new THREE.Vector3();
 const _fpZ = new THREE.Vector3();
 const _fpMat = new THREE.Matrix4();
 const _camHit = new THREE.Vector3();
+const _vehQ = new THREE.Quaternion();
+const _lookQ = new THREE.Quaternion();
+const _lookE = new THREE.Euler();
 
 function lookDirFromYawPitch(yaw: number, pitch: number, out: THREE.Vector3) {
   const cy = Math.cos(pitch);
@@ -743,7 +759,8 @@ function FirstPersonRig({
   } | null>(null);
   const lastJumpNonce = useRef(0);
   const lastInteractNonce = useRef(0);
-  const lastWarpNonce = useRef(0);
+  const lastWarpNonce = useRef(-1);
+  const lastVehCam = useRef<"first" | "third" | null>(null);
   const speedRef = useRef(0);
   const crouchGate = useRef<CrouchHold | null>(null);
   const wasFp = useRef(false);
@@ -753,7 +770,7 @@ function FirstPersonRig({
     const gate = new CrouchHold(
       () => {
         const s = useStudio.getState();
-        if (!s.firstPerson) return;
+        if (!s.firstPerson || s.inVehicle) return;
         if (s.fpProne) {
           s.setFpProne(false);
           s.setFpCrouch(false);
@@ -763,7 +780,7 @@ function FirstPersonRig({
       },
       () => {
         const s = useStudio.getState();
-        if (!s.firstPerson) return;
+        if (!s.firstPerson || s.inVehicle) return;
         s.setFpProne(!s.fpProne);
       },
     );
@@ -1030,8 +1047,8 @@ function FirstPersonRig({
 
   useEffect(() => {
     const probe = {
-      getYaw: () => yaw.current,
-      getPitch: () => pitch.current,
+      getYaw: () => (vehLive.inVehicle ? vehLive.yaw : yaw.current),
+      getPitch: () => (vehLive.inVehicle ? vehLive.pitch : pitch.current),
       setPitch: (v: number) => {
         pitch.current = THREE.MathUtils.clamp(v, -FP_PITCH_LIM, FP_PITCH_LIM);
       },
@@ -1046,7 +1063,8 @@ function FirstPersonRig({
         pitch.current -= dy * sens;
         pitch.current = THREE.MathUtils.clamp(pitch.current, -FP_PITCH_LIM, FP_PITCH_LIM);
       },
-      getSpeed: () => speedRef.current,
+      getSpeed: () => (vehLive.inVehicle ? Math.abs(vehLive.speed) : speedRef.current),
+      getRoll: () => vehLive.roll,
       getSprinting: () => fpLive.sprinting,
       getPos: () => pos.current.toArray() as [number, number, number],
       getEye: () => eye.current,
@@ -1066,6 +1084,7 @@ function FirstPersonRig({
         near: (camera as THREE.PerspectiveCamera).near,
         aspect: (camera as THREE.PerspectiveCamera).aspect,
         quat: camera.quaternion.toArray(),
+        camPos: camera.position.toArray(),
         canvas: [gl.domElement.width, gl.domElement.height, gl.domElement.clientWidth, gl.domElement.clientHeight],
         tri: gl.info.render.triangles,
         calls: gl.info.render.calls,
@@ -1086,6 +1105,21 @@ function FirstPersonRig({
         colNear: getCityDebugAabbs(pos.current.x, pos.current.z, 24, 4),
         citySpawn: getCityRuntime().spawn,
         cityMinY: getCityRuntime().minY,
+        inVehicle: vehLive.inVehicle,
+        vehicleCam: useStudio.getState().vehicleCam,
+        vehId: vehLive.id,
+        vehKind: vehLive.kind,
+        vehSpeed: vehLive.speed,
+        vehYaw: vehLive.yaw,
+        vehPitch: vehLive.pitch,
+        vehRoll: vehLive.roll,
+        vehPos: [vehLive.x, vehLive.y, vehLive.z],
+        vehEye: [vehLive.eyeX, vehLive.eyeY, vehLive.eyeZ],
+        vehSteer: vehLive.steerIn,
+        vehSteerAngle: getOccupied()?.steerAngle ?? 0,
+        vehN: vehLive.vehicles.length,
+        vehReady: vehLive.ready,
+        vehicles: vehLive.vehicles.map((v) => ({ id: v.id, kind: v.kind, x: v.x, y: v.y, z: v.z, yaw: v.yaw, speed: v.speed })),
         cityVis: (() => {
           const rt = getCityRuntime();
           const g = rt.group;
@@ -1133,6 +1167,12 @@ function FirstPersonRig({
       interact: () => {
         window.dispatchEvent(new Event("studio-fp-interact"));
       },
+      warpToVehicle: (kind?: "car" | "plane") => {
+        const p = approachVehicle(kind);
+        if (!p) return null;
+        useStudio.getState().warpFp(p.x, p.y, p.z);
+        return p;
+      },
     };
     window.__controlsTest = probe;
     return () => {
@@ -1143,15 +1183,19 @@ function FirstPersonRig({
   useFrame((_, dt) => {
     const st = useStudio.getState();
     if (st.fpWarpNonce !== lastWarpNonce.current) {
+      const boot = lastWarpNonce.current < 0;
       lastWarpNonce.current = st.fpWarpNonce;
-      pos.current.set(st.fpWarpX, st.fpWarpY, st.fpWarpZ);
-      velX.current = 0;
-      velY.current = 0;
-      velZ.current = 0;
-      grounded.current = true;
-      fpLive.x = st.fpWarpX;
-      fpLive.y = st.fpWarpY;
-      fpLive.z = st.fpWarpZ;
+      if (vehLive.inVehicle && !boot) resetVehicles();
+      if (!vehLive.inVehicle) {
+        pos.current.set(st.fpWarpX, st.fpWarpY, st.fpWarpZ);
+        velX.current = 0;
+        velY.current = 0;
+        velZ.current = 0;
+        grounded.current = true;
+        fpLive.x = st.fpWarpX;
+        fpLive.y = st.fpWarpY;
+        fpLive.z = st.fpWarpZ;
+      }
     }
     if (!firstPerson) return;
     const d = Math.min(0.05, Math.max(0.001, dt));
@@ -1165,15 +1209,66 @@ function FirstPersonRig({
       if (!mapOpen) input.current.jumpTap = true;
     }
     const act = input.current.poll();
-    crouchGate.current?.setHeld(act.crouchHeld);
     const live = useStudio.getState();
+    const inVeh = live.inVehicle || vehLive.inVehicle;
+    if (!inVeh) crouchGate.current?.setHeld(act.crouchHeld);
+    else crouchGate.current?.setHeld(false);
     const crouched = live.fpCrouch;
     const prone = live.fpProne;
     if (st.fpInteractNonce !== lastInteractNonce.current) {
       lastInteractNonce.current = st.fpInteractNonce;
       window.dispatchEvent(new Event("studio-fp-interact"));
-    } else if (act.interact && !mapOpen) {
-      window.dispatchEvent(new Event("studio-fp-interact"));
+    } else if (!mapOpen) {
+      if (inVeh ? act.interactF : act.interact) {
+        window.dispatchEvent(new Event("studio-fp-interact"));
+      }
+    }
+
+    if (vehLive.ready && live.worldMap === "city") {
+      stepVehicles(d, {
+        throttle: inVeh ? act.moveY : 0,
+        steer: inVeh ? -act.moveX : 0,
+        pitch: inVeh ? -act.moveY : 0,
+        roll: inVeh ? -act.moveX : 0,
+        yaw: inVeh ? (act.qHeld ? 1 : 0) + live.vehYawHeld + (act.eHeld ? -1 : 0) : 0,
+        nitro: inVeh && (act.sprint || live.vehNitroHeld),
+        handbrake: inVeh && (act.spaceHeld || live.vehDriftHeld),
+        thrustUp: inVeh && (act.sprint || live.vehNitroHeld),
+        thrustDown: inVeh && act.cHeld,
+        thrustSlider: inVeh ? live.vehThrustSlider : null,
+        mapOpen,
+      });
+    }
+    if (inVeh) {
+      const v = getOccupied();
+      if (vehLive.snapYaw != null) {
+        yaw.current = vehLive.snapYaw;
+        pitch.current = live.vehicleCam === "first" ? 0 : -0.18;
+        vehLive.snapYaw = null;
+      }
+      if (v) {
+        pos.current.set(v.x, v.y, v.z);
+        speedRef.current = Math.abs(v.speed);
+      }
+      fpLive.active = true;
+      fpLive.view = body ? "body" : "observe";
+      fpLive.x = pos.current.x;
+      fpLive.y = pos.current.y;
+      fpLive.z = pos.current.z;
+      fpLive.yaw = yaw.current;
+      fpLive.pitch = pitch.current;
+      fpLive.crouched = false;
+      fpLive.prone = false;
+      fpLive.moveFwd = 0;
+      fpLive.moveSide = 0;
+      fpLive.speedMps = speedRef.current;
+      fpLive.stepDist = 0;
+      fpLive.grounded = v ? !v.airborne : true;
+      fpLive.velY = v?.vy ?? 0;
+      fpLive.sprinting = false;
+      if (v?.airborne) fpLive.airTime += d;
+      else fpLive.airTime = 0;
+      return;
     }
 
     const wantEye = prone ? FP_PRONE : crouched ? FP_CROUCH : FP_STAND;
@@ -1359,6 +1454,12 @@ function FirstPersonRig({
       pos.current.z = z;
     }
 
+    if (cityOn) {
+      const pushed = pushPlayerFromVehicles(pos.current.x, pos.current.y, pos.current.z, capR);
+      pos.current.x = pushed.x;
+      pos.current.z = pushed.z;
+    }
+
     const stepDist = Math.hypot(pos.current.x - prevX, pos.current.z - prevZ);
     speedRef.current = Math.hypot(velX.current, velZ.current);
 
@@ -1390,10 +1491,136 @@ function FirstPersonRig({
     else fpLive.airTime += d;
   }, -1);
 
-  useFrame(() => {
+  useFrame((_, dt) => {
     if (!firstPerson) return;
     const st = useStudio.getState();
     if (st.cityMapOpen) return;
+    const inVeh = st.inVehicle || vehLive.inVehicle;
+    const v = inVeh ? getOccupied() : null;
+    if (v) {
+      const d = Math.min(0.05, Math.max(0.001, dt));
+      const firstCam = st.vehicleCam === "first";
+      if (lastVehCam.current !== st.vehicleCam) {
+        lastVehCam.current = st.vehicleCam;
+        if (firstCam) pitch.current = v.kind === "plane" ? 0.12 : 0.02;
+        else pitch.current = -0.18;
+        yaw.current = v.yaw;
+      }
+      const fx = v.fx;
+      const fy = v.fy;
+      const fz = v.fz;
+      const ux = v.ux;
+      const uy = v.uy;
+      const uz = v.uz;
+      const rx = v.rx;
+      const ry = v.ry;
+      const rz = v.rz;
+      const accelerating = v.kind === "plane" ? v.thrust > 0.28 : v.speed > 5 && Math.abs(v.lat) < 8;
+      if (accelerating) {
+        const dyaw = Math.atan2(Math.sin(v.yaw - yaw.current), Math.cos(v.yaw - yaw.current));
+        yaw.current += dyaw * (1 - Math.exp(-2.1 * d));
+        if (!firstCam) {
+          const wantPitch = v.kind === "plane" ? -0.12 : -0.18;
+          pitch.current += (wantPitch - pitch.current) * (1 - Math.exp(-1.4 * d));
+        }
+      }
+      const persp = camera as THREE.PerspectiveCamera;
+      const kick = Math.min(18, Math.abs(v.speed) * 0.12 + v.nitro * 8);
+      if (firstCam) {
+        pitch.current = THREE.MathUtils.clamp(pitch.current, -0.55, 0.42);
+        if (pitch.current < -0.22) pitch.current += (0.0 - pitch.current) * (1 - Math.exp(-10 * d));
+        const camX = v.x + rx * v.eyeX + ux * v.eyeY - fx * v.eyeZ;
+        const camY = v.y + ry * v.eyeX + uy * v.eyeY - fy * v.eyeZ;
+        const camZ = v.z + rz * v.eyeX + uz * v.eyeY - fz * v.eyeZ;
+        camera.position.set(camX, camY, camZ);
+        _vehQ.set(v.qx, v.qy, v.qz, v.qw);
+        const dyaw = Math.atan2(Math.sin(yaw.current - v.yaw), Math.cos(yaw.current - v.yaw));
+        _lookE.set(-pitch.current, dyaw, 0, "YXZ");
+        _lookQ.setFromEuler(_lookE);
+        camera.quaternion.copy(_vehQ).multiply(_lookQ);
+        const fov = Math.min(82, st.fpFov + kick * 0.45);
+        const near = 0.06;
+        const far = 2400;
+        if (persp.fov !== fov || persp.near !== near || persp.far !== far) {
+          persp.fov = fov;
+          persp.near = near;
+          persp.far = far;
+          persp.updateProjectionMatrix();
+        }
+        const c = controlsRef.current;
+        if (c) {
+          c.target.set(v.x + fx * 6, camY, v.z + fz * 6);
+          c.enabled = false;
+        }
+        return;
+      }
+      pitch.current = THREE.MathUtils.clamp(pitch.current, -1.15, -0.04);
+      const dist = vehLive.camDist;
+      const height = vehLive.camHeight;
+      const lookAhead = v.kind === "plane" ? 14 : 5.5;
+      let camX: number;
+      let camY: number;
+      let camZ: number;
+      if (v.kind === "plane" && v.airborne) {
+        camX = v.x - fx * dist + ux * height * 0.55;
+        camY = v.y - fy * dist + uy * height * 0.55;
+        camZ = v.z - fz * dist + uz * height * 0.55;
+      } else {
+        const lookY = v.y + (v.kind === "plane" ? 0.4 : 0.55);
+        const cy = Math.cos(pitch.current);
+        const lx = -Math.sin(yaw.current) * cy;
+        const ly = Math.sin(pitch.current);
+        const lz = -Math.cos(yaw.current) * cy;
+        camX = v.x - lx * dist;
+        camY = lookY - ly * dist + height * 0.12;
+        camZ = v.z - lz * dist;
+        const gy = citySurfaceAt(camX, camZ);
+        if (camY < gy + 0.7) camY = gy + 0.7;
+        _camHit.set(v.x, lookY, v.z);
+        _fpZ.set(camX - v.x, camY - lookY, camZ - v.z);
+        const span = _fpZ.length();
+        if (span > 0.2) {
+          _fpZ.multiplyScalar(1 / span);
+          const hit = cityRayPick(_camHit, _fpZ, span);
+          if (hit) {
+            const hd = _camHit.distanceTo(_fpFwd.set(hit.x, hit.y, hit.z));
+            if (hd < span - 0.35) {
+              const t = Math.max(1.2, hd - 0.45);
+              camX = v.x + _fpZ.x * t;
+              camY = lookY + _fpZ.y * t;
+              camZ = v.z + _fpZ.z * t;
+            }
+          }
+        }
+      }
+      const k = 1 - Math.exp(-8.5 * d);
+      camera.position.x += (camX - camera.position.x) * k;
+      camera.position.y += (camY - camera.position.y) * k;
+      camera.position.z += (camZ - camera.position.z) * k;
+      const lookY = v.y + (v.kind === "plane" ? 0.35 : 0.55);
+      _fpFwd.set(v.x + fx * lookAhead - camera.position.x, lookY + fy * lookAhead + 0.2 - camera.position.y, v.z + fz * lookAhead - camera.position.z);
+      if (v.kind === "plane" && v.airborne) {
+        _fpFwd.set(v.x + fx * lookAhead - camera.position.x, v.y + fy * lookAhead + uy * 0.4 - camera.position.y, v.z + fz * lookAhead - camera.position.z);
+        applyLookDir(camera, _fpFwd, v.yaw);
+      } else {
+        applyLookDir(camera, _fpFwd, yaw.current);
+      }
+      const fov = Math.min(88, st.fpFov + kick);
+      const near = 0.45;
+      const far = 2400;
+      if (persp.fov !== fov || persp.near !== near || persp.far !== far) {
+        persp.fov = fov;
+        persp.near = near;
+        persp.far = far;
+        persp.updateProjectionMatrix();
+      }
+      const c = controlsRef.current;
+      if (c) {
+        c.target.set(v.x, lookY, v.z);
+        c.enabled = false;
+      }
+      return;
+    }
     syncFpProjection(camera, st.worldMap, st.fpView, st.fpFov);
     const body = st.fpView === "body";
     const fx = -Math.sin(yaw.current);
@@ -1873,8 +2100,13 @@ function WorldGate() {
     const go = async () => {
       const s = useStudio.getState();
       if (!s.firstPerson || travelLock || s.loading) return;
+      if (s.inVehicle || vehLive.inVehicle) {
+        tryExitVehicle();
+        return;
+      }
       const x = fpLive.x;
       const z = fpLive.z;
+      if (s.worldMap === "city" && tryEnterVehicle(fpLive.x, fpLive.y, fpLive.z)) return;
       if (s.worldMap === "home" && nearHomeExit(x, z)) {
         travelLock = true;
         s.setFirstPerson(true, "body");
@@ -1903,6 +2135,7 @@ function WorldGate() {
         return;
       }
       if (s.worldMap === "city" && nearCityPortal(x, z)) {
+        resetVehicles();
         travelLock = true;
         useStudio.setState({ loading: true, loadError: null, loadProgress: 22, loadHint: "返回家中…" });
         s.setFirstPerson(true, "body");
@@ -1924,8 +2157,12 @@ function WorldGate() {
       return;
     }
     let hint = "";
-    if (s.worldMap === "home" && nearHomeExit(fpLive.x, fpLive.z)) hint = "按 E / 互动 出门";
-    else if (s.worldMap === "city" && nearCityPortal(fpLive.x, fpLive.z)) hint = "按 E / 互动 回家";
+    if (s.inVehicle || vehLive.inVehicle) hint = "";
+    else if (s.worldMap === "city") hint = vehicleHintAt(fpLive.x, fpLive.y, fpLive.z);
+    if (!hint) {
+      if (s.worldMap === "home" && nearHomeExit(fpLive.x, fpLive.z)) hint = "按 E / 互动 出门";
+      else if (s.worldMap === "city" && nearCityPortal(fpLive.x, fpLive.z)) hint = "按 E / 互动 回家";
+    }
     if (hint !== s.portalHint) s.setPortalHint(hint);
   });
   return null;
@@ -1965,7 +2202,7 @@ function BodyFillLight() {
   useFrame(() => {
     const l = ref.current;
     if (!l) return;
-    if (!on) {
+    if (!on || useStudio.getState().inVehicle) {
       l.intensity = 0;
       return;
     }

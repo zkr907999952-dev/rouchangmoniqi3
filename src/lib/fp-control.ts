@@ -6,7 +6,13 @@ export type FpActions = {
   jump: boolean;
   crouchHeld: boolean;
   interact: boolean;
+  interactF: boolean;
   sprint: boolean;
+  spaceHeld: boolean;
+  qHeld: boolean;
+  eHeld: boolean;
+  cHeld: boolean;
+  fHeld: boolean;
 };
 
 const GAME_CODES = new Set([
@@ -22,6 +28,7 @@ const GAME_CODES = new Set([
   "KeyC",
   "KeyE",
   "KeyF",
+  "KeyQ",
   "ShiftLeft",
   "ShiftRight",
 ]);
@@ -145,10 +152,12 @@ export class FpInput {
   private injected: string[] = [];
   private prevJump = false;
   private prevInteract = false;
+  private prevF = false;
 
   attach() {
     this.prevJump = false;
     this.prevInteract = false;
+    this.prevF = false;
     this.keys.clear();
     this.injected = [];
     const down = (e: KeyboardEvent) => {
@@ -218,8 +227,10 @@ export class FpInput {
     }
     const jumpHeld = this.jumpTap || held("Space");
     const jump = jumpHeld && !this.prevJump;
-    const interactHeld = this.interactTap || held("KeyE") || held("KeyF");
+    const fHeld = held("KeyF");
+    const interactHeld = this.interactTap || held("KeyE") || fHeld;
     const interact = interactHeld && !this.prevInteract;
+    const interactF = (this.interactTap || fHeld) && !this.prevF;
     const stickMag = Math.hypot(this.stickX, this.stickY);
     let padSprint = false;
     let padMag = 0;
@@ -235,6 +246,7 @@ export class FpInput {
       padMag >= 0.88;
     this.prevJump = jumpHeld;
     this.prevInteract = interactHeld;
+    this.prevF = this.interactTap || fHeld;
     this.jumpTap = false;
     this.interactTap = false;
     return {
@@ -243,7 +255,13 @@ export class FpInput {
       jump,
       crouchHeld: this.crouchHold || padCrouch || held("KeyC"),
       interact,
+      interactF,
       sprint,
+      spaceHeld: jumpHeld,
+      qHeld: held("KeyQ"),
+      eHeld: held("KeyE"),
+      cHeld: held("KeyC"),
+      fHeld,
     };
   }
 }
@@ -270,6 +288,8 @@ declare global {
       setFirstPerson?: (on: boolean, view?: "observe" | "body") => void;
       warp?: (x: number, y: number, z: number) => void;
       interact?: () => void;
+      warpToVehicle?: (kind?: "car" | "plane") => { x: number; y: number; z: number; id: string; kind: "car" | "plane" } | null;
+      getRoll?: () => number;
       getDebug?: () => Record<string, unknown>;
     };
   }

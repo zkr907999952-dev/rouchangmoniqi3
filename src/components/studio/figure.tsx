@@ -1738,7 +1738,8 @@ function FittedFigure({
       setup.skeleton.setPose(s.pose);
       jumpMenuT.current = 0;
     }
-    const bodyOn = s.firstPerson && s.fpView === "body";
+    setup.root.visible = !s.inVehicle;
+    const bodyOn = s.firstPerson && s.fpView === "body" && !s.inVehicle;
     if (bodyOn) {
       if (!bodyWasOn.current) {
         setup.skeleton.fpEyeLocal(eyeSmooth.current);

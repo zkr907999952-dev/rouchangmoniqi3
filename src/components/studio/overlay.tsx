@@ -36,6 +36,11 @@ import {
   User,
   Map,
   Home,
+  Flame,
+  LogOut,
+  Gauge,
+  ChevronsLeft,
+  ChevronsRight,
 } from "lucide-react";
 import * as Slider from "@radix-ui/react-slider";
 import { cn } from "@/lib/utils";
@@ -43,6 +48,7 @@ import { PRESETS, useStudio, type CamFocus, type PresetId, type StudioParams, FP
 import { ANIMATIONS, EXPRESSIONS, HAND_GESTURES, POSES } from "@/lib/softbody/soft-skeleton";
 import { STICK_SPRINT } from "@/lib/fp-control";
 import { CITY_MAP_H_MAX, CITY_MAP_H_MIN, citySurfaceAt, getCityRuntime } from "@/lib/world-map";
+import { PLANE_TAKEOFF_KMH } from "@/lib/vehicle-sim";
 import { fpLive } from "@/lib/fp-pose";
 
 const SLIDERS: {
@@ -221,6 +227,11 @@ export function Overlay() {
         useStudio.getState().setCityMapOpen(false);
         return;
       }
+      if (useStudio.getState().firstPerson && useStudio.getState().inVehicle && e.code === "KeyV") {
+        e.preventDefault();
+        useStudio.getState().toggleVehicleCam();
+        return;
+      }
       if (useStudio.getState().firstPerson) {
         if (
           e.code === "KeyW" ||
@@ -231,6 +242,7 @@ export function Overlay() {
           e.code === "KeyC" ||
           e.code === "KeyE" ||
           e.code === "KeyF" ||
+          e.code === "KeyQ" ||
           e.code.startsWith("Arrow")
         ) {
           return;
@@ -1947,12 +1959,26 @@ function FirstPersonHud() {
   const crouch = useStudio((s) => s.fpCrouch);
   const prone = useStudio((s) => s.fpProne);
   const cityMapOpen = useStudio((s) => s.cityMapOpen);
+  const inVehicle = useStudio((s) => s.inVehicle);
+  const vehicleKind = useStudio((s) => s.vehicleKind);
+  const vehicleSpeed = useStudio((s) => s.vehicleSpeed);
+  const vehicleThrust = useStudio((s) => s.vehicleThrust);
+  const vehicleNitro = useStudio((s) => s.vehicleNitro);
+  const vehicleAirborne = useStudio((s) => s.vehicleAirborne);
+  const vehicleCam = useStudio((s) => s.vehicleCam);
+  const toggleVehicleCam = useStudio((s) => s.toggleVehicleCam);
   const setFpStick = useStudio((s) => s.setFpStick);
   const setFpCrouchHeld = useStudio((s) => s.setFpCrouchHeld);
   const tapFpJump = useStudio((s) => s.tapFpJump);
   const tapFpInteract = useStudio((s) => s.tapFpInteract);
+  const setVehNitroHeld = useStudio((s) => s.setVehNitroHeld);
+  const setVehDriftHeld = useStudio((s) => s.setVehDriftHeld);
+  const setVehYawHeld = useStudio((s) => s.setVehYawHeld);
+  const setVehThrustSlider = useStudio((s) => s.setVehThrustSlider);
+  const vehThrustSlider = useStudio((s) => s.vehThrustSlider);
   const portalHint = useStudio((s) => s.portalHint);
   const stickRef = useRef<HTMLDivElement>(null);
+  const thrustRef = useRef<HTMLDivElement>(null);
   const [knob, setKnob] = useState({ x: 0, y: 0, mag: 0 });
   const [touchUi, setTouchUi] = useState(false);
   const pid = useRef<number | null>(null);
@@ -1974,6 +2000,15 @@ function FirstPersonHud() {
       setKnob({ x: 0, y: 0, mag: 0 });
     }
   }, [firstPerson, setFpStick, setFpCrouchHeld]);
+
+  useEffect(() => {
+    if (!inVehicle) {
+      setVehNitroHeld(false);
+      setVehDriftHeld(false);
+      setVehYawHeld(0);
+      setVehThrustSlider(null);
+    }
+  }, [inVehicle, setVehNitroHeld, setVehDriftHeld, setVehYawHeld, setVehThrustSlider]);
 
   if (!firstPerson) {
     if (cityMapOpen) return <FpZoomBar />;
@@ -2020,9 +2055,29 @@ function FirstPersonHud() {
   const btn =
     "pointer-events-auto inline-flex size-16 flex-col items-center justify-center gap-0.5 rounded-full border border-border/50 bg-surface/70 text-fg shadow-sm backdrop-blur-[2px] active:scale-[0.97]";
 
+  const setThrustFromY = (clientY: number) => {
+    const el = thrustRef.current;
+    if (!el) return;
+    const r = el.getBoundingClientRect();
+    const t = 1 - (clientY - r.top) / r.height;
+    setVehThrustSlider(Math.max(0, Math.min(1, t)));
+  };
+
+  const walkHint = prone
+    ? "匍匐中 · 点按 C 起身 · 长按取消匍匐"
+    : crouch
+      ? "下蹲中 · C 起身 · 长按匍匐"
+      : "右键锁定视角 · WASD 移动 · Shift 奔跑 · M 地图 · C 点按蹲 · 长按匍匐";
+  const vehHint =
+    vehicleKind === "plane"
+      ? vehicleAirborne
+        ? "Shift/C 推力 · W 推杆俯冲 · S 拉杆抬头 · A/D 滚转 · Q/E 偏航 · V 视角 · F 下车"
+        : "滑行中 · Shift/C 推力 · Q/E 转向 · 加速后拉杆(S)起飞 · V 视角 · F 下车"
+      : "W 加速 · S 刹车/倒车 · A/D 转向 · Shift 氮气 · 空格 手刹 · V 视角 · F 下车";
+
   return (
     <>
-      {cityMapOpen ? null : (
+      {cityMapOpen || inVehicle ? null : (
         <div className="pointer-events-none absolute top-1/2 left-1/2 z-20 size-4 -translate-x-1/2 -translate-y-1/2">
           <span className="absolute top-1/2 left-0 h-px w-full bg-fg/70" />
           <span className="absolute top-0 left-1/2 h-full w-px bg-fg/70" />
@@ -2030,13 +2085,35 @@ function FirstPersonHud() {
       )}
       {cityMapOpen ? null : (
         <p className="pointer-events-none absolute top-5 left-1/2 z-20 -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-2.5 py-0.5 text-[10px] tracking-wide text-muted">
-          {fpView === "body" ? "角色视角" : "观察"}
+          {inVehicle ? (vehicleKind === "plane" ? "驾驶 · 战机" : "驾驶 · 跑车") + (vehicleCam === "first" ? " · 第一人称" : " · 第三人称") : fpView === "body" ? "角色视角" : "观察"}
         </p>
       )}
-      {cityMapOpen || !portalHint ? null : (
+      {cityMapOpen || inVehicle ? null : !portalHint ? null : (
         <p className="pointer-events-none absolute top-14 left-1/2 z-20 -translate-x-1/2 rounded-full border border-accent/50 bg-accent/80 px-3 py-1 text-[12px] font-medium text-accent-fg">
           {portalHint}
         </p>
+      )}
+      {cityMapOpen || !inVehicle ? null : (
+        <div className="absolute top-14 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2">
+          <div className="pointer-events-none flex items-center gap-2 rounded-full border border-border/40 bg-surface/60 px-3 py-1 text-[11px] tabular-nums text-fg">
+            <Gauge className="size-3.5 text-muted" />
+            <span>{Math.round(vehicleSpeed)} km/h</span>
+            {vehicleKind === "plane" ? <span className="text-muted">推力 {Math.round(vehicleThrust * 100)}%</span> : null}
+            {vehicleNitro ? <span className="text-accent">氮气</span> : null}
+            {vehicleKind === "plane" && !vehicleAirborne && vehicleSpeed >= PLANE_TAKEOFF_KMH - 8 ? (
+              <span className="text-accent">拉杆起飞</span>
+            ) : null}
+          </div>
+          <button
+            type="button"
+            aria-label={vehicleCam === "first" ? "第三人称" : "第一人称"}
+            className="pointer-events-auto inline-flex h-8 items-center gap-1.5 rounded-full border border-border/50 bg-surface/75 px-2.5 text-[11px] font-medium text-fg backdrop-blur-[2px] hover:bg-surface"
+            onClick={() => toggleVehicleCam()}
+          >
+            <Camera className="size-3.5" />
+            {vehicleCam === "first" ? "第一人称" : "第三人称"}
+          </button>
+        </div>
       )}
       <FpZoomBar />
       {cityMapOpen ? null : lookLocked ? (
@@ -2045,11 +2122,7 @@ function FirstPersonHud() {
         </p>
       ) : (
         <p className="pointer-events-none absolute bottom-6 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-3 py-1 text-[11px] text-muted sm:block">
-          {prone
-            ? "匍匐中 · 点按 C 起身 · 长按取消匍匐"
-            : crouch
-              ? "下蹲中 · C 起身 · 长按匍匐"
-              : "右键锁定视角 · WASD 移动 · Shift 奔跑 · M 地图 · C 点按蹲 · 长按匍匐"}
+          {inVehicle ? vehHint : walkHint}
         </p>
       )}
       {cityMapOpen || !touchUi ? null : (
@@ -2058,7 +2131,7 @@ function FirstPersonHud() {
             ref={stickRef}
             className={cn(
               "pointer-events-auto absolute bottom-8 left-5 z-20 grid size-32 place-items-center touch-none rounded-full border backdrop-blur-[2px]",
-              knob.mag >= STICK_SPRINT
+              !inVehicle && knob.mag >= STICK_SPRINT
                 ? "border-accent bg-accent/25"
                 : "border-border/50 bg-surface/45",
             )}
@@ -2073,58 +2146,174 @@ function FirstPersonHud() {
             <span
               className={cn(
                 "pointer-events-none relative z-10 size-12 rounded-full shadow-sm",
-                knob.mag >= STICK_SPRINT ? "bg-accent" : "bg-accent/90",
+                !inVehicle && knob.mag >= STICK_SPRINT ? "bg-accent" : "bg-accent/90",
               )}
               style={{ transform: `translate(${knob.x}px, ${knob.y}px)` }}
             />
             <span className="pointer-events-none absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] tracking-wide text-muted">
-              {knob.mag >= STICK_SPRINT ? "奔跑" : "外圈奔跑"}
+              {inVehicle ? (vehicleKind === "plane" ? "后拉抬头 / 滚转" : "油门 / 转向") : knob.mag >= STICK_SPRINT ? "奔跑" : "外圈奔跑"}
             </span>
           </div>
-          <div
-            className="absolute right-5 z-20 flex flex-col gap-3"
-            style={{ bottom: "calc(2rem + env(safe-area-inset-bottom))" }}
-          >
-            <button
-              type="button"
-              aria-label="互动"
-              className={btn}
-              onPointerDown={(e) => {
-                e.preventDefault();
-                tapFpInteract();
-              }}
+          {inVehicle ? (
+            <div
+              className="absolute right-5 z-20 flex flex-col items-end gap-3"
+              style={{ bottom: "calc(2rem + env(safe-area-inset-bottom))" }}
             >
-              <Hand className="size-5" />
-              <span className="text-[10px] font-medium leading-none">互动</span>
-            </button>
-            <button
-              type="button"
-              aria-label={prone ? "匍匐" : "下蹲"}
-              className={cn(btn, crouch || prone ? "border-accent bg-accent text-accent-fg" : "")}
-              onPointerDown={(e) => {
-                e.preventDefault();
-                e.currentTarget.setPointerCapture(e.pointerId);
-                setFpCrouchHeld(true);
-              }}
-              onPointerUp={() => setFpCrouchHeld(false)}
-              onPointerCancel={() => setFpCrouchHeld(false)}
+              <button
+                type="button"
+                aria-label="下车"
+                className={btn}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  tapFpInteract();
+                }}
+              >
+                <LogOut className="size-5" />
+                <span className="text-[10px] font-medium leading-none">下车</span>
+              </button>
+              <button
+                type="button"
+                aria-label="切换视角"
+                className={btn}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  toggleVehicleCam();
+                }}
+              >
+                <Camera className="size-5" />
+                <span className="text-[10px] font-medium leading-none">{vehicleCam === "first" ? "第一人称" : "第三人称"}</span>
+              </button>
+              {vehicleKind === "plane" ? (
+                <>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      aria-label="左偏航"
+                      className={btn}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        setVehYawHeld(1);
+                      }}
+                      onPointerUp={() => setVehYawHeld(0)}
+                      onPointerCancel={() => setVehYawHeld(0)}
+                    >
+                      <ChevronsLeft className="size-5" />
+                      <span className="text-[10px] font-medium leading-none">Q</span>
+                    </button>
+                    <button
+                      type="button"
+                      aria-label="右偏航"
+                      className={btn}
+                      onPointerDown={(e) => {
+                        e.preventDefault();
+                        setVehYawHeld(-1);
+                      }}
+                      onPointerUp={() => setVehYawHeld(0)}
+                      onPointerCancel={() => setVehYawHeld(0)}
+                    >
+                      <ChevronsRight className="size-5" />
+                      <span className="text-[10px] font-medium leading-none">E</span>
+                    </button>
+                  </div>
+                  <div
+                    ref={thrustRef}
+                    className="pointer-events-auto relative h-36 w-11 touch-none rounded-full border border-border/50 bg-surface/55"
+                    onPointerDown={(e) => {
+                      e.currentTarget.setPointerCapture(e.pointerId);
+                      setThrustFromY(e.clientY);
+                    }}
+                    onPointerMove={(e) => {
+                      if (e.currentTarget.hasPointerCapture(e.pointerId)) setThrustFromY(e.clientY);
+                    }}
+                  >
+                    <span
+                      className="absolute right-0 bottom-0 left-0 rounded-full bg-accent/80"
+                      style={{ height: `${Math.round((vehThrustSlider ?? vehicleThrust) * 100)}%` }}
+                    />
+                    <span className="pointer-events-none absolute -left-8 top-1/2 -translate-y-1/2 text-[10px] text-muted">
+                      推力
+                    </span>
+                  </div>
+                </>
+              ) : (
+                <>
+                  <button
+                    type="button"
+                    aria-label="氮气"
+                    className={cn(btn, vehicleNitro ? "border-accent bg-accent text-accent-fg" : "")}
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      setVehNitroHeld(true);
+                    }}
+                    onPointerUp={() => setVehNitroHeld(false)}
+                    onPointerCancel={() => setVehNitroHeld(false)}
+                  >
+                    <Flame className="size-5" />
+                    <span className="text-[10px] font-medium leading-none">氮气</span>
+                  </button>
+                  <button
+                    type="button"
+                    aria-label="漂移"
+                    className={btn}
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      setVehDriftHeld(true);
+                    }}
+                    onPointerUp={() => setVehDriftHeld(false)}
+                    onPointerCancel={() => setVehDriftHeld(false)}
+                  >
+                    <Wind className="size-5" />
+                    <span className="text-[10px] font-medium leading-none">漂移</span>
+                  </button>
+                </>
+              )}
+            </div>
+          ) : (
+            <div
+              className="absolute right-5 z-20 flex flex-col gap-3"
+              style={{ bottom: "calc(2rem + env(safe-area-inset-bottom))" }}
             >
-              <ChevronsDown className="size-5" />
-              <span className="text-[10px] font-medium leading-none">{prone ? "匍匐" : "下蹲"}</span>
-            </button>
-            <button
-              type="button"
-              aria-label="跳跃"
-              className={btn}
-              onPointerDown={(e) => {
-                e.preventDefault();
-                tapFpJump();
-              }}
-            >
-              <ArrowUp className="size-5" />
-              <span className="text-[10px] font-medium leading-none">跳跃</span>
-            </button>
-          </div>
+              <button
+                type="button"
+                aria-label="互动"
+                className={btn}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  tapFpInteract();
+                }}
+              >
+                <Hand className="size-5" />
+                <span className="text-[10px] font-medium leading-none">互动</span>
+              </button>
+              <button
+                type="button"
+                aria-label={prone ? "匍匐" : "下蹲"}
+                className={cn(btn, crouch || prone ? "border-accent bg-accent text-accent-fg" : "")}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  setFpCrouchHeld(true);
+                }}
+                onPointerUp={() => setFpCrouchHeld(false)}
+                onPointerCancel={() => setFpCrouchHeld(false)}
+              >
+                <ChevronsDown className="size-5" />
+                <span className="text-[10px] font-medium leading-none">{prone ? "匍匐" : "下蹲"}</span>
+              </button>
+              <button
+                type="button"
+                aria-label="跳跃"
+                className={btn}
+                onPointerDown={(e) => {
+                  e.preventDefault();
+                  tapFpJump();
+                }}
+              >
+                <ArrowUp className="size-5" />
+                <span className="text-[10px] font-medium leading-none">跳跃</span>
+              </button>
+            </div>
+          )}
         </>
       )}
     </>

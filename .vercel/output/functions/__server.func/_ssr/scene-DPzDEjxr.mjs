@@ -3,8 +3,8 @@ import { a as require_jsx_runtime, o as require_react } from "../_libs/@radix-ui
 import { $ as MeshLambertMaterial, B as LineSegments, C as Euler, E as Group, H as LinearMipmapLinearFilter, It as Vector2, J as MathUtils, K as MOUSE, Lt as Vector3, Nt as TorusGeometry, Ot as SphereGeometry, Q as MeshBasicMaterial, R as LineBasicMaterial, Rt as Vector4, S as DynamicDrawUsage, St as SRGBColorSpace, T as Fog, V as LinearFilter, X as Matrix4, Y as Matrix3, Z as Mesh, _ as ClampToEdgeWrapping, b as CylinderGeometry, d as BufferAttribute, dt as PlaneGeometry, f as BufferGeometry, ft as PointLight, g as CircleGeometry, gt as Quaternion, h as CapsuleGeometry, i as useThree, kt as Spherical, l as Box3, m as CanvasTexture, n as Canvas, r as useFrame, t as OrbitControls, tt as MeshStandardMaterial, u as BoxGeometry, ut as Plane, v as Color, vt as Ray, xt as RingGeometry, y as ConeGeometry, yt as Raycaster } from "../_libs/@react-three/drei+[...].mjs";
 import { n as SkeletonUtils } from "../_libs/three-stdlib.mjs";
 import { t as Reflector } from "../_libs/three.mjs";
-import { C as isLocoPose, S as isDancePose, _ as getCitySpawn, a as navelInsertMorph, b as LOCO_POSES, c as HOME_EXIT, d as cityMoveCapsule, f as cityRayDown, g as getCityRuntime, h as getCityDebugAabbs, i as FpInput, l as HOME_RETURN_SPAWN, m as citySurfaceAt, n as loadCityModel, o as useStudio, p as cityRayPick, r as CrouchHold, u as bakeCityCollision, v as nearCityPortal, x as SoftSkeleton, y as nearHomeExit } from "./routes-B-QwxdJc.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/scene-0zSDavV6.js
+import { A as getCityDebugAabbs, C as HOME_EXIT, D as cityRayDown, E as cityMoveCapsule, F as LOCO_POSES, I as SoftSkeleton, L as isDancePose, M as getCitySpawn, N as nearCityPortal, O as cityRayPick, P as nearHomeExit, R as isLocoPose, T as bakeCityCollision, _ as loadCityModel, a as applyWheelLayout, b as navelInsertMorph, c as getVehicles, d as spawnVehicles, f as stepVehicles, g as vehicleHintAt, h as vehLive, i as applyCockpit, j as getCityRuntime, k as citySurfaceAt, l as pushPlayerFromVehicles, m as tryExitVehicle, n as CrouchHold, o as approachVehicle, p as tryEnterVehicle, r as FpInput, s as getOccupied, u as resetVehicles, v as loadVehicleModels, w as HOME_RETURN_SPAWN, x as useStudio, y as fpLive } from "./routes-DxHoPiWi.mjs";
+//#region node_modules/.nitro/vite/services/ssr/assets/scene-DPzDEjxr.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var nude_rig_data_default = {
@@ -2499,7 +2499,7 @@ function sameOrgan(a, b) {
 }
 var _v$1 = new Vector3();
 var _n$2 = new Vector3();
-var _q$1 = new Quaternion();
+var _q$2 = new Quaternion();
 var _axisY$1 = new Vector3(0, 1, 0);
 var _side$1 = new Vector3();
 var _bin = new Vector3();
@@ -2729,7 +2729,7 @@ var FistPlay = class {
 	}
 	layoutArm() {
 		if (!this.armPos || !this.armRest) return;
-		_q$1.setFromUnitVectors(_axisY$1, this.dir);
+		_q$2.setFromUnitVectors(_axisY$1, this.dir);
 		const fx = this.anus.x + this.dir.x * this.depth;
 		const fy = this.anus.y + this.dir.y * this.depth;
 		const fz = this.anus.z + this.dir.z * this.depth;
@@ -2739,7 +2739,7 @@ var FistPlay = class {
 		for (let i = 0; i < this.armCount; i++) {
 			const i3 = i * 3;
 			_v$1.set(rest[i3], rest[i3 + 1], rest[i3 + 2]);
-			_v$1.applyQuaternion(_q$1);
+			_v$1.applyQuaternion(_q$2);
 			arr[i3] = _v$1.x + fx;
 			arr[i3 + 1] = _v$1.y + fy;
 			arr[i3 + 2] = _v$1.z + fz;
@@ -2927,12 +2927,12 @@ function prepareArm(src) {
 	stumpZ /= Math.max(1, stumpN);
 	_v$1.set(stumpX - fistX, stumpY - fistY, stumpZ - fistZ);
 	if (_v$1.lengthSq() < 1e-8) _v$1.set(0, -1, 0);
-	_q$1.setFromUnitVectors(_v$1.normalize(), new Vector3(0, -1, 0));
+	_q$2.setFromUnitVectors(_v$1.normalize(), new Vector3(0, -1, 0));
 	const targetLen = .38;
 	const scl = targetLen / (Math.hypot(stumpX - fistX, stumpY - fistY, stumpZ - fistZ) || span);
 	for (let i = 0; i < count; i++) {
 		_v$1.set(arr[i * 3] - fistX, arr[i * 3 + 1] - fistY, arr[i * 3 + 2] - fistZ);
-		_v$1.applyQuaternion(_q$1).multiplyScalar(scl);
+		_v$1.applyQuaternion(_q$2).multiplyScalar(scl);
 		arr[i * 3] = _v$1.x;
 		arr[i * 3 + 1] = _v$1.y;
 		arr[i * 3 + 2] = _v$1.z;
@@ -2961,7 +2961,7 @@ function prepareArm(src) {
 var _v = new Vector3();
 var _n$1 = new Vector3();
 var _side = new Vector3();
-var _q = new Quaternion();
+var _q$1 = new Quaternion();
 var _axisY = new Vector3(0, 1, 0);
 var _look = new Vector3();
 var _down = new Vector3(0, -1, 0);
@@ -3676,8 +3676,8 @@ function clampDirToCone(dir, axis, maxAng) {
 		return dir;
 	}
 	_n$1.normalize();
-	_q.setFromAxisAngle(_n$1, maxAng);
-	dir.copy(_side).applyQuaternion(_q);
+	_q$1.setFromAxisAngle(_n$1, maxAng);
+	dir.copy(_side).applyQuaternion(_q$1);
 	return dir;
 }
 function prepareBayonet(src, totalLen) {
@@ -3760,11 +3760,11 @@ function prepareBayonet(src, totalLen) {
 	const hdl = mid(hdlA);
 	_v.copy(tip).sub(hdl);
 	if (_v.lengthSq() < 1e-10) _v.set(0, 1, 0);
-	_q.setFromUnitVectors(_v.normalize(), _axisY);
+	_q$1.setFromUnitVectors(_v.normalize(), _axisY);
 	const scl = totalLen / (tip.distanceTo(hdl) || span);
 	for (let i = 0; i < count; i++) {
 		_v.set(arr[i * 3] - hdl.x, arr[i * 3 + 1] - hdl.y, arr[i * 3 + 2] - hdl.z);
-		_v.applyQuaternion(_q).multiplyScalar(scl);
+		_v.applyQuaternion(_q$1).multiplyScalar(scl);
 		arr[i * 3] = _v.x;
 		arr[i * 3 + 1] = _v.y;
 		arr[i * 3 + 2] = _v.z;
@@ -3773,7 +3773,7 @@ function prepareBayonet(src, totalLen) {
 	if (nrm) {
 		const na = nrm.array;
 		for (let i = 0; i < nrm.count; i++) {
-			_v.set(na[i * 3], na[i * 3 + 1], na[i * 3 + 2]).applyQuaternion(_q);
+			_v.set(na[i * 3], na[i * 3 + 1], na[i * 3 + 2]).applyQuaternion(_q$1);
 			_v.normalize();
 			na[i * 3] = _v.x;
 			na[i * 3 + 1] = _v.y;
@@ -4001,33 +4001,6 @@ function applyNavelMorph(morph, depth, diameter, squeeze = 0) {
 		v.pos[v.i3 + 2] += tz - v.restz;
 	}
 }
-var fpLive = {
-	active: false,
-	view: "observe",
-	x: 0,
-	y: 0,
-	z: 0,
-	yaw: 0,
-	pitch: 0,
-	bodyYaw: Math.PI,
-	crouched: false,
-	prone: false,
-	eyeX: 0,
-	eyeY: 1.48,
-	eyeZ: .22,
-	chestX: 0,
-	chestY: 1.12,
-	chestZ: .12,
-	headReady: false,
-	moveFwd: 0,
-	moveSide: 0,
-	speedMps: 1.65,
-	stepDist: 0,
-	grounded: true,
-	airTime: 0,
-	velY: 0,
-	sprinting: false
-};
 var _hit = new Vector3();
 var _normal = new Vector3();
 var _target = new Vector3();
@@ -4036,9 +4009,9 @@ var _n = new Vector3();
 var _plane = new Plane();
 var _ray = new Ray();
 var _ndc = new Vector2();
-var _box = new Box3();
-var _size = new Vector3();
-var _center = new Vector3();
+var _box$1 = new Box3();
+var _size$1 = new Vector3();
+var _center$1 = new Vector3();
 var _local = new Vector3();
 var _eye = new Vector3();
 var _navelW = new Vector3();
@@ -4420,33 +4393,33 @@ function cloneGraph(source) {
 function fitStanding(source, targetHeight) {
 	const root = cloneGraph(source);
 	root.updateMatrixWorld(true);
-	_box.setFromObject(root);
-	_box.getSize(_size);
-	_box.getCenter(_center);
-	if (_size.z > _size.x * 1.2) {
-		const facePlusX = _center.x < .2;
+	_box$1.setFromObject(root);
+	_box$1.getSize(_size$1);
+	_box$1.getCenter(_center$1);
+	if (_size$1.z > _size$1.x * 1.2) {
+		const facePlusX = _center$1.x < .2;
 		root.rotation.y += facePlusX ? -Math.PI / 2 : Math.PI / 2;
 		root.updateMatrixWorld(true);
-		_box.setFromObject(root);
-		_box.getSize(_size);
-		_box.getCenter(_center);
+		_box$1.setFromObject(root);
+		_box$1.getSize(_size$1);
+		_box$1.getCenter(_center$1);
 	}
-	if (_size.z > _size.y * 1.25) {
+	if (_size$1.z > _size$1.y * 1.25) {
 		root.rotation.x += -Math.PI / 2;
 		root.updateMatrixWorld(true);
-		_box.setFromObject(root);
-		_box.getSize(_size);
-		_box.getCenter(_center);
+		_box$1.setFromObject(root);
+		_box$1.getSize(_size$1);
+		_box$1.getCenter(_center$1);
 	}
-	const s = targetHeight / Math.max(_size.y, .001);
+	const s = targetHeight / Math.max(_size$1.y, .001);
 	root.scale.multiplyScalar(s);
 	root.updateMatrixWorld(true);
-	_box.setFromObject(root);
-	_box.getSize(_size);
-	_box.getCenter(_center);
-	root.position.x -= _center.x;
-	root.position.z -= _center.z;
-	root.position.y -= _box.min.y;
+	_box$1.setFromObject(root);
+	_box$1.getSize(_size$1);
+	_box$1.getCenter(_center$1);
+	root.position.x -= _center$1.x;
+	root.position.z -= _center$1.z;
+	root.position.y -= _box$1.min.y;
 	root.updateMatrixWorld(true);
 	return root;
 }
@@ -5122,9 +5095,9 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 		const root = new Group();
 		const body = flattenToWorld(fitStanding(character, 1.66));
 		root.add(body);
-		_box.setFromObject(body);
-		_box.getSize(_size);
-		const height = _size.y;
+		_box$1.setFromObject(body);
+		_box$1.getSize(_size$1);
+		const height = _size$1.y;
 		const charBox = new Box3().setFromObject(body);
 		const navel = findNavel(body, height);
 		const yNavel = navel.y;
@@ -5633,7 +5606,8 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 			setup.skeleton.setPose(s.pose);
 			jumpMenuT.current = 0;
 		}
-		const bodyOn = s.firstPerson && s.fpView === "body";
+		setup.root.visible = !s.inVehicle;
+		const bodyOn = s.firstPerson && s.fpView === "body" && !s.inVehicle;
 		if (bodyOn) {
 			if (!bodyWasOn.current) {
 				setup.skeleton.fpEyeLocal(eyeSmooth.current);
@@ -6006,8 +5980,8 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 		setup.gutHealth.updateBars(camera, s.showGutHp);
 		const ring = ringRef.current;
 		if (ring) {
-			if (setup.strike.lastOrigin(_center)) {
-				ring.position.copy(_center);
+			if (setup.strike.lastOrigin(_center$1)) {
+				ring.position.copy(_center$1);
 				ring.position.z += .012;
 				const rr = Math.max(.02, setup.strike.ringRadius());
 				ring.scale.set(rr, rr, 1);
@@ -6764,6 +6738,766 @@ function FittedFigure({ character, intestines, pelvis, arm, bayonet, bayonetLong
 		})
 	] });
 }
+var _box = new Box3();
+var _size = new Vector3();
+var _center = new Vector3();
+var _eul = new Euler();
+var _q = new Quaternion();
+var _p = new Vector3();
+var _scale = new Vector3();
+function findNamed(root, re) {
+	const out = [];
+	root.traverse((o) => {
+		if (re.test(o.name)) out.push(o);
+	});
+	return out;
+}
+function firstNamed(root, re) {
+	return findNamed(root, re)[0] ?? null;
+}
+function markerCenterZ(root, re) {
+	const obj = firstNamed(root, re);
+	if (!obj) return null;
+	_box.setFromObject(obj);
+	if (_box.isEmpty()) return null;
+	return (_box.min.z + _box.max.z) * .5;
+}
+function normalizeFacing(root, targetLen, tailName, noseName) {
+	root.updateMatrixWorld(true);
+	_box.setFromObject(root);
+	if (_box.isEmpty()) return;
+	_box.getSize(_size);
+	const longest = Math.max(_size.x, _size.y, _size.z);
+	if (longest > .01) root.scale.multiplyScalar(targetLen / longest);
+	root.updateMatrixWorld(true);
+	_box.setFromObject(root);
+	_box.getSize(_size);
+	if (_size.x > _size.z * 1.12) root.rotation.y += Math.PI / 2;
+	root.updateMatrixWorld(true);
+	_box.setFromObject(root);
+	_box.getCenter(_center);
+	const tailZ = markerCenterZ(root, tailName);
+	const noseZ = markerCenterZ(root, noseName);
+	let flip = false;
+	if (noseZ != null) flip = noseZ > _center.z;
+	else if (tailZ != null) flip = tailZ < _center.z;
+	if (flip) root.rotation.y += Math.PI;
+	root.userData.faceDbg = {
+		tailZ,
+		noseZ,
+		centerZ: _center.z,
+		flip
+	};
+	root.updateMatrixWorld(true);
+	root.updateMatrixWorld(true);
+	_box.setFromObject(root);
+	_box.getCenter(_center);
+	root.position.x -= _center.x;
+	root.position.y -= _box.min.y;
+	root.position.z -= _center.z;
+	root.updateMatrixWorld(true);
+}
+function liftOrigin(wrap, originY) {
+	wrap.updateMatrixWorld(true);
+	for (const ch of wrap.children) ch.position.y -= originY;
+	wrap.updateMatrixWorld(true);
+}
+function measureCockpit(wrap, re, fallback, behind, up) {
+	return measureCockpitObj(wrap, firstNamed(wrap, re), fallback, behind, up);
+}
+function measureCockpitObj(wrap, obj, fallback, behind, up) {
+	if (!obj) return fallback;
+	wrap.updateMatrixWorld(true);
+	_box.setFromObject(obj);
+	if (_box.isEmpty()) return fallback;
+	_box.getCenter(_center);
+	wrap.worldToLocal(_center);
+	return {
+		x: _center.x,
+		y: _center.y + up,
+		z: _center.z + behind
+	};
+}
+function mountWheels(wrap, nameRe) {
+	wrap.updateMatrixWorld(true);
+	const objs = findNamed(wrap, nameRe).filter((o) => !/_hub$/i.test(o.name) && !o.name.includes("Hub"));
+	const wheels = [];
+	for (const obj of objs) {
+		if (obj.parent && /^WheelHub/.test(obj.parent.name)) continue;
+		const worldPos = obj.getWorldPosition(new Vector3());
+		_box.setFromObject(obj);
+		_box.getSize(_size);
+		const axle = _size.x <= _size.z ? "x" : "z";
+		obj.getWorldScale(_scale);
+		const spinSign = Math.sign(_scale.x) || 1;
+		const hub = new Group();
+		hub.name = `WheelHub_${obj.name}`;
+		wrap.add(hub);
+		wrap.worldToLocal(_p.copy(worldPos));
+		hub.position.copy(_p);
+		hub.quaternion.identity();
+		hub.scale.set(1, 1, 1);
+		wrap.attach(obj);
+		hub.attach(obj);
+		const off = hub.position.clone();
+		const steer = off.z < 0;
+		hub.userData.steer = steer;
+		hub.userData.axle = axle;
+		hub.userData.spinSign = spinSign;
+		wheels.push({
+			root: hub,
+			restPos: hub.position.clone(),
+			restQuat: hub.quaternion.clone(),
+			steer,
+			axle,
+			spinSign,
+			offset: {
+				x: off.x,
+				y: off.y,
+				z: off.z
+			}
+		});
+	}
+	wheels.sort((a, b) => a.offset.z - b.offset.z || a.offset.x - b.offset.x);
+	return wheels;
+}
+function collectHubs(wrap) {
+	return findNamed(wrap, /^WheelHub_/).map((hub) => ({
+		root: hub,
+		restPos: hub.position.clone(),
+		restQuat: hub.quaternion.clone(),
+		steer: Boolean(hub.userData.steer) || hub.position.z < 0,
+		axle: hub.userData.axle || "x",
+		spinSign: typeof hub.userData.spinSign === "number" ? hub.userData.spinSign : 1,
+		offset: {
+			x: hub.position.x,
+			y: hub.position.y,
+			z: hub.position.z
+		}
+	}));
+}
+function bindPivots(root, items) {
+	const out = [];
+	for (const it of items) for (const obj of findNamed(root, it.re)) out.push({
+		obj,
+		rest: obj.quaternion.clone(),
+		axis: it.axis,
+		sign: it.sign,
+		max: it.max
+	});
+	return out;
+}
+function applyPivot(b, t) {
+	_eul.set(0, 0, 0, "XYZ");
+	const a = b.sign * b.max * t;
+	if (b.axis === "x") _eul.x = a;
+	if (b.axis === "y") _eul.y = a;
+	if (b.axis === "z") _eul.z = a;
+	_q.setFromEuler(_eul);
+	b.obj.quaternion.copy(b.rest).multiply(_q);
+}
+function splitTriangles(mesh, wrap, pred) {
+	const src = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry;
+	const pos = src.getAttribute("position");
+	if (!pos) return null;
+	mesh.updateMatrixWorld(true);
+	wrap.updateMatrixWorld(true);
+	const keep = [];
+	for (let i = 0; i < pos.count; i += 3) {
+		let sx = 0;
+		let sy = 0;
+		let sz = 0;
+		for (let k = 0; k < 3; k++) {
+			_p.fromBufferAttribute(pos, i + k);
+			mesh.localToWorld(_p);
+			wrap.worldToLocal(_p);
+			sx += _p.x;
+			sy += _p.y;
+			sz += _p.z;
+		}
+		if (pred(sx / 3, sy / 3, sz / 3)) keep.push(i, i + 1, i + 2);
+	}
+	if (keep.length < 24) return null;
+	const out = new BufferGeometry();
+	for (const name of Object.keys(src.attributes)) {
+		const attr = src.getAttribute(name);
+		const dim = attr.itemSize;
+		const data = new Float32Array(keep.length * dim);
+		let o = 0;
+		for (const vi of keep) for (let k = 0; k < dim; k++) data[o++] = attr.array[vi * dim + k];
+		out.setAttribute(name, new BufferAttribute(data, dim));
+	}
+	out.computeVertexNormals();
+	out.computeBoundingBox();
+	return out;
+}
+function makeHalfMesh(mesh, geo, side) {
+	const half = new Mesh(geo, mesh.material);
+	half.castShadow = false;
+	half.receiveShadow = false;
+	half.name = `${mesh.name}_${side}`;
+	mesh.updateMatrixWorld(true);
+	half.quaternion.copy(mesh.getWorldQuaternion(_q));
+	half.position.copy(mesh.getWorldPosition(_center));
+	half.scale.copy(mesh.getWorldScale(_size));
+	return half;
+}
+function punchMesh(mesh, wrap, drop) {
+	const kept = splitTriangles(mesh, wrap, (x, y, z) => !drop(x, y, z));
+	if (!kept) return;
+	const old = mesh.geometry;
+	mesh.geometry = kept;
+	if (old !== mesh.geometry) {}
+}
+function makeScissorDoors(wrap) {
+	wrap.updateMatrixWorld(true);
+	const interior = firstNamed(wrap, /^Interior_doors$/);
+	const extras = [];
+	for (const re of [
+		/^Right&Left_windows$/,
+		/^Right&Left_window_2$/,
+		/^Mirrors$/
+	]) {
+		const o = firstNamed(wrap, re);
+		if (o) extras.push(o);
+	}
+	const hood = firstNamed(wrap, /Hood075_Body_0$/) ?? firstNamed(wrap, /^Hood075$/);
+	let vol = {
+		xAbs: .52,
+		minY: .14,
+		maxY: .92,
+		minZ: -1.02,
+		maxZ: .42
+	};
+	if (interior) {
+		_box.setFromObject(interior);
+		if (!_box.isEmpty()) vol = {
+			xAbs: Math.max(.48, Math.min(Math.abs(_box.min.x), Math.abs(_box.max.x)) * .58),
+			minY: _box.min.y - .05,
+			maxY: _box.max.y + .14,
+			minZ: _box.min.z - .06,
+			maxZ: _box.max.z + .1
+		};
+	}
+	const inDoor = (x, y, z) => Math.abs(x) >= vol.xAbs && y >= vol.minY && y <= vol.maxY && z >= vol.minZ && z <= vol.maxZ;
+	const sources = [interior, ...extras].filter(Boolean);
+	const out = [];
+	for (const side of ["L", "R"]) {
+		const pivot = new Group();
+		pivot.name = `Scissor_${side}`;
+		wrap.add(pivot);
+		const made = [];
+		const sidePred = (x, y, z) => inDoor(x, y, z) && (side === "L" ? x < 0 : x >= 0);
+		for (const src of sources) {
+			const meshes = [];
+			src.traverse((o) => {
+				const m = o;
+				if (m.isMesh) meshes.push(m);
+			});
+			for (const mesh of meshes) {
+				const geo = splitTriangles(mesh, wrap, sidePred);
+				if (!geo) continue;
+				const half = makeHalfMesh(mesh, geo, side);
+				wrap.attach(half);
+				made.push(half);
+			}
+		}
+		if (hood) {
+			const meshes = [];
+			hood.traverse((o) => {
+				const m = o;
+				if (m.isMesh) meshes.push(m);
+			});
+			for (const mesh of meshes) {
+				const geo = splitTriangles(mesh, wrap, sidePred);
+				if (!geo) continue;
+				const half = makeHalfMesh(mesh, geo, side);
+				wrap.attach(half);
+				made.push(half);
+			}
+		}
+		if (!made.length) {
+			wrap.remove(pivot);
+			continue;
+		}
+		_box.makeEmpty();
+		for (const m of made) _box.expandByObject(m);
+		const hx = (side === "L" ? _box.min.x : _box.max.x) * .72;
+		const hy = _box.max.y - .02;
+		const hz = _box.min.z + .08;
+		pivot.position.set(hx, hy, hz);
+		wrap.updateMatrixWorld(true);
+		for (const half of made) pivot.attach(half);
+		const sign = side === "L" ? -1 : 1;
+		pivot.userData.axis = "z";
+		pivot.userData.sign = sign;
+		pivot.userData.max = 1.35;
+		out.push({
+			obj: pivot,
+			rest: pivot.quaternion.clone(),
+			axis: "z",
+			sign,
+			max: 1.35
+		});
+	}
+	if (out.length) {
+		for (const src of sources) src.visible = false;
+		if (hood) {
+			const meshes = [];
+			hood.traverse((o) => {
+				const m = o;
+				if (m.isMesh) meshes.push(m);
+			});
+			for (const mesh of meshes) punchMesh(mesh, wrap, inDoor);
+		}
+	}
+	return out;
+}
+function addGlow(wrap, z, color, dist) {
+	const light = new PointLight(color, 0, dist, 2);
+	light.position.set(0, .05, z);
+	wrap.add(light);
+	return light;
+}
+function prepareCar(src) {
+	const root = src.clone(true);
+	root.traverse((o) => {
+		const m = o;
+		if (m.isMesh) {
+			m.frustumCulled = true;
+			m.castShadow = false;
+			m.receiveShadow = false;
+		}
+	});
+	normalizeFacing(root, 4.82, /Exhaust_1$|Tail_light$|Rear_part_1$/, /Hood|Front_part_1$|Daylight$|Headlight$/);
+	const wrap = new Group();
+	wrap.name = "CarVisual";
+	wrap.add(root);
+	wrap.updateMatrixWorld(true);
+	const wheels = mountWheels(wrap, /^Wheel_(FL|FR|BL|BR)$/);
+	const doors = makeScissorDoors(wrap);
+	const originY = .48;
+	const cockpit = measureCockpit(wrap, /^Steering_wheel$/, {
+		x: -.38,
+		y: .9,
+		z: .18
+	}, .52, .12);
+	cockpit.y -= originY;
+	liftOrigin(wrap, originY);
+	const hubs = collectHubs(wrap);
+	wrap.userData.originY = originY;
+	wrap.userData.cockpit = cockpit;
+	wrap.userData.faceDbg = root.userData.faceDbg;
+	const steer = firstNamed(wrap, /^Steering_wheel$/);
+	const glow = [addGlow(wrap, 2.15, 16738850, 4.2), addGlow(wrap, 2.05, 16760944, 2.4)];
+	return {
+		wrap,
+		wheels: hubs.length ? hubs : wheels,
+		doors,
+		steer,
+		glow,
+		originY,
+		cockpit
+	};
+}
+function preparePlane(src) {
+	const root = src.clone(true);
+	root.traverse((o) => {
+		const m = o;
+		if (m.isMesh) {
+			m.frustumCulled = true;
+			m.castShadow = false;
+		}
+	});
+	normalizeFacing(root, 18.6, /^elevator_l|^rudder_/, /^gear_f$|bonnet|nose|wheel_lfchild/i);
+	const wrap = new Group();
+	wrap.name = "PlaneVisual";
+	wrap.add(root);
+	wrap.updateMatrixWorld(true);
+	const wheels = mountWheels(wrap, /^wheel_l[fr]/i);
+	const originY = 1.28;
+	const cockpit = measureCockpitObj(wrap, firstNamed(wrap, /steeringwheel/) ?? firstNamed(wrap, /canopy/), {
+		x: 0,
+		y: 2.62,
+		z: -5.2
+	}, .2, .08);
+	cockpit.y -= originY;
+	cockpit.x *= .15;
+	cockpit.z = Math.min(-4.15, cockpit.z + .85);
+	cockpit.y = Math.max(1.42, Math.min(1.62, cockpit.y));
+	liftOrigin(wrap, originY);
+	const hubs = collectHubs(wrap);
+	wrap.userData.originY = originY;
+	wrap.userData.cockpit = cockpit;
+	wrap.userData.faceDbg = root.userData.faceDbg;
+	const doors = bindPivots(wrap, [
+		{
+			re: /door_hatch_l/,
+			axis: "z",
+			sign: 1,
+			max: 1.15
+		},
+		{
+			re: /door_hatch_r/,
+			axis: "z",
+			sign: -1,
+			max: 1.15
+		},
+		{
+			re: /door_dside_f/,
+			axis: "z",
+			sign: 1,
+			max: .95
+		},
+		{
+			re: /door_pside_f/,
+			axis: "z",
+			sign: -1,
+			max: .95
+		}
+	]);
+	const gears = bindPivots(wrap, [
+		{
+			re: /^gear_f/,
+			axis: "x",
+			sign: 1,
+			max: 1.45
+		},
+		{
+			re: /^gear_lm1/,
+			axis: "z",
+			sign: -1,
+			max: 1.35
+		},
+		{
+			re: /^gear_rm1/,
+			axis: "z",
+			sign: 1,
+			max: 1.35
+		}
+	]);
+	const gearDoors = bindPivots(wrap, [
+		{
+			re: /gear_door_fl/,
+			axis: "x",
+			sign: -1,
+			max: 1.2
+		},
+		{
+			re: /gear_door_fr/,
+			axis: "x",
+			sign: 1,
+			max: 1.2
+		},
+		{
+			re: /gear_door_rl1/,
+			axis: "z",
+			sign: 1,
+			max: 1.1
+		},
+		{
+			re: /gear_door_rr1/,
+			axis: "z",
+			sign: -1,
+			max: 1.1
+		}
+	]);
+	const surfaces = bindPivots(wrap, [
+		{
+			re: /aileron_l/,
+			axis: "z",
+			sign: 1,
+			max: .45
+		},
+		{
+			re: /aileron_r/,
+			axis: "z",
+			sign: -1,
+			max: .45
+		},
+		{
+			re: /elevator_l/,
+			axis: "x",
+			sign: 1,
+			max: .4
+		},
+		{
+			re: /elevator_r/,
+			axis: "x",
+			sign: 1,
+			max: .4
+		},
+		{
+			re: /^rudder_/,
+			axis: "y",
+			sign: 1,
+			max: .45
+		},
+		{
+			re: /wingflap_l/,
+			axis: "x",
+			sign: 1,
+			max: .35
+		},
+		{
+			re: /wingflap_r/,
+			axis: "x",
+			sign: 1,
+			max: .35
+		}
+	]);
+	const steer = firstNamed(wrap, /steeringwheel/);
+	const glow = [addGlow(wrap, 7.6, 5154815, 9), addGlow(wrap, 7.2, 16742962, 6)];
+	return {
+		wrap,
+		wheels: hubs.length ? hubs : wheels,
+		doors,
+		gears,
+		gearDoors,
+		surfaces,
+		steer,
+		glow,
+		originY,
+		cockpit
+	};
+}
+function layoutFromWheels(wheels, kind) {
+	const pts = wheels.map((w) => w.offset);
+	if (!pts.length) return kind === "plane" ? {
+		wheels: [{
+			x: 0,
+			y: .4,
+			z: -4,
+			steer: true
+		}],
+		halfL: 8.4,
+		halfW: 2,
+		height: 2.6,
+		wheelR: .4
+	} : {
+		wheels: [{
+			x: -.9,
+			y: .34,
+			z: -1.4,
+			steer: true
+		}],
+		halfL: 2.3,
+		halfW: 1.05,
+		height: 1.15,
+		wheelR: .34
+	};
+	let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity, minY = Infinity;
+	for (const p of pts) {
+		minX = Math.min(minX, p.x);
+		maxX = Math.max(maxX, p.x);
+		minZ = Math.min(minZ, p.z);
+		maxZ = Math.max(maxZ, p.z);
+		minY = Math.min(minY, p.y);
+	}
+	return {
+		wheels: wheels.map((w) => ({
+			x: w.offset.x,
+			y: w.offset.y,
+			z: w.offset.z,
+			steer: w.offset.z < 0
+		})),
+		halfL: Math.max(2.1, (Math.abs(minZ) + Math.abs(maxZ)) * .5 + (kind === "plane" ? 3.2 : .85)),
+		halfW: Math.max(.9, (Math.abs(minX) + Math.abs(maxX)) * .5 + (kind === "plane" ? .4 : .18)),
+		height: kind === "plane" ? 2.7 : 1.16,
+		wheelR: Math.max(.22, Math.abs(minY))
+	};
+}
+function VehicleWorld() {
+	const world = useStudio((s) => s.worldMap);
+	const showCol = useStudio((s) => s.showCollision);
+	const [visuals, setVisuals] = (0, import_react.useState)([]);
+	const colRef = (0, import_react.useRef)(null);
+	(0, import_react.useEffect)(() => {
+		if (world !== "city") {
+			setVisuals([]);
+			resetVehicles();
+			vehLive.ready = false;
+			vehLive.vehicles = [];
+			return;
+		}
+		let cancelled = false;
+		(async () => {
+			try {
+				const models = await loadVehicleModels();
+				if (cancelled) return;
+				let n = 0;
+				while (!getCityRuntime().ready && n++ < 80) await new Promise((r) => setTimeout(r, 50));
+				if (cancelled || !getCityRuntime().ready) return;
+				spawnVehicles();
+				const carPrep = prepareCar(models.car);
+				const planePrep = preparePlane(models.plane);
+				window.__faceDbg = {
+					car: carPrep.wrap.userData.faceDbg,
+					plane: planePrep.wrap.userData.faceDbg,
+					carEye: carPrep.cockpit,
+					planeEye: planePrep.cockpit
+				};
+				const list = [];
+				for (const v of getVehicles()) if (v.kind === "car") {
+					const wrap = carPrep.wrap.clone(true);
+					const wheels = collectHubs(wrap);
+					const lay = layoutFromWheels(wheels.length ? wheels : carPrep.wheels, "car");
+					applyWheelLayout(v.id, lay.wheels, lay.halfL, lay.halfW, lay.height, lay.wheelR);
+					const cock = wrap.userData.cockpit ?? carPrep.cockpit;
+					applyCockpit(v.id, cock, carPrep.originY);
+					const doors = findNamed(wrap, /^Scissor_[LR]$/).map((obj) => ({
+						obj,
+						rest: obj.quaternion.clone(),
+						axis: obj.userData.axis || "z",
+						sign: typeof obj.userData.sign === "number" ? obj.userData.sign : /_L$/.test(obj.name) ? -1 : 1,
+						max: typeof obj.userData.max === "number" ? obj.userData.max : 1.35
+					}));
+					const steer = firstNamed(wrap, /^Steering_wheel$/);
+					const glow = [];
+					wrap.traverse((o) => {
+						const l = o;
+						if (l.isPointLight) glow.push(l);
+					});
+					list.push({
+						id: v.id,
+						kind: "car",
+						group: wrap,
+						wheels: wheels.length ? wheels : carPrep.wheels,
+						doors: doors.length ? doors : carPrep.doors,
+						gears: [],
+						gearDoors: [],
+						surfaces: [],
+						steerWheel: steer ? {
+							obj: steer,
+							rest: steer.quaternion.clone()
+						} : null,
+						glow
+					});
+				} else {
+					const prep = planePrep;
+					const lay = layoutFromWheels(prep.wheels, "plane");
+					applyWheelLayout(v.id, lay.wheels, lay.halfL, lay.halfW, lay.height, lay.wheelR);
+					applyCockpit(v.id, prep.cockpit, prep.originY);
+					list.push({
+						id: v.id,
+						kind: "plane",
+						group: prep.wrap,
+						wheels: prep.wheels,
+						doors: prep.doors,
+						gears: prep.gears,
+						gearDoors: prep.gearDoors,
+						surfaces: prep.surfaces,
+						steerWheel: prep.steer ? {
+							obj: prep.steer,
+							rest: prep.steer.quaternion.clone()
+						} : null,
+						glow: prep.glow
+					});
+				}
+				if (!cancelled) setVisuals(list);
+			} catch (err) {
+				console.warn("[vehicles]", err);
+			}
+		})();
+		return () => {
+			cancelled = true;
+		};
+	}, [world]);
+	useFrame(() => {
+		if (world !== "city") return;
+		for (const vis of visuals) {
+			const v = getVehicles().find((o) => o.id === vis.id);
+			if (!v) {
+				vis.group.visible = false;
+				continue;
+			}
+			vis.group.visible = true;
+			vis.group.position.set(v.x, v.y, v.z);
+			vis.group.quaternion.set(v.qx, v.qy, v.qz, v.qw);
+			vis.wheels.forEach((w, i) => {
+				const sag = (v.susp[i] ?? .4) - .4;
+				w.root.position.copy(w.restPos);
+				w.root.position.y += sag * .2;
+				w.root.quaternion.copy(w.restQuat);
+				if (w.steer) w.root.rotateY(v.steerAngle * .9);
+				const spin = v.wheelSpin * (w.spinSign || 1);
+				if (w.axle === "z") w.root.rotateZ(spin);
+				else w.root.rotateX(spin);
+			});
+			const doorT = v.door;
+			for (const d of vis.doors) applyPivot(d, doorT);
+			const gearUp = 1 - v.gear;
+			for (const g of vis.gears) applyPivot(g, gearUp);
+			for (const g of vis.gearDoors) applyPivot(g, gearUp);
+			if (v.kind === "plane") {
+				const pitchN = MathUtils.clamp(v.pitch / .4, -1, 1);
+				const rollN = MathUtils.clamp(v.roll / .6, -1, 1);
+				for (const s of vis.surfaces) {
+					const name = s.obj.name;
+					let t = 0;
+					if (/aileron_l/.test(name)) t = rollN;
+					else if (/aileron_r/.test(name)) t = rollN;
+					else if (/elevator/.test(name)) t = -pitchN;
+					else if (/rudder/.test(name)) t = MathUtils.clamp(v.steerAngle, -1, 1);
+					else if (/wingflap/.test(name)) t = v.gear > .4 || v.speed < 50 ? .7 : 0;
+					applyPivot(s, t);
+				}
+			}
+			if (vis.steerWheel) {
+				_eul.set(0, 0, -v.steerAngle * 2.4);
+				vis.steerWheel.obj.quaternion.copy(vis.steerWheel.rest).multiply(_q.setFromEuler(_eul));
+			}
+			vis.glow?.forEach((light, i) => {
+				if (v.kind === "car") light.intensity = v.nitro * (i === 0 ? 6.2 : 2.4);
+				else light.intensity = v.thrust * (v.airborne ? 1 : .35) * (i === 0 ? 8.5 : 5.5 * v.thrust);
+			});
+		}
+		const g = colRef.current;
+		if (g) {
+			g.visible = showCol && world === "city";
+			if (g.visible) {
+				const list = getVehicles();
+				const want = list.length * 4;
+				while (g.children.length < want) {
+					const m = new Mesh(new BoxGeometry(1, 1, 1), new MeshBasicMaterial({
+						color: 8048895,
+						transparent: true,
+						opacity: .16,
+						depthWrite: false
+					}));
+					g.add(m);
+				}
+				let slot = 0;
+				const place = (x, y, z, sx, sy, sz, yaw, on) => {
+					const mesh = g.children[slot++];
+					if (!mesh) return;
+					mesh.visible = on;
+					if (!on) return;
+					mesh.position.set(x, y, z);
+					mesh.scale.set(sx, sy, sz);
+					mesh.rotation.set(0, yaw, 0);
+				};
+				for (const v of list) {
+					place(v.x, v.y, v.z, v.halfW * 2, v.height, v.halfL * 2, v.yaw, true);
+					if (v.kind === "plane") {
+						place(v.x + v.rx * -v.halfW * 2.6, v.y, v.z + v.rz * -v.halfW * 2.6, 4.8, .35, 2.6, v.yaw, true);
+						place(v.x + v.rx * v.halfW * 2.6, v.y, v.z + v.rz * v.halfW * 2.6, 4.8, .35, 2.6, v.yaw, true);
+						place(v.x - v.fx * v.halfL * .7, v.y, v.z - v.fz * v.halfL * .7, v.halfW * 1.2, .4, 3.2, v.yaw, true);
+					} else {
+						place(v.x - v.fx * v.halfL * .55, v.y, v.z - v.fz * v.halfL * .55, v.halfW * 1.7, v.height * .72, v.halfL * .7, v.yaw, true);
+						place(v.x + v.fx * v.halfL * .5, v.y, v.z + v.fz * v.halfL * .5, v.halfW * 1.85, v.height * .78, v.halfL * .72, v.yaw, true);
+						place(v.x, v.y + .02, v.z, v.halfW * 1.9, .18, v.halfL * 1.9, v.yaw, true);
+					}
+				}
+				while (slot < g.children.length) g.children[slot++].visible = false;
+			}
+		}
+	});
+	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("group", {
+		visible: world === "city",
+		children: [visuals.map((v) => /* @__PURE__ */ (0, import_jsx_runtime.jsx)("primitive", { object: v.group }, v.id)), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("group", { ref: colRef })]
+	});
+}
 function Scene({ character, intestines, pelvis, arm, bayonet, bayonetLong, room }) {
 	const controlsRef = (0, import_react.useRef)(null);
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)("div", {
@@ -6799,6 +7533,7 @@ function Scene({ character, intestines, pelvis, arm, bayonet, bayonetLong, room 
 				children: [
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Bedroom, { room }),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CityWorld, {}),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(VehicleWorld, {}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CityMapBake, {}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CityMapRig, {}),
 					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(CityMapGizmos, {}),
@@ -7358,6 +8093,9 @@ var _fpUp = new Vector3();
 var _fpZ = new Vector3();
 var _fpMat = new Matrix4();
 var _camHit = new Vector3();
+var _vehQ = new Quaternion();
+var _lookQ = new Quaternion();
+var _lookE = new Euler();
 function lookDirFromYawPitch(yaw, pitch, out) {
 	const cy = Math.cos(pitch);
 	out.set(-Math.sin(yaw) * cy, Math.sin(pitch), -Math.cos(yaw) * cy);
@@ -7448,7 +8186,8 @@ function FirstPersonRig({ controlsRef }) {
 	const orbitSnap = (0, import_react.useRef)(null);
 	const lastJumpNonce = (0, import_react.useRef)(0);
 	const lastInteractNonce = (0, import_react.useRef)(0);
-	const lastWarpNonce = (0, import_react.useRef)(0);
+	const lastWarpNonce = (0, import_react.useRef)(-1);
+	const lastVehCam = (0, import_react.useRef)(null);
 	const speedRef = (0, import_react.useRef)(0);
 	const crouchGate = (0, import_react.useRef)(null);
 	const wasFp = (0, import_react.useRef)(false);
@@ -7456,14 +8195,14 @@ function FirstPersonRig({ controlsRef }) {
 	(0, import_react.useEffect)(() => {
 		const gate = new CrouchHold(() => {
 			const s = useStudio.getState();
-			if (!s.firstPerson) return;
+			if (!s.firstPerson || s.inVehicle) return;
 			if (s.fpProne) {
 				s.setFpProne(false);
 				s.setFpCrouch(false);
 			} else s.setFpCrouch(!s.fpCrouch);
 		}, () => {
 			const s = useStudio.getState();
-			if (!s.firstPerson) return;
+			if (!s.firstPerson || s.inVehicle) return;
 			s.setFpProne(!s.fpProne);
 		});
 		crouchGate.current = gate;
@@ -7725,8 +8464,8 @@ function FirstPersonRig({ controlsRef }) {
 	}, [firstPerson, gl]);
 	(0, import_react.useEffect)(() => {
 		const probe = {
-			getYaw: () => yaw.current,
-			getPitch: () => pitch.current,
+			getYaw: () => vehLive.inVehicle ? vehLive.yaw : yaw.current,
+			getPitch: () => vehLive.inVehicle ? vehLive.pitch : pitch.current,
 			setPitch: (v) => {
 				pitch.current = MathUtils.clamp(v, -FP_PITCH_LIM, FP_PITCH_LIM);
 			},
@@ -7741,7 +8480,8 @@ function FirstPersonRig({ controlsRef }) {
 				pitch.current -= dy * sens;
 				pitch.current = MathUtils.clamp(pitch.current, -FP_PITCH_LIM, FP_PITCH_LIM);
 			},
-			getSpeed: () => speedRef.current,
+			getSpeed: () => vehLive.inVehicle ? Math.abs(vehLive.speed) : speedRef.current,
+			getRoll: () => vehLive.roll,
 			getSprinting: () => fpLive.sprinting,
 			getPos: () => pos.current.toArray(),
 			getEye: () => eye.current,
@@ -7761,6 +8501,7 @@ function FirstPersonRig({ controlsRef }) {
 				near: camera.near,
 				aspect: camera.aspect,
 				quat: camera.quaternion.toArray(),
+				camPos: camera.position.toArray(),
 				canvas: [
 					gl.domElement.width,
 					gl.domElement.height,
@@ -7786,6 +8527,37 @@ function FirstPersonRig({ controlsRef }) {
 				colNear: getCityDebugAabbs(pos.current.x, pos.current.z, 24, 4),
 				citySpawn: getCityRuntime().spawn,
 				cityMinY: getCityRuntime().minY,
+				inVehicle: vehLive.inVehicle,
+				vehicleCam: useStudio.getState().vehicleCam,
+				vehId: vehLive.id,
+				vehKind: vehLive.kind,
+				vehSpeed: vehLive.speed,
+				vehYaw: vehLive.yaw,
+				vehPitch: vehLive.pitch,
+				vehRoll: vehLive.roll,
+				vehPos: [
+					vehLive.x,
+					vehLive.y,
+					vehLive.z
+				],
+				vehEye: [
+					vehLive.eyeX,
+					vehLive.eyeY,
+					vehLive.eyeZ
+				],
+				vehSteer: vehLive.steerIn,
+				vehSteerAngle: getOccupied()?.steerAngle ?? 0,
+				vehN: vehLive.vehicles.length,
+				vehReady: vehLive.ready,
+				vehicles: vehLive.vehicles.map((v) => ({
+					id: v.id,
+					kind: v.kind,
+					x: v.x,
+					y: v.y,
+					z: v.z,
+					yaw: v.yaw,
+					speed: v.speed
+				})),
 				cityVis: (() => {
 					const rt = getCityRuntime();
 					const g = rt.group;
@@ -7835,6 +8607,12 @@ function FirstPersonRig({ controlsRef }) {
 			},
 			interact: () => {
 				window.dispatchEvent(new Event("studio-fp-interact"));
+			},
+			warpToVehicle: (kind) => {
+				const p = approachVehicle(kind);
+				if (!p) return null;
+				useStudio.getState().warpFp(p.x, p.y, p.z);
+				return p;
 			}
 		};
 		window.__controlsTest = probe;
@@ -7845,15 +8623,19 @@ function FirstPersonRig({ controlsRef }) {
 	useFrame((_, dt) => {
 		const st = useStudio.getState();
 		if (st.fpWarpNonce !== lastWarpNonce.current) {
+			const boot = lastWarpNonce.current < 0;
 			lastWarpNonce.current = st.fpWarpNonce;
-			pos.current.set(st.fpWarpX, st.fpWarpY, st.fpWarpZ);
-			velX.current = 0;
-			velY.current = 0;
-			velZ.current = 0;
-			grounded.current = true;
-			fpLive.x = st.fpWarpX;
-			fpLive.y = st.fpWarpY;
-			fpLive.z = st.fpWarpZ;
+			if (vehLive.inVehicle && !boot) resetVehicles();
+			if (!vehLive.inVehicle) {
+				pos.current.set(st.fpWarpX, st.fpWarpY, st.fpWarpZ);
+				velX.current = 0;
+				velY.current = 0;
+				velZ.current = 0;
+				grounded.current = true;
+				fpLive.x = st.fpWarpX;
+				fpLive.y = st.fpWarpY;
+				fpLive.z = st.fpWarpZ;
+			}
 		}
 		if (!firstPerson) return;
 		const d = Math.min(.05, Math.max(.001, dt));
@@ -7867,14 +8649,62 @@ function FirstPersonRig({ controlsRef }) {
 			if (!mapOpen) input.current.jumpTap = true;
 		}
 		const act = input.current.poll();
-		crouchGate.current?.setHeld(act.crouchHeld);
 		const live = useStudio.getState();
+		const inVeh = live.inVehicle || vehLive.inVehicle;
+		if (!inVeh) crouchGate.current?.setHeld(act.crouchHeld);
+		else crouchGate.current?.setHeld(false);
 		const crouched = live.fpCrouch;
 		const prone = live.fpProne;
 		if (st.fpInteractNonce !== lastInteractNonce.current) {
 			lastInteractNonce.current = st.fpInteractNonce;
 			window.dispatchEvent(new Event("studio-fp-interact"));
-		} else if (act.interact && !mapOpen) window.dispatchEvent(new Event("studio-fp-interact"));
+		} else if (!mapOpen) {
+			if (inVeh ? act.interactF : act.interact) window.dispatchEvent(new Event("studio-fp-interact"));
+		}
+		if (vehLive.ready && live.worldMap === "city") stepVehicles(d, {
+			throttle: inVeh ? act.moveY : 0,
+			steer: inVeh ? -act.moveX : 0,
+			pitch: inVeh ? -act.moveY : 0,
+			roll: inVeh ? -act.moveX : 0,
+			yaw: inVeh ? (act.qHeld ? 1 : 0) + live.vehYawHeld + (act.eHeld ? -1 : 0) : 0,
+			nitro: inVeh && (act.sprint || live.vehNitroHeld),
+			handbrake: inVeh && (act.spaceHeld || live.vehDriftHeld),
+			thrustUp: inVeh && (act.sprint || live.vehNitroHeld),
+			thrustDown: inVeh && act.cHeld,
+			thrustSlider: inVeh ? live.vehThrustSlider : null,
+			mapOpen
+		});
+		if (inVeh) {
+			const v = getOccupied();
+			if (vehLive.snapYaw != null) {
+				yaw.current = vehLive.snapYaw;
+				pitch.current = live.vehicleCam === "first" ? 0 : -.18;
+				vehLive.snapYaw = null;
+			}
+			if (v) {
+				pos.current.set(v.x, v.y, v.z);
+				speedRef.current = Math.abs(v.speed);
+			}
+			fpLive.active = true;
+			fpLive.view = body ? "body" : "observe";
+			fpLive.x = pos.current.x;
+			fpLive.y = pos.current.y;
+			fpLive.z = pos.current.z;
+			fpLive.yaw = yaw.current;
+			fpLive.pitch = pitch.current;
+			fpLive.crouched = false;
+			fpLive.prone = false;
+			fpLive.moveFwd = 0;
+			fpLive.moveSide = 0;
+			fpLive.speedMps = speedRef.current;
+			fpLive.stepDist = 0;
+			fpLive.grounded = v ? !v.airborne : true;
+			fpLive.velY = v?.vy ?? 0;
+			fpLive.sprinting = false;
+			if (v?.airborne) fpLive.airTime += d;
+			else fpLive.airTime = 0;
+			return;
+		}
 		const wantEye = prone ? FP_PRONE : crouched ? FP_CROUCH : FP_STAND;
 		if (wantEye !== eyeTarget.current) {
 			eyeFrom.current = eye.current;
@@ -8014,6 +8844,11 @@ function FirstPersonRig({ controlsRef }) {
 			pos.current.y = y;
 			pos.current.z = z;
 		}
+		if (cityOn) {
+			const pushed = pushPlayerFromVehicles(pos.current.x, pos.current.y, pos.current.z, capR);
+			pos.current.x = pushed.x;
+			pos.current.z = pushed.z;
+		}
 		const stepDist = Math.hypot(pos.current.x - prevX, pos.current.z - prevZ);
 		speedRef.current = Math.hypot(velX.current, velZ.current);
 		if (grounded.current && wishLen > .12) distWalk.current += stepDist;
@@ -8039,10 +8874,132 @@ function FirstPersonRig({ controlsRef }) {
 		if (grounded.current) fpLive.airTime = 0;
 		else fpLive.airTime += d;
 	}, -1);
-	useFrame(() => {
+	useFrame((_, dt) => {
 		if (!firstPerson) return;
 		const st = useStudio.getState();
 		if (st.cityMapOpen) return;
+		const v = st.inVehicle || vehLive.inVehicle ? getOccupied() : null;
+		if (v) {
+			const d = Math.min(.05, Math.max(.001, dt));
+			const firstCam = st.vehicleCam === "first";
+			if (lastVehCam.current !== st.vehicleCam) {
+				lastVehCam.current = st.vehicleCam;
+				if (firstCam) pitch.current = v.kind === "plane" ? .12 : .02;
+				else pitch.current = -.18;
+				yaw.current = v.yaw;
+			}
+			const fx = v.fx;
+			const fy = v.fy;
+			const fz = v.fz;
+			const ux = v.ux;
+			const uy = v.uy;
+			const uz = v.uz;
+			const rx = v.rx;
+			const ry = v.ry;
+			const rz = v.rz;
+			if (v.kind === "plane" ? v.thrust > .28 : v.speed > 5 && Math.abs(v.lat) < 8) {
+				const dyaw = Math.atan2(Math.sin(v.yaw - yaw.current), Math.cos(v.yaw - yaw.current));
+				yaw.current += dyaw * (1 - Math.exp(-2.1 * d));
+				if (!firstCam) {
+					const wantPitch = v.kind === "plane" ? -.12 : -.18;
+					pitch.current += (wantPitch - pitch.current) * (1 - Math.exp(-1.4 * d));
+				}
+			}
+			const persp = camera;
+			const kick = Math.min(18, Math.abs(v.speed) * .12 + v.nitro * 8);
+			if (firstCam) {
+				pitch.current = MathUtils.clamp(pitch.current, -.55, .42);
+				if (pitch.current < -.22) pitch.current += (0 - pitch.current) * (1 - Math.exp(-10 * d));
+				const camX = v.x + rx * v.eyeX + ux * v.eyeY - fx * v.eyeZ;
+				const camY = v.y + ry * v.eyeX + uy * v.eyeY - fy * v.eyeZ;
+				const camZ = v.z + rz * v.eyeX + uz * v.eyeY - fz * v.eyeZ;
+				camera.position.set(camX, camY, camZ);
+				_vehQ.set(v.qx, v.qy, v.qz, v.qw);
+				const dyaw = Math.atan2(Math.sin(yaw.current - v.yaw), Math.cos(yaw.current - v.yaw));
+				_lookE.set(-pitch.current, dyaw, 0, "YXZ");
+				_lookQ.setFromEuler(_lookE);
+				camera.quaternion.copy(_vehQ).multiply(_lookQ);
+				const fov = Math.min(82, st.fpFov + kick * .45);
+				const near = .06;
+				const far = 2400;
+				if (persp.fov !== fov || persp.near !== near || persp.far !== far) {
+					persp.fov = fov;
+					persp.near = near;
+					persp.far = far;
+					persp.updateProjectionMatrix();
+				}
+				const c = controlsRef.current;
+				if (c) {
+					c.target.set(v.x + fx * 6, camY, v.z + fz * 6);
+					c.enabled = false;
+				}
+				return;
+			}
+			pitch.current = MathUtils.clamp(pitch.current, -1.15, -.04);
+			const dist = vehLive.camDist;
+			const height = vehLive.camHeight;
+			const lookAhead = v.kind === "plane" ? 14 : 5.5;
+			let camX;
+			let camY;
+			let camZ;
+			if (v.kind === "plane" && v.airborne) {
+				camX = v.x - fx * dist + ux * height * .55;
+				camY = v.y - fy * dist + uy * height * .55;
+				camZ = v.z - fz * dist + uz * height * .55;
+			} else {
+				const lookY = v.y + (v.kind === "plane" ? .4 : .55);
+				const cy = Math.cos(pitch.current);
+				const lx = -Math.sin(yaw.current) * cy;
+				const ly = Math.sin(pitch.current);
+				const lz = -Math.cos(yaw.current) * cy;
+				camX = v.x - lx * dist;
+				camY = lookY - ly * dist + height * .12;
+				camZ = v.z - lz * dist;
+				const gy = citySurfaceAt(camX, camZ);
+				if (camY < gy + .7) camY = gy + .7;
+				_camHit.set(v.x, lookY, v.z);
+				_fpZ.set(camX - v.x, camY - lookY, camZ - v.z);
+				const span = _fpZ.length();
+				if (span > .2) {
+					_fpZ.multiplyScalar(1 / span);
+					const hit = cityRayPick(_camHit, _fpZ, span);
+					if (hit) {
+						const hd = _camHit.distanceTo(_fpFwd.set(hit.x, hit.y, hit.z));
+						if (hd < span - .35) {
+							const t = Math.max(1.2, hd - .45);
+							camX = v.x + _fpZ.x * t;
+							camY = lookY + _fpZ.y * t;
+							camZ = v.z + _fpZ.z * t;
+						}
+					}
+				}
+			}
+			const k = 1 - Math.exp(-8.5 * d);
+			camera.position.x += (camX - camera.position.x) * k;
+			camera.position.y += (camY - camera.position.y) * k;
+			camera.position.z += (camZ - camera.position.z) * k;
+			const lookY = v.y + (v.kind === "plane" ? .35 : .55);
+			_fpFwd.set(v.x + fx * lookAhead - camera.position.x, lookY + fy * lookAhead + .2 - camera.position.y, v.z + fz * lookAhead - camera.position.z);
+			if (v.kind === "plane" && v.airborne) {
+				_fpFwd.set(v.x + fx * lookAhead - camera.position.x, v.y + fy * lookAhead + uy * .4 - camera.position.y, v.z + fz * lookAhead - camera.position.z);
+				applyLookDir(camera, _fpFwd, v.yaw);
+			} else applyLookDir(camera, _fpFwd, yaw.current);
+			const fov = Math.min(88, st.fpFov + kick);
+			const near = .45;
+			const far = 2400;
+			if (persp.fov !== fov || persp.near !== near || persp.far !== far) {
+				persp.fov = fov;
+				persp.near = near;
+				persp.far = far;
+				persp.updateProjectionMatrix();
+			}
+			const c = controlsRef.current;
+			if (c) {
+				c.target.set(v.x, lookY, v.z);
+				c.enabled = false;
+			}
+			return;
+		}
 		syncFpProjection(camera, st.worldMap, st.fpView, st.fpFov);
 		const body = st.fpView === "body";
 		const fx = -Math.sin(yaw.current);
@@ -8113,7 +9070,7 @@ function CityMapBake() {
 			try {
 				const model = await loadCityModel(() => {});
 				if (cancelled) return;
-				if (!getCityRuntime().ready || getCityRuntime().group !== model || getCityRuntime().bakeId !== "house-v10") bakeCityCollision(model);
+				if (!getCityRuntime().ready || getCityRuntime().group !== model || getCityRuntime().bakeId !== "house-v11") bakeCityCollision(model);
 			} catch {}
 		})();
 		return () => {
@@ -8523,8 +9480,13 @@ function WorldGate() {
 		const go = async () => {
 			const s = useStudio.getState();
 			if (!s.firstPerson || travelLock || s.loading) return;
+			if (s.inVehicle || vehLive.inVehicle) {
+				tryExitVehicle();
+				return;
+			}
 			const x = fpLive.x;
 			const z = fpLive.z;
+			if (s.worldMap === "city" && tryEnterVehicle(fpLive.x, fpLive.y, fpLive.z)) return;
 			if (s.worldMap === "home" && nearHomeExit(x, z)) {
 				travelLock = true;
 				s.setFirstPerson(true, "body");
@@ -8547,7 +9509,7 @@ function WorldGate() {
 						loadProgress: 94,
 						loadHint: "生成贴合模型的碰撞"
 					});
-					if (!getCityRuntime().ready || getCityRuntime().group !== model || getCityRuntime().bakeId !== "house-v10") bakeCityCollision(model);
+					if (!getCityRuntime().ready || getCityRuntime().group !== model || getCityRuntime().bakeId !== "house-v11") bakeCityCollision(model);
 					useStudio.setState({
 						worldMap: "city",
 						portalHint: "",
@@ -8575,6 +9537,7 @@ function WorldGate() {
 				return;
 			}
 			if (s.worldMap === "city" && nearCityPortal(x, z)) {
+				resetVehicles();
 				travelLock = true;
 				useStudio.setState({
 					loading: true,
@@ -8609,8 +9572,12 @@ function WorldGate() {
 			return;
 		}
 		let hint = "";
-		if (s.worldMap === "home" && nearHomeExit(fpLive.x, fpLive.z)) hint = "按 E / 互动 出门";
-		else if (s.worldMap === "city" && nearCityPortal(fpLive.x, fpLive.z)) hint = "按 E / 互动 回家";
+		if (s.inVehicle || vehLive.inVehicle) hint = "";
+		else if (s.worldMap === "city") hint = vehicleHintAt(fpLive.x, fpLive.y, fpLive.z);
+		if (!hint) {
+			if (s.worldMap === "home" && nearHomeExit(fpLive.x, fpLive.z)) hint = "按 E / 互动 出门";
+			else if (s.worldMap === "city" && nearCityPortal(fpLive.x, fpLive.z)) hint = "按 E / 互动 回家";
+		}
 		if (hint !== s.portalHint) s.setPortalHint(hint);
 	});
 	return null;
@@ -8715,7 +9682,7 @@ function BodyFillLight() {
 	useFrame(() => {
 		const l = ref.current;
 		if (!l) return;
-		if (!on) {
+		if (!on || useStudio.getState().inVehicle) {
 			l.intensity = 0;
 			return;
 		}

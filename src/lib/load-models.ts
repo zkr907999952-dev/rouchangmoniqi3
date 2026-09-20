@@ -20,6 +20,8 @@ const TOTAL_BYTES = MODEL_FILES.reduce((s, f) => s + f.bytes, 0);
 const CORE_BYTES = MODEL_FILES.filter((f) => f.core).reduce((s, f) => s + f.bytes, 0);
 const CACHE_NAME = "vela-glb-v2";
 export const CITY_FILE = { url: "/models/city.glb", bytes: 8_037_544, path: "/models/", hint: "城市" };
+export const CAR_FILE = { url: "/models/car.glb", bytes: 5_679_708, path: "/models/", hint: "跑车" };
+export const PLANE_FILE = { url: "/models/plane.glb", bytes: 13_549_236, path: "/models/", hint: "战机" };
 
 export type LoadedScenes = {
   character: THREE.Group;
@@ -283,4 +285,25 @@ export async function loadCityModel(onProgress: (pct: number, hint: string) => v
   cityGroup = scene;
   onProgress(96, "绘制碰撞");
   return scene;
+}
+
+let carGroup: THREE.Group | null = null;
+let planeGroup: THREE.Group | null = null;
+
+export async function loadVehicleModels(onProgress?: (pct: number, hint: string) => void) {
+  const report = onProgress ?? (() => {});
+  if (!carGroup) {
+    report(12, "载入跑车");
+    const buf = await fetchBuffer(CAR_FILE.url, CAR_FILE.bytes, () => {}, false);
+    carGroup = await parseGlb(buf, CAR_FILE.path);
+    carGroup.name = "LamboRevuelto";
+  }
+  if (!planeGroup) {
+    report(55, "载入战机");
+    const buf = await fetchBuffer(PLANE_FILE.url, PLANE_FILE.bytes, () => {}, false);
+    planeGroup = await parseGlb(buf, PLANE_FILE.path);
+    planeGroup.name = "F22Raptor";
+  }
+  report(100, "载具就绪");
+  return { car: carGroup, plane: planeGroup };
 }

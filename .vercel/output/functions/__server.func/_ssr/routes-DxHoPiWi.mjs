@@ -1,7 +1,7 @@
 import { i as __toESM } from "../_runtime.mjs";
 import { a as require_jsx_runtime, o as require_react } from "../_libs/@radix-ui/react-collection+[...].mjs";
 import { C as Euler, E as Group, J as MathUtils, L as Line3, Lt as Vector3, X as Matrix4, d as BufferAttribute, f as BufferGeometry, gt as Quaternion, l as Box3, p as Cache, v as Color, vt as Ray } from "../_libs/@react-three/drei+[...].mjs";
-import { A as Box, C as Grab, D as ChevronsUpDown, E as Crosshair, F as ArrowDown, I as Activity, M as ArrowUp, N as ArrowRight, O as ChevronsDown, P as ArrowLeft, S as Grid3x3, T as EyeOff, _ as Map$1, a as User, b as Hand, c as Settings2, d as RotateCcw, f as Rotate3d, g as Move, h as Pause, i as Wind, j as Bone, k as Camera, l as Scan, m as Pointer, n as Zap, p as Repeat, r as Wrench, s as Sword, t as ZoomIn, u as RotateCw, v as House, w as Eye, x as GripHorizontal, y as Heart } from "../_libs/lucide-react.mjs";
+import { A as ChevronsUpDown, B as ArrowDown, C as Grid3x3, D as Eye, E as Flame, F as Box, I as Bone, L as ArrowUp, M as ChevronsLeft, N as ChevronsDown, O as EyeOff, P as Camera, R as ArrowRight, S as GripHorizontal, T as Gauge, V as Activity, _ as Map$1, a as User, b as Heart, c as Settings2, d as RotateCcw, f as Rotate3d, g as Move, h as Pause, i as Wind, j as ChevronsRight, k as Crosshair, l as Scan, m as Pointer, n as Zap, p as Repeat, r as Wrench, s as Sword, t as ZoomIn, u as RotateCw, v as LogOut, w as Grab, x as Hand, y as House, z as ArrowLeft } from "../_libs/lucide-react.mjs";
 import { t as GLTFLoader } from "../_libs/three-stdlib.mjs";
 import { t as MeshBVH } from "../_libs/three-mesh-bvh.mjs";
 import { t as create } from "../_libs/zustand.mjs";
@@ -9,7 +9,7 @@ import { n as MeshoptDecoder } from "../_libs/three.mjs";
 import { i as SliderTrack, n as SliderRange, r as SliderThumb, t as Slider } from "../_libs/@radix-ui/react-slider+[...].mjs";
 import { t as clsx } from "../_libs/clsx.mjs";
 import { t as twMerge } from "../_libs/tailwind-merge.mjs";
-//#region node_modules/.nitro/vite/services/ssr/assets/routes-B-QwxdJc.js
+//#region node_modules/.nitro/vite/services/ssr/assets/routes-DxHoPiWi.js
 var import_react = /* @__PURE__ */ __toESM(require_react());
 var import_jsx_runtime = require_jsx_runtime();
 var __defProp = Object.defineProperty;
@@ -217,7 +217,7 @@ function isLocoPose(id) {
 function isDancePose(id) {
 	return id.startsWith("dance");
 }
-var _q = new Quaternion();
+var _q$1 = new Quaternion();
 var _q2 = new Quaternion();
 var _from = new Vector3();
 var _to = new Vector3();
@@ -1225,7 +1225,7 @@ var SoftSkeleton = class {
 		const dist = _to.dot(h.axisWorld);
 		const p = this.parent[h.bone];
 		_v.copy(h.axisWorld).multiplyScalar(dist);
-		if (p >= 0) _v.applyQuaternion(_q.copy(this.wrot[p]).invert());
+		if (p >= 0) _v.applyQuaternion(_q$1.copy(this.wrot[p]).invert());
 		this.off[h.bone].copy(h.startOff).add(_v);
 	}
 	bonePos(i) {
@@ -1261,7 +1261,7 @@ var SoftSkeleton = class {
 	toRestLocal(p) {
 		const i = this.byName["C_Spine_a"] ?? this.byName["C_Hip_a"] ?? 0;
 		p.sub(this.wpos[i]);
-		p.applyQuaternion(_q.copy(this.wrot[i]).invert());
+		p.applyQuaternion(_q$1.copy(this.wrot[i]).invert());
 		p.x += this.rest[i * 3];
 		p.y += this.rest[i * 3 + 1];
 		p.z += this.rest[i * 3 + 2];
@@ -1269,7 +1269,7 @@ var SoftSkeleton = class {
 	}
 	toRestDir(n) {
 		const i = this.byName["C_Spine_a"] ?? this.byName["C_Hip_a"] ?? 0;
-		n.applyQuaternion(_q.copy(this.wrot[i]).invert());
+		n.applyQuaternion(_q$1.copy(this.wrot[i]).invert());
 		return n;
 	}
 	poseQuat(i) {
@@ -1590,8 +1590,8 @@ var SoftSkeleton = class {
 			_v.set(_to.x, _to.y, Math.min(_to.z - .22, .04));
 			if (_v.lengthSq() < 1e-8) return;
 			_v.normalize();
-			_q.setFromUnitVectors(_to, _v);
-			this.poseQ[i].premultiply(_q);
+			_q$1.setFromUnitVectors(_to, _v);
+			this.poseQ[i].premultiply(_q$1);
 		};
 		pull("L_UpperArm_a", "L_Forearm_a");
 		pull("R_UpperArm_a", "R_Forearm_a");
@@ -2027,8 +2027,8 @@ var SoftSkeleton = class {
 			const spin = (name, ex, ey, ez) => {
 				const i = this.byName[name];
 				if (i === void 0) return;
-				_q.setFromEuler(_e.set(ex, ey, ez, "XYZ"));
-				this.poseQ[i].multiply(_q);
+				_q$1.setFromEuler(_e.set(ex, ey, ez, "XYZ"));
+				this.poseQ[i].multiply(_q$1);
 			};
 			spin("R_Forearm_a", stirY * 5.5, stirX * 4.2, 0);
 			spin("R_Hand_a", stirY * 9.5, stirX * 7.5, stirX * 2.2);
@@ -2202,13 +2202,13 @@ var SoftSkeleton = class {
 				q.identity();
 				if (Math.abs(j.flex) > .001) {
 					_from.set(this.handCurlAx[iL * 3], this.handCurlAx[iL * 3 + 1], this.handCurlAx[iL * 3 + 2]);
-					_q.setFromAxisAngle(_from, j.flex);
-					q.multiply(_q);
+					_q$1.setFromAxisAngle(_from, j.flex);
+					q.multiply(_q$1);
 				}
 				if (Math.abs(j.spread) > .001) {
 					_from.set(this.handPalmAx[iL * 3], this.handPalmAx[iL * 3 + 1], this.handPalmAx[iL * 3 + 2]);
-					_q.setFromAxisAngle(_from, j.spread);
-					q.multiply(_q);
+					_q$1.setFromAxisAngle(_from, j.spread);
+					q.multiply(_q$1);
 				}
 			}
 		}
@@ -2331,12 +2331,12 @@ var SoftSkeleton = class {
 				const q = poseAt(suffix);
 				q.identity();
 				if (Math.abs(flip) > .001 && _from.lengthSq() > 1e-10) {
-					_q.setFromAxisAngle(_from, flip);
-					q.multiply(_q);
+					_q$1.setFromAxisAngle(_from, flip);
+					q.multiply(_q$1);
 				}
 				if (e[0] !== 0 || e[1] !== 0 || e[2] !== 0) {
-					_q.setFromEuler(_e.set(e[0], e[1], e[2], "XYZ"));
-					q.multiply(_q);
+					_q$1.setFromEuler(_e.set(e[0], e[1], e[2], "XYZ"));
+					q.multiply(_q$1);
 				}
 			};
 			poseThumb("Thumb_a", th.a, th.flip);
@@ -2510,8 +2510,8 @@ var SoftSkeleton = class {
 			if (!locked && this.jawKind[i]) {
 				const th = this.jawTheta(i);
 				if (th > .001) {
-					_q.setFromEuler(_e.set(th, 0, 0, "XYZ"));
-					_q2.copy(targetQ).multiply(_q);
+					_q$1.setFromEuler(_e.set(th, 0, 0, "XYZ"));
+					_q2.copy(targetQ).multiply(_q$1);
 					targetQ = _q2;
 				}
 			}
@@ -2543,8 +2543,8 @@ var SoftSkeleton = class {
 				if (i === this.iNeck) {
 					const p = this.parent[i];
 					if (p >= 0) {
-						_q.copy(this.wrot[p]).invert();
-						_lookQ.copy(_q).multiply(this.bodyNeckQ);
+						_q$1.copy(this.wrot[p]).invert();
+						_lookQ.copy(_q$1).multiply(this.bodyNeckQ);
 					} else _lookQ.copy(this.bodyNeckQ);
 					q.copy(_lookQ);
 					qv.set(0, 0, 0);
@@ -2575,23 +2575,23 @@ var SoftSkeleton = class {
 				continue;
 			}
 			if (!locked) {
-				_q.copy(q).invert().multiply(targetQ);
-				const ang = 2 * Math.acos(Math.min(1, Math.abs(_q.w)));
+				_q$1.copy(q).invert().multiply(targetQ);
+				const ang = 2 * Math.acos(Math.min(1, Math.abs(_q$1.w)));
 				if (ang > 1e-5) {
-					const s = Math.sqrt(1 - _q.w * _q.w) || 1e-6;
-					const sign = _q.w < 0 ? -1 : 1;
+					const s = Math.sqrt(1 - _q$1.w * _q$1.w) || 1e-6;
+					const sign = _q$1.w < 0 ? -1 : 1;
 					const k = isFace ? stiff * 1.5 : stiff;
-					qv.x += sign * (_q.x / s) * ang * k * d;
-					qv.y += sign * (_q.y / s) * ang * k * d;
-					qv.z += sign * (_q.z / s) * ang * k * d;
+					qv.x += sign * (_q$1.x / s) * ang * k * d;
+					qv.y += sign * (_q$1.y / s) * ang * k * d;
+					qv.z += sign * (_q$1.z / s) * ang * k * d;
 				}
 			}
 			qv.multiplyScalar(Math.exp(-damp * d));
 			const spin = qv.length() * d * .55;
 			if (spin > 1e-8) {
 				_axis.copy(qv).normalize();
-				_q.setFromAxisAngle(_axis, spin);
-				q.premultiply(_q);
+				_q$1.setFromAxisAngle(_axis, spin);
+				q.premultiply(_q$1);
 				q.normalize();
 			}
 			const maxA = locked ? 3.2 : Math.max(this.maxAng[i], poseA + .08);
@@ -2661,14 +2661,14 @@ var SoftSkeleton = class {
 			if (_from.lengthSq() < 1e-8 || _v.lengthSq() < 1e-8) continue;
 			_from.normalize();
 			_v.normalize();
-			_q.setFromUnitVectors(_from, _v);
+			_q$1.setFromUnitVectors(_from, _v);
 			const pp = this.parent[pivot];
 			if (pp >= 0) {
 				_q2.copy(this.wrot[pp]).invert();
-				_q.premultiply(_q2);
-				_q.multiply(this.wrot[pp]);
+				_q$1.premultiply(_q2);
+				_q$1.multiply(this.wrot[pp]);
 			}
-			this.q[pivot].premultiply(_q);
+			this.q[pivot].premultiply(_q$1);
 			this.q[pivot].normalize();
 		}
 		this.updateFK();
@@ -2687,13 +2687,13 @@ var SoftSkeleton = class {
 			this.hairRootRotPrev.copy(rq);
 			this.hairRootInit = true;
 		} else {
-			_q.copy(rq).multiply(_q2.copy(this.hairRootRotPrev).invert());
+			_q$1.copy(rq).multiply(_q2.copy(this.hairRootRotPrev).invert());
 			for (let k = 1; k < n; k++) {
 				_from.copy(this.hairP[k]).sub(this.hairRootPrev);
-				_from.applyQuaternion(_q);
+				_from.applyQuaternion(_q$1);
 				this.hairP[k].copy(rp).add(_from);
 				_from.copy(this.hairPrev[k]).sub(this.hairRootPrev);
-				_from.applyQuaternion(_q);
+				_from.applyQuaternion(_q$1);
 				this.hairPrev[k].copy(rp).add(_from);
 			}
 		}
@@ -2815,8 +2815,8 @@ var SoftSkeleton = class {
 				this.q[i].slerp(IDENTITY, .22);
 				continue;
 			}
-			_q.setFromUnitVectors(_from, _to);
-			this.q[i].slerp(_q, .4);
+			_q$1.setFromUnitVectors(_from, _to);
+			this.q[i].slerp(_q$1, .4);
 		}
 	}
 	stepDents(d) {
@@ -3237,7 +3237,7 @@ var SoftSkeleton = class {
 		}
 	}
 };
-var CITY_BAKE_ID = "house-v10";
+var CITY_BAKE_ID = "house-v11";
 var HOME_EXIT = {
 	x: -3.58,
 	y: 0,
@@ -3287,7 +3287,8 @@ var city = {
 	probeN: 0,
 	probeY: null,
 	sampleV: [],
-	sampleBB: []
+	sampleBB: [],
+	landmarks: {}
 };
 function getCityRuntime() {
 	return city;
@@ -3356,6 +3357,7 @@ function disposeColliders() {
 	}
 	city.colliders = [];
 	city.hash = /* @__PURE__ */ new Map();
+	city.landmarks = {};
 }
 var _tv = new Vector3();
 /** Copy verts through matrixWorld into a fresh non-interleaved buffer. Meshopt/interleaved clone+applyMatrix4 is a no-op. */
@@ -3551,6 +3553,7 @@ function bakeCityCollision(root) {
 	gatherColliders(sx - 3, sx + 3, sz - 3, sz + 3, _query);
 	city.probeN = _query.length;
 	city.probeY = cityRayDown(sx, city.maxY + 80, sz, city.maxY + 220);
+	captureLandmarks(root);
 }
 var _ray = new Ray();
 var _dirN = new Vector3();
@@ -3559,7 +3562,7 @@ var _inv = new Matrix4();
 var _world = new Matrix4();
 var _hitP = new Vector3();
 var _worldDir = new Vector3();
-var _origin = new Vector3();
+var _origin$1 = new Vector3();
 function prepareRay(col, origin, dir) {
 	if (col.world) {
 		_ray.origin.copy(origin);
@@ -3586,7 +3589,7 @@ function cityRayDown(x, fromY, z, maxDist) {
 	let best = maxDist + 1;
 	let hitY = null;
 	_dirN.set(0, -1, 0);
-	const origin = _origin.set(x, fromY, z);
+	const origin = _origin$1.set(x, fromY, z);
 	for (const col of _query) {
 		if (fromY < col.box.minY - .02) continue;
 		if (fromY - maxDist > col.box.maxY + .02) continue;
@@ -3610,7 +3613,7 @@ function cityLowestSurface(x, z, minY = .04, maxY = 8) {
 	if (!city.colliders.length) return 0;
 	gatherColliders(x - 2.5, x + 2.5, z - 2.5, z + 2.5, _query);
 	_dirN.set(0, -1, 0);
-	const origin = _origin.set(x, top, z);
+	const origin = _origin$1.set(x, top, z);
 	let lowest = null;
 	for (const col of _query) {
 		if (col.box.maxY < minY - .02) continue;
@@ -3650,6 +3653,18 @@ function citySurfaceAt(x, z) {
 	return 0;
 }
 function cityRayPick(origin, direction, maxDist = 4e3) {
+	const hit = cityRayHit(origin, direction, maxDist);
+	if (!hit) return null;
+	return {
+		x: hit.x,
+		y: hit.y,
+		z: hit.z
+	};
+}
+var _hitN = new Vector3();
+var _faceN = new Vector3();
+/** MeshBVH raycast with world-space contact normal facing the incoming ray. */
+function cityRayHit(origin, direction, maxDist = 4e3) {
 	if (!city.ready || !city.colliders.length) return null;
 	_dirN.copy(direction);
 	if (_dirN.lengthSq() < 1e-10) return null;
@@ -3667,11 +3682,23 @@ function cityRayPick(origin, direction, maxDist = 4e3) {
 		hitToWorld(col, hit, origin, _dirN, s);
 		const distW = origin.distanceTo(_hitP);
 		if (distW > maxDist || distW >= best) continue;
+		if (hit.face) _faceN.copy(hit.face.normal);
+		else if (hit.normal) _faceN.copy(hit.normal);
+		else _faceN.copy(_dirN).negate();
+		if (col.world) _hitN.copy(_faceN);
+		else _hitN.copy(_faceN).transformDirection(col.mesh.matrixWorld);
+		if (_hitN.lengthSq() < 1e-10) _hitN.copy(_dirN).negate();
+		else _hitN.normalize();
+		if (_hitN.dot(_dirN) > 0) _hitN.negate();
 		best = distW;
 		point = {
 			x: _hitP.x,
 			y: _hitP.y,
-			z: _hitP.z
+			z: _hitP.z,
+			nx: _hitN.x,
+			ny: _hitN.y,
+			nz: _hitN.z,
+			dist: distW
 		};
 	}
 	return point;
@@ -3680,7 +3707,7 @@ var _seg = new Line3();
 var _box = new Box3();
 var _triPoint = new Vector3();
 var _capPoint = new Vector3();
-var _dir = new Vector3();
+var _dir$1 = new Vector3();
 /** Push a vertical capsule out of city triangles. Feet at (x,y,z). */
 function cityMoveCapsule(px, py, pz, radius, height, dx, dy, dz, snapGround = true) {
 	let x = px + dx;
@@ -3728,16 +3755,16 @@ function cityMoveCapsule(px, py, pz, radius, height, dx, dy, dz, snapGround = tr
 					const dist = tri.closestPointToSegment(_seg, _triPoint, _capPoint);
 					if (dist < localR) {
 						const depth = localR - dist;
-						_dir.copy(_capPoint).sub(_triPoint);
-						if (_dir.lengthSq() < 1e-12) tri.getNormal(_dir);
-						else _dir.normalize();
-						_seg.start.addScaledVector(_dir, depth);
-						_seg.end.addScaledVector(_dir, depth);
+						_dir$1.copy(_capPoint).sub(_triPoint);
+						if (_dir$1.lengthSq() < 1e-12) tri.getNormal(_dir$1);
+						else _dir$1.normalize();
+						_seg.start.addScaledVector(_dir$1, depth);
+						_seg.end.addScaledVector(_dir$1, depth);
 						hit = true;
 						if (col.world) {
-							if (_dir.y > .55) grounded = true;
+							if (_dir$1.y > .55) grounded = true;
 						} else {
-							_worldDir.copy(_dir).transformDirection(col.mesh.matrixWorld);
+							_worldDir.copy(_dir$1).transformDirection(col.mesh.matrixWorld);
 							if (_worldDir.y > .55) grounded = true;
 						}
 					}
@@ -3811,6 +3838,88 @@ function nearCityPortal(x, z) {
 	const dz = z - city.portal.z;
 	const r = city.portal.r;
 	return dx * dx + dz * dz <= r * r;
+}
+var LANDMARK_RE = /^(AirPort|AirPort_Track|Airport_Front|AirPort_Border|Boulevard_Ground[A-D]|Docks_Ground|Island_Ground|Miami_Ground)/;
+function captureLandmarks(root) {
+	city.landmarks = {};
+	const box = new Box3();
+	root.traverse((obj) => {
+		if (!LANDMARK_RE.test(obj.name)) return;
+		box.setFromObject(obj);
+		if (box.isEmpty() || !Number.isFinite(box.min.x)) return;
+		city.landmarks[obj.name] = {
+			minX: box.min.x,
+			minY: box.min.y,
+			minZ: box.min.z,
+			maxX: box.max.x,
+			maxY: box.max.y,
+			maxZ: box.max.z
+		};
+	});
+}
+function getAirportSpawn() {
+	const track = city.landmarks.AirPort_Track ?? city.landmarks.Airport_Front ?? city.landmarks.AirPort;
+	const hangar = city.landmarks.AirPort ?? city.landmarks.Airport_Front;
+	if (!track) return null;
+	const alongX = track.maxX - track.minX > track.maxZ - track.minZ;
+	const hx = hangar ? (hangar.minX + hangar.maxX) * .5 : (track.minX + track.maxX) * .5;
+	const hz = hangar ? (hangar.minZ + hangar.maxZ) * .5 : (track.minZ + track.maxZ) * .5;
+	let best = null;
+	let bestScore = -1e9;
+	const n = 18;
+	for (let i = 0; i < n; i++) {
+		const u = (i + .35) / n;
+		const x = alongX ? MathUtils.lerp(track.minX + 14, track.maxX - 14, u) : MathUtils.clamp(hx + (i % 2 === 0 ? 18 : -18), track.minX + 10, track.maxX - 10);
+		const z = alongX ? MathUtils.clamp(hz + (i % 2 === 0 ? 18 : -18), track.minZ + 10, track.maxZ - 10) : MathUtils.lerp(track.minZ + 14, track.maxZ - 14, u);
+		if (hangar && x > hangar.minX + 6 && x < hangar.maxX - 6 && z > hangar.minZ + 6 && z < hangar.maxZ - 6) continue;
+		const y = cityLowestSurface(x, z, -2, 10);
+		if (!(Number.isFinite(y) && y > -.4 && y < 3.4)) continue;
+		const dH = Math.hypot(x - hx, z - hz);
+		const score = -dH * .35 + (y < 1.6 ? 24 : 0) + (dH > 16 && dH < 70 ? 12 : 0);
+		if (score > bestScore) {
+			bestScore = score;
+			best = {
+				x,
+				y,
+				z,
+				yaw: alongX ? x >= hx ? -Math.PI / 2 : Math.PI / 2 : z >= hz ? Math.PI : 0
+			};
+		}
+	}
+	if (best) return best;
+	const x = MathUtils.clamp((track.minX + track.maxX) * .5, track.minX + 8, track.maxX - 8);
+	const z = MathUtils.clamp((track.minZ + track.maxZ) * .5, track.minZ + 8, track.maxZ - 8);
+	return {
+		x,
+		y: cityLowestSurface(x, z, -2, 12),
+		z,
+		yaw: alongX ? -Math.PI / 2 : 0
+	};
+}
+function sampleRoadPoints(count, avoid) {
+	const grounds = Object.entries(city.landmarks).filter(([n]) => /^(Boulevard_Ground|Docks_Ground|Island_Ground|AirPort_Track)/.test(n));
+	const out = [];
+	if (!grounds.length) return out;
+	let guard = 0;
+	while (out.length < count && guard < count * 36) {
+		guard++;
+		const b = grounds[guard % grounds.length][1];
+		const pad = 8;
+		const x = MathUtils.lerp(b.minX + pad, b.maxX - pad, Math.abs(Math.sin(guard * 12.9898 + .37 + out.length * 1.7)));
+		const z = MathUtils.lerp(b.minZ + pad, b.maxZ - pad, Math.abs(Math.sin(guard * 78.233 + 1.11 + out.length * 2.3)));
+		if (avoid.some((a) => (x - a.x) ** 2 + (z - a.z) ** 2 < a.r * a.r)) continue;
+		if (out.some((p) => (x - p.x) ** 2 + (z - p.z) ** 2 < 196)) continue;
+		const y = cityLowestSurface(x, z, .02, 2.6);
+		if (!(y > .04 && y < 2.2)) continue;
+		const alongX = b.maxX - b.minX > b.maxZ - b.minZ;
+		out.push({
+			x,
+			y,
+			z,
+			yaw: alongX ? -Math.PI / 2 : 0
+		});
+	}
+	return out;
 }
 /** Park fingertip is ~5cm in front of the navel; full insert is ~5cm in. Contact is halfway. */
 var NAVEL_CONTACT_T = .5;
@@ -4135,6 +4244,18 @@ var useStudio = create((set) => ({
 	fpWarpX: 0,
 	fpWarpY: 0,
 	fpWarpZ: 0,
+	inVehicle: false,
+	vehicleKind: null,
+	vehicleSpeed: 0,
+	vehicleThrust: 0,
+	vehicleNitro: false,
+	vehicleAirborne: false,
+	vehicleGear: true,
+	vehicleCam: "third",
+	vehNitroHeld: false,
+	vehDriftHeld: false,
+	vehYawHeld: 0,
+	vehThrustSlider: null,
 	setParam: (key, value) => set((s) => ({
 		...s,
 		[key]: value,
@@ -4801,7 +4922,13 @@ var useStudio = create((set) => ({
 		worldMap,
 		portalHint: "",
 		cityMapOpen: false,
-		cityMapMarker: null
+		cityMapMarker: null,
+		inVehicle: false,
+		vehicleKind: null,
+		vehNitroHeld: false,
+		vehDriftHeld: false,
+		vehYawHeld: 0,
+		vehThrustSlider: null
 	}),
 	setPortalHint: (portalHint) => set({ portalHint }),
 	setCityMapOpen: (cityMapOpen) => set({ cityMapOpen }),
@@ -4815,6 +4942,12 @@ var useStudio = create((set) => ({
 		fpWarpZ,
 		cityMapOpen: false
 	})),
+	setVehNitroHeld: (vehNitroHeld) => set({ vehNitroHeld }),
+	setVehDriftHeld: (vehDriftHeld) => set({ vehDriftHeld }),
+	setVehYawHeld: (vehYawHeld) => set({ vehYawHeld: Math.max(-1, Math.min(1, vehYawHeld)) }),
+	setVehThrustSlider: (vehThrustSlider) => set({ vehThrustSlider }),
+	toggleVehicleCam: () => set((s) => ({ vehicleCam: s.vehicleCam === "first" ? "third" : "first" })),
+	setVehicleCam: (vehicleCam) => set({ vehicleCam }),
 	shake: () => set((s) => ({ shakeNonce: s.shakeNonce + 1 })),
 	fireStrike: (point = null) => set((s) => ({
 		strikeNonce: s.strikeNonce + 1,
@@ -4837,228 +4970,32 @@ var useStudio = create((set) => ({
 		retryNonce: s.retryNonce + 1
 	}))
 }));
-var GAME_CODES = /* @__PURE__ */ new Set([
-	"KeyW",
-	"KeyA",
-	"KeyS",
-	"KeyD",
-	"ArrowUp",
-	"ArrowDown",
-	"ArrowLeft",
-	"ArrowRight",
-	"Space",
-	"KeyC",
-	"KeyE",
-	"KeyF",
-	"ShiftLeft",
-	"ShiftRight"
-]);
-function radialDeadzone(x, y, dz = .15) {
-	const m = Math.hypot(x, y);
-	if (m < dz) return {
-		x: 0,
-		y: 0
-	};
-	const scale = (m - dz) / (1 - dz) / m;
-	return {
-		x: x * scale,
-		y: y * scale
-	};
-}
-function THREE_CLAMP(v, a, b) {
-	return v < a ? a : v > b ? b : v;
-}
-var CROUCH_LONG_MS = 500;
-var CROUCH_COOL_MS = 380;
-var CROUCH_STICKY_MS = 80;
-/** Tap vs long-press with sticky release so key-repeat cannot flicker posture. */
-var CrouchHold = class {
-	onTap;
-	onLong;
-	held = false;
-	downAt = 0;
-	longFired = false;
-	lastAction = 0;
-	longTimer = null;
-	stickyTimer = null;
-	constructor(onTap, onLong) {
-		this.onTap = onTap;
-		this.onLong = onLong;
-	}
-	setHeld(on) {
-		if (on) this.down();
-		else this.up();
-	}
-	reset() {
-		this.clearTimers();
-		this.held = false;
-		this.longFired = false;
-		this.downAt = 0;
-	}
-	down() {
-		if (this.stickyTimer) {
-			clearTimeout(this.stickyTimer);
-			this.stickyTimer = null;
-			if (this.held) {
-				if (!this.longFired) this.armLong();
-				return;
-			}
-		}
-		if (this.held) return;
-		this.held = true;
-		this.downAt = performance.now();
-		this.longFired = false;
-		this.armLong();
-	}
-	armLong() {
-		if (this.longTimer) clearTimeout(this.longTimer);
-		this.longTimer = setTimeout(() => {
-			this.longTimer = null;
-			const age = performance.now() - this.downAt;
-			if (!this.held || this.longFired) return;
-			if (age < 460) return;
-			this.longFired = true;
-			this.lastAction = performance.now();
-			this.onLong();
-		}, CROUCH_LONG_MS);
-	}
-	up() {
-		if (!this.held) return;
-		if (this.stickyTimer) return;
-		if (this.longTimer) {
-			clearTimeout(this.longTimer);
-			this.longTimer = null;
-		}
-		this.stickyTimer = setTimeout(() => this.commitUp(), CROUCH_STICKY_MS);
-	}
-	commitUp() {
-		this.stickyTimer = null;
-		if (!this.held) return;
-		this.held = false;
-		if (this.longTimer) {
-			clearTimeout(this.longTimer);
-			this.longTimer = null;
-		}
-		if (this.longFired) return;
-		const now = performance.now();
-		if (now - this.lastAction < CROUCH_COOL_MS) return;
-		this.lastAction = now;
-		this.onTap();
-	}
-	clearTimers() {
-		if (this.longTimer) {
-			clearTimeout(this.longTimer);
-			this.longTimer = null;
-		}
-		if (this.stickyTimer) {
-			clearTimeout(this.stickyTimer);
-			this.stickyTimer = null;
-		}
-	}
-};
-var FpInput = class {
-	keys = /* @__PURE__ */ new Set();
-	stickX = 0;
-	stickY = 0;
-	jumpTap = false;
-	crouchHold = false;
-	interactTap = false;
-	gate = null;
-	injected = [];
-	prevJump = false;
-	prevInteract = false;
-	attach() {
-		this.prevJump = false;
-		this.prevInteract = false;
-		this.keys.clear();
-		this.injected = [];
-		const down = (e) => {
-			if (e.repeat) {
-				if (GAME_CODES.has(e.code)) e.preventDefault();
-				return;
-			}
-			const tag = e.target?.tagName;
-			if (tag === "INPUT" || tag === "TEXTAREA") return;
-			this.keys.add(e.code);
-			if (e.code === "KeyC") this.gate?.setHeld(true);
-			if (GAME_CODES.has(e.code)) e.preventDefault();
-		};
-		const up = (e) => {
-			this.keys.delete(e.code);
-			if (e.code === "KeyC") this.gate?.setHeld(false);
-		};
-		const clear = () => {
-			this.keys.clear();
-			this.gate?.setHeld(false);
-		};
-		window.addEventListener("keydown", down, { capture: true });
-		window.addEventListener("keyup", up, { capture: true });
-		window.addEventListener("blur", clear);
-		document.addEventListener("visibilitychange", () => {
-			if (document.hidden) clear();
-		});
-		this.detach = () => {
-			window.removeEventListener("keydown", down, true);
-			window.removeEventListener("keyup", up, true);
-			window.removeEventListener("blur", clear);
-			this.keys.clear();
-		};
-	}
-	detach = () => {};
-	setKeys(codes) {
-		this.injected = codes.slice();
-		this.gate?.setHeld(codes.includes("KeyC"));
-	}
-	poll() {
-		const held = (code) => this.keys.has(code) || this.injected.includes(code);
-		let mx = this.stickX;
-		let my = this.stickY;
-		if (held("KeyD") || held("ArrowRight")) mx += 1;
-		if (held("KeyA") || held("ArrowLeft")) mx -= 1;
-		if (held("KeyW") || held("ArrowUp")) my += 1;
-		if (held("KeyS") || held("ArrowDown")) my -= 1;
-		let padCrouch = false;
-		const pad = typeof navigator !== "undefined" ? navigator.getGamepads?.()[0] : null;
-		if (pad && pad.mapping === "standard") {
-			const dz = radialDeadzone(pad.axes[0] ?? 0, -(pad.axes[1] ?? 0));
-			mx += dz.x;
-			my += dz.y;
-			if (pad.buttons[0]?.pressed) this.jumpTap = true;
-			if (pad.buttons[1]?.pressed) padCrouch = true;
-			if (pad.buttons[2]?.pressed) this.interactTap = true;
-		}
-		mx = THREE_CLAMP(mx, -1, 1);
-		my = THREE_CLAMP(my, -1, 1);
-		const mag = Math.hypot(mx, my);
-		if (mag > 1) {
-			mx /= mag;
-			my /= mag;
-		}
-		const jumpHeld = this.jumpTap || held("Space");
-		const jump = jumpHeld && !this.prevJump;
-		const interactHeld = this.interactTap || held("KeyE") || held("KeyF");
-		const interact = interactHeld && !this.prevInteract;
-		const stickMag = Math.hypot(this.stickX, this.stickY);
-		let padSprint = false;
-		let padMag = 0;
-		if (pad && pad.mapping === "standard") {
-			padSprint = Boolean(pad.buttons[10]?.pressed);
-			padMag = Math.hypot(pad.axes[0] ?? 0, pad.axes[1] ?? 0);
-		}
-		const sprint = held("ShiftLeft") || held("ShiftRight") || stickMag >= .72 || padSprint || padMag >= .88;
-		this.prevJump = jumpHeld;
-		this.prevInteract = interactHeld;
-		this.jumpTap = false;
-		this.interactTap = false;
-		return {
-			moveX: mx,
-			moveY: my,
-			jump,
-			crouchHeld: this.crouchHold || padCrouch || held("KeyC"),
-			interact,
-			sprint
-		};
-	}
+var fpLive = {
+	active: false,
+	view: "observe",
+	x: 0,
+	y: 0,
+	z: 0,
+	yaw: 0,
+	pitch: 0,
+	bodyYaw: Math.PI,
+	crouched: false,
+	prone: false,
+	eyeX: 0,
+	eyeY: 1.48,
+	eyeZ: .22,
+	chestX: 0,
+	chestY: 1.12,
+	chestZ: .12,
+	headReady: false,
+	moveFwd: 0,
+	moveSide: 0,
+	speedMps: 1.65,
+	stepDist: 0,
+	grounded: true,
+	airTime: 0,
+	velY: 0,
+	sprinting: false
 };
 Cache.enabled = true;
 var MODEL_FILES = [
@@ -5127,6 +5064,18 @@ var CITY_FILE = {
 	bytes: 8037544,
 	path: "/models/",
 	hint: "城市"
+};
+var CAR_FILE = {
+	url: "/models/car.glb",
+	bytes: 5679708,
+	path: "/models/",
+	hint: "跑车"
+};
+var PLANE_FILE = {
+	url: "/models/plane.glb",
+	bytes: 13549236,
+	path: "/models/",
+	hint: "战机"
 };
 var memBuf = /* @__PURE__ */ new Map();
 var memScenes = null;
@@ -5344,6 +5293,1278 @@ async function loadCityModel(onProgress) {
 	onProgress(96, "绘制碰撞");
 	return scene;
 }
+var carGroup = null;
+var planeGroup = null;
+async function loadVehicleModels(onProgress) {
+	const report = onProgress ?? (() => {});
+	if (!carGroup) {
+		report(12, "载入跑车");
+		carGroup = await parseGlb(await fetchBuffer(CAR_FILE.url, CAR_FILE.bytes, () => {}, false), CAR_FILE.path);
+		carGroup.name = "LamboRevuelto";
+	}
+	if (!planeGroup) {
+		report(55, "载入战机");
+		planeGroup = await parseGlb(await fetchBuffer(PLANE_FILE.url, PLANE_FILE.bytes, () => {}, false), PLANE_FILE.path);
+		planeGroup.name = "F22Raptor";
+	}
+	report(100, "载具就绪");
+	return {
+		car: carGroup,
+		plane: planeGroup
+	};
+}
+/** Arcade-sim hybrid vehicles on the city MeshBVH (GTA / racing / 6DOF flight). */
+var vehLive = {
+	ready: false,
+	inVehicle: false,
+	id: "",
+	kind: "car",
+	x: 0,
+	y: 0,
+	z: 0,
+	yaw: 0,
+	pitch: 0,
+	roll: 0,
+	qx: 0,
+	qy: 0,
+	qz: 0,
+	qw: 1,
+	fx: 0,
+	fy: 0,
+	fz: -1,
+	rx: 1,
+	ry: 0,
+	rz: 0,
+	ux: 0,
+	uy: 1,
+	uz: 0,
+	visPitch: 0,
+	visRoll: 0,
+	speed: 0,
+	thrust: 0,
+	nitro: false,
+	drifting: false,
+	gear: 1,
+	door: 0,
+	airborne: false,
+	camDist: 7.4,
+	camHeight: 2.2,
+	eyeX: -.38,
+	eyeY: .42,
+	eyeZ: .22,
+	steerIn: 0,
+	hint: "",
+	vehicles: [],
+	snapYaw: null
+};
+var CAR_ACCEL = 24;
+var CAR_BRAKE = 38;
+var CAR_REV = 13;
+var CAR_MAX = 38;
+var CAR_NITRO = 56;
+var CAR_DRAG = .38;
+var CAR_TURN = 1.85;
+var CAR_GRIP = 11.5;
+var CAR_DRIFT_GRIP = 1.7;
+var CAR_MASS = 1420;
+var CAR_G = 22;
+var SPRING_K = 64e3;
+var DAMPER_C = 5400;
+var I_PITCH = 2200;
+var I_ROLL = 900;
+var PLANE_THRUST_RATE = .55;
+var PLANE_TAKEOFF_KMH = Math.round(115.2);
+var PLANE_MAX = 168;
+var PLANE_TAXI = 26;
+var PLANE_THRUST = 32;
+var PLANE_LIFT_K = .0088;
+var PLANE_DRAG = .016;
+var GRAV = 18.5;
+var SUSP_TRAVEL = .32;
+var _origin = new Vector3();
+var _dir = new Vector3();
+var _q = new Quaternion();
+var _qDelta = new Quaternion();
+var _eul = new Euler();
+var _fwd = new Vector3();
+var _up = new Vector3();
+var _right = new Vector3();
+var hudClock = 0;
+var doorTimer = 0;
+function getVehicles() {
+	return vehLive.vehicles;
+}
+function getOccupied() {
+	if (!vehLive.inVehicle) return null;
+	return vehLive.vehicles.find((v) => v.id === vehLive.id) ?? null;
+}
+function nearestVehicle(x, y, z) {
+	let best = null;
+	let bestD = 1e9;
+	for (const v of vehLive.vehicles) {
+		if (v.occupied) continue;
+		const r = v.kind === "plane" ? 8.4 : 4.2;
+		const dx = x - v.x;
+		const dz = z - v.z;
+		const dy = y - v.y;
+		const d = dx * dx + dz * dz + dy * dy * .25;
+		if (d < r * r && d < bestD) {
+			best = v;
+			bestD = d;
+		}
+	}
+	return best;
+}
+function resetVehicles() {
+	for (const v of vehLive.vehicles) {
+		v.occupied = false;
+		v.doorTarget = 0;
+		v.occupyPhase = 0;
+		v.speed = 0;
+		v.lat = 0;
+		v.vx = 0;
+		v.vy = 0;
+		v.vz = 0;
+		v.nitro = 0;
+		v.pitch = 0;
+		v.roll = 0;
+		v.pitchRate = 0;
+		v.rollRate = 0;
+		v.airborne = false;
+		writeQuatFromEuler(v);
+		updateBasis(v);
+	}
+	vehLive.inVehicle = false;
+	vehLive.id = "";
+	vehLive.hint = "";
+	useStudio.setState({
+		inVehicle: false,
+		vehicleKind: null
+	});
+}
+function tryEnterVehicle(x, y, z) {
+	if (vehLive.inVehicle) return false;
+	const v = nearestVehicle(x, y, z);
+	if (!v) return false;
+	v.occupied = true;
+	v.doorTarget = 1;
+	v.occupyPhase = 1;
+	doorTimer = .72;
+	vehLive.inVehicle = true;
+	vehLive.id = v.id;
+	vehLive.kind = v.kind;
+	vehLive.snapYaw = v.yaw;
+	useStudio.setState({
+		inVehicle: true,
+		vehicleKind: v.kind,
+		fpCrouch: false,
+		fpProne: false,
+		fpCrouchHeld: false,
+		portalHint: ""
+	});
+	return true;
+}
+function tryExitVehicle() {
+	const v = getOccupied();
+	if (!v) return false;
+	if (v.occupyPhase < 0) return true;
+	v.doorTarget = 1;
+	v.occupyPhase = -1;
+	doorTimer = .52;
+	return true;
+}
+function finishExit(v) {
+	const side = v.kind === "plane" ? 4.4 : 2.15;
+	let x = v.x - v.rx * side;
+	let z = v.z - v.rz * side;
+	const y = cityLowestSurface(x, z, -2, 16);
+	const pushed = cityMoveCapsule(x, y, z, .3, 1.64, 0, 0, 0, true);
+	x = pushed.x;
+	z = pushed.z;
+	v.occupied = false;
+	v.occupyPhase = 0;
+	v.doorTarget = 0;
+	v.speed *= .35;
+	v.lat = 0;
+	vehLive.inVehicle = false;
+	vehLive.id = "";
+	useStudio.setState({
+		inVehicle: false,
+		vehicleKind: null
+	});
+	useStudio.getState().warpFp(x, pushed.y, z);
+	fpLive.x = x;
+	fpLive.y = pushed.y;
+	fpLive.z = z;
+	fpLive.yaw = v.yaw + Math.PI * .5;
+}
+function approachVehicle(kind) {
+	const v = kind ? vehLive.vehicles.find((o) => o.kind === kind) : vehLive.vehicles[0];
+	if (!v) return null;
+	const side = v.kind === "plane" ? 4.6 : 2.4;
+	const x = v.x - v.rx * side;
+	const z = v.z - v.rz * side;
+	return {
+		x,
+		y: cityLowestSurface(x, z, -2, 16),
+		z,
+		id: v.id,
+		kind: v.kind
+	};
+}
+function spawnVehicles() {
+	if (!getCityRuntime().ready) return;
+	vehLive.vehicles = [];
+	const sp = getCitySpawn();
+	const avoid = [{
+		x: sp.x,
+		z: sp.z,
+		r: 6
+	}];
+	const near = [];
+	for (const [dx, dz] of [
+		[22.5, 6.2],
+		[-20.8, 5.4],
+		[8.2, 21.5]
+	]) {
+		const x = sp.x + dx;
+		const z = sp.z + dz;
+		const y = cityLowestSurface(x, z, .02, 2.4);
+		if (y > .05 && y < 1.9) {
+			const yaw = Math.atan2(sp.x - x, sp.z - z);
+			near.push({
+				x,
+				y,
+				z,
+				yaw
+			});
+			avoid.push({
+				x,
+				z,
+				r: 8
+			});
+			if (near.length >= 1) break;
+		}
+	}
+	const extra = sampleRoadPoints(4, avoid);
+	const carSpawns = [...near, ...extra].slice(0, 5);
+	if (!carSpawns.length) carSpawns.push({
+		x: sp.x + 6.5,
+		y: sp.y,
+		z: sp.z + 1.4,
+		yaw: 0
+	});
+	carSpawns.forEach((p, i) => {
+		vehLive.vehicles.push(makeCar(`car-${i}`, p.x, p.y, p.z, p.yaw));
+	});
+	const ap = getAirportSpawn();
+	if (ap) vehLive.vehicles.push(makePlane("plane-0", ap.x, ap.y, ap.z, ap.yaw));
+	else {
+		const x = sp.x + 80;
+		const z = sp.z - 40;
+		vehLive.vehicles.push(makePlane("plane-0", x, cityLowestSurface(x, z, -2, 16), z, -Math.PI / 2));
+	}
+	vehLive.ready = true;
+}
+function blankMotion() {
+	return {
+		pitch: 0,
+		roll: 0,
+		qx: 0,
+		qy: 0,
+		qz: 0,
+		qw: 1,
+		fx: 0,
+		fy: 0,
+		fz: -1,
+		rx: 1,
+		ry: 0,
+		rz: 0,
+		ux: 0,
+		uy: 1,
+		uz: 0,
+		speed: 0,
+		lat: 0,
+		vx: 0,
+		vy: 0,
+		vz: 0,
+		thrust: 0,
+		nitro: 0,
+		steerAngle: 0,
+		wheelSpin: 0,
+		susp: [
+			.5,
+			.5,
+			.5,
+			.5
+		],
+		suspVel: [
+			0,
+			0,
+			0,
+			0
+		],
+		visPitch: 0,
+		visRoll: 0,
+		pitchRate: 0,
+		rollRate: 0,
+		gear: 1,
+		door: 0,
+		doorTarget: 0,
+		occupyPhase: 0,
+		occupied: false,
+		airborne: false
+	};
+}
+function makeCar(id, x, y, z, yaw) {
+	const v = {
+		id,
+		kind: "car",
+		x,
+		y,
+		z,
+		yaw,
+		...blankMotion(),
+		halfL: 2.38,
+		halfW: 1.08,
+		height: 1.18,
+		wheelR: .34,
+		originY: .48,
+		eyeX: -.38,
+		eyeY: .42,
+		eyeZ: .22,
+		wheels: [
+			{
+				x: -.92,
+				y: .34,
+				z: -1.42,
+				steer: true
+			},
+			{
+				x: .92,
+				y: .34,
+				z: -1.42,
+				steer: true
+			},
+			{
+				x: -.95,
+				y: .34,
+				z: 1.38,
+				steer: false
+			},
+			{
+				x: .95,
+				y: .34,
+				z: 1.38,
+				steer: false
+			}
+		]
+	};
+	v.y += v.originY;
+	writeQuatFromEuler(v);
+	updateBasis(v);
+	return v;
+}
+function makePlane(id, x, y, z, yaw) {
+	const v = {
+		id,
+		kind: "plane",
+		x,
+		y,
+		z,
+		yaw,
+		...blankMotion(),
+		thrust: .12,
+		halfL: 8.6,
+		halfW: 2.1,
+		height: 2.8,
+		wheelR: .42,
+		originY: 1.32,
+		eyeX: 0,
+		eyeY: 1.28,
+		eyeZ: -5.15,
+		wheels: [
+			{
+				x: 0,
+				y: .42,
+				z: -4.1,
+				steer: true
+			},
+			{
+				x: -1.85,
+				y: .42,
+				z: 1.4,
+				steer: false
+			},
+			{
+				x: 1.85,
+				y: .42,
+				z: 1.4,
+				steer: false
+			}
+		]
+	};
+	v.y += v.originY;
+	writeQuatFromEuler(v);
+	updateBasis(v);
+	return v;
+}
+function applyWheelLayout(id, wheels, halfL, halfW, height, wheelR) {
+	const v = vehLive.vehicles.find((o) => o.id === id);
+	if (!v) return;
+	v.wheels = wheels;
+	v.halfL = halfL;
+	v.halfW = halfW;
+	v.height = height;
+	v.wheelR = wheelR;
+}
+function applyCockpit(id, eye, originY) {
+	const v = vehLive.vehicles.find((o) => o.id === id);
+	if (!v) return;
+	v.eyeX = eye.x;
+	v.eyeY = eye.y;
+	v.eyeZ = eye.z;
+	if (originY != null && Number.isFinite(originY)) v.originY = originY;
+}
+function writeQuatFromEuler(v) {
+	_eul.set(v.pitch, v.yaw, v.roll, "YXZ");
+	_q.setFromEuler(_eul);
+	v.qx = _q.x;
+	v.qy = _q.y;
+	v.qz = _q.z;
+	v.qw = _q.w;
+}
+function readEulerFromQuat(v) {
+	_q.set(v.qx, v.qy, v.qz, v.qw);
+	_eul.setFromQuaternion(_q, "YXZ");
+	v.pitch = _eul.x;
+	v.yaw = _eul.y;
+	v.roll = _eul.z;
+}
+function updateBasis(v) {
+	_q.set(v.qx, v.qy, v.qz, v.qw);
+	_fwd.set(0, 0, -1).applyQuaternion(_q);
+	_up.set(0, 1, 0).applyQuaternion(_q);
+	_right.set(1, 0, 0).applyQuaternion(_q);
+	v.fx = _fwd.x;
+	v.fy = _fwd.y;
+	v.fz = _fwd.z;
+	v.ux = _up.x;
+	v.uy = _up.y;
+	v.uz = _up.z;
+	v.rx = _right.x;
+	v.ry = _right.y;
+	v.rz = _right.z;
+}
+function applyLocalRates(v, pitchRate, yawRate, rollRate, dt) {
+	_q.set(v.qx, v.qy, v.qz, v.qw);
+	_eul.set(pitchRate * dt, yawRate * dt, rollRate * dt, "YXZ");
+	_qDelta.setFromEuler(_eul);
+	_q.multiply(_qDelta);
+	_q.normalize();
+	v.qx = _q.x;
+	v.qy = _q.y;
+	v.qz = _q.z;
+	v.qw = _q.w;
+	readEulerFromQuat(v);
+	updateBasis(v);
+}
+function bodyPoint(v, lx, ly, lz, out) {
+	out.set(v.x + v.rx * lx + v.ux * ly - v.fx * lz, v.y + v.ry * lx + v.uy * ly - v.fy * lz, v.z + v.rz * lx + v.uz * ly - v.fz * lz);
+	return out;
+}
+function hullPoints(v) {
+	const hl = v.halfL;
+	const hw = v.halfW;
+	if (v.kind === "plane") return [
+		[
+			0,
+			.15,
+			-hl * .92
+		],
+		[
+			0,
+			.05,
+			-hl * .55
+		],
+		[
+			0,
+			.2,
+			0
+		],
+		[
+			0,
+			.15,
+			hl * .42
+		],
+		[
+			0,
+			.35,
+			hl * .78
+		],
+		[
+			-hw * 2.55,
+			.08,
+			-hl * .08
+		],
+		[
+			hw * 2.55,
+			.08,
+			-hl * .08
+		],
+		[
+			-hw * 1.4,
+			.05,
+			hl * .12
+		],
+		[
+			hw * 1.4,
+			.05,
+			hl * .12
+		],
+		[
+			0,
+			.85,
+			-hl * .22
+		],
+		[
+			0,
+			-.35,
+			-hl * .4
+		]
+	];
+	return [
+		[
+			0,
+			.12,
+			-hl * .95
+		],
+		[
+			0,
+			.18,
+			hl * .92
+		],
+		[
+			-hw * .92,
+			.08,
+			-hl * .62
+		],
+		[
+			hw * .92,
+			.08,
+			-hl * .62
+		],
+		[
+			-hw * .92,
+			.08,
+			hl * .55
+		],
+		[
+			hw * .92,
+			.08,
+			hl * .55
+		],
+		[
+			-hw * .88,
+			.22,
+			0
+		],
+		[
+			hw * .88,
+			.22,
+			0
+		],
+		[
+			0,
+			.52,
+			-hl * .15
+		],
+		[
+			0,
+			.48,
+			hl * .2
+		],
+		[
+			0,
+			-.22,
+			0
+		]
+	];
+}
+function groundY(x, fromY, z, span) {
+	const hit = cityRayDown(x, fromY, z, span);
+	if (hit != null) return hit;
+	return citySurfaceAt(x, z);
+}
+function sweptMove(v, dx, dy, dz) {
+	const dist = Math.hypot(dx, dy, dz);
+	const skin = v.kind === "plane" ? .55 : .28;
+	let nx = 0;
+	let ny = 0;
+	let nz = 0;
+	let tHit = 1;
+	if (dist > 1e-5) {
+		const inv = 1 / dist;
+		const dirx = dx * inv;
+		const diry = dy * inv;
+		const dirz = dz * inv;
+		_dir.set(dirx, diry, dirz);
+		const pts = hullPoints(v);
+		for (const [lx, ly, lz] of pts) {
+			bodyPoint(v, lx, ly, lz, _origin);
+			const hit = cityRayHit(_origin, _dir, dist + skin + .15);
+			if (!hit) continue;
+			const t = (hit.dist - skin) / dist;
+			if (t < tHit) {
+				tHit = t;
+				nx = hit.nx;
+				ny = hit.ny;
+				nz = hit.nz;
+			}
+		}
+	}
+	const use = MathUtils.clamp(tHit, 0, 1);
+	v.x += dx * use;
+	v.y += dy * use;
+	v.z += dz * use;
+	let blocked = tHit < .995;
+	if (blocked && dist > 1e-5) {
+		const rem = 1 - use;
+		let sdx = dx * rem;
+		let sdy = dy * rem;
+		let sdz = dz * rem;
+		const vn = sdx * nx + sdy * ny + sdz * nz;
+		if (vn < 0) {
+			sdx -= nx * vn;
+			sdy -= ny * vn;
+			sdz -= nz * vn;
+		}
+		v.x += sdx;
+		v.y += sdy;
+		v.z += sdz;
+		const velN = v.vx * nx + v.vy * ny + v.vz * nz;
+		if (velN < 0) {
+			const bounce = v.kind === "plane" && v.airborne ? .18 : .02;
+			v.vx -= nx * velN * (1 + bounce);
+			v.vy -= ny * velN * (1 + bounce);
+			v.vz -= nz * velN * (1 + bounce);
+			if (velN < -16) {
+				v.vx *= .45;
+				v.vy *= .45;
+				v.vz *= .45;
+				v.speed *= .45;
+			}
+		}
+		if (v.kind === "car" || !v.airborne) {
+			v.speed = v.vx * v.fx + v.vy * v.fy + v.vz * v.fz;
+			v.lat = v.vx * v.rx + v.vy * v.ry + v.vz * v.rz;
+			if (ny < .45) {
+				v.speed *= .82;
+				v.lat *= .55;
+			}
+		}
+	}
+	const r = v.kind === "plane" ? 1.15 : .72;
+	const h = v.kind === "plane" ? 1.85 : .95;
+	const samples = v.kind === "plane" ? [
+		[0, 0],
+		[0, -v.halfL * .7],
+		[0, v.halfL * .45],
+		[-v.halfW * 2.4, .1],
+		[v.halfW * 2.4, .1]
+	] : [
+		[0, 0],
+		[0, -v.halfL * .7],
+		[0, v.halfL * .62],
+		[-v.halfW * .75, -v.halfL * .2],
+		[v.halfW * .75, -v.halfL * .2],
+		[-v.halfW * .75, v.halfL * .25],
+		[v.halfW * .75, v.halfL * .25]
+	];
+	let ax = 0;
+	let ay = 0;
+	let az = 0;
+	const feetY = v.y - v.originY * .35;
+	for (const [lx, lz] of samples) {
+		const ox = v.x + v.rx * lx - v.fx * lz;
+		const oz = v.z + v.rz * lx - v.fz * lz;
+		const hit = cityMoveCapsule(ox, feetY, oz, v.kind === "plane" && Math.abs(lx) > v.halfW ? r * .5 : r, h, 0, 0, 0, false);
+		ax += hit.x - ox;
+		az += hit.z - oz;
+		ay += hit.y - feetY;
+	}
+	const n = samples.length;
+	const px = ax / n;
+	const pz = az / n;
+	const py = ay / n;
+	if (Math.hypot(px, pz) > .012) {
+		v.x += px;
+		v.z += pz;
+		blocked = true;
+		if (v.kind === "car") {
+			v.speed *= .88;
+			v.lat *= .7;
+		}
+	}
+	if (py > .04 && (v.kind === "car" || !v.airborne || v.vy < 2)) {
+		v.y += py * .65;
+		if (v.vy < 0) v.vy *= .2;
+	}
+	return blocked;
+}
+function stepCarSuspension(v, dt, throttle, brake) {
+	updateBasis(v);
+	const travel = Math.max(.24, SUSP_TRAVEL);
+	const attach = .1;
+	const restLen = v.originY + attach + .12;
+	let Fy = 0;
+	let torquePitch = 0;
+	let torqueRoll = 0;
+	let hits = 0;
+	v.wheels.forEach((w, i) => {
+		const ax = v.x + v.rx * w.x + v.ux * attach - v.fx * w.z;
+		const ay = v.y + v.ry * w.x + v.uy * attach - v.fy * w.z;
+		const az = v.z + v.rz * w.x + v.uz * attach - v.fz * w.z;
+		_origin.set(ax, ay, az);
+		_dir.set(-v.ux, -v.uy, -v.uz);
+		const hit = cityRayHit(_origin, _dir, restLen + travel + .4);
+		let comp = 0;
+		if (hit && hit.ny > .32) {
+			comp = MathUtils.clamp(restLen - hit.dist, 0, travel);
+			hits++;
+		}
+		const frac = comp / travel;
+		const prev = v.susp[i] ?? .4;
+		const vel = (frac - prev) / Math.max(dt, 1e-4);
+		v.suspVel[i] = vel;
+		v.susp[i] = MathUtils.lerp(prev, frac, 1 - Math.exp(-18 * dt));
+		const force = Math.max(0, SPRING_K * comp + DAMPER_C * vel * travel);
+		Fy += force;
+		torquePitch += force * w.z;
+		torqueRoll += force * w.x;
+	});
+	const transfer = MathUtils.clamp(throttle, -1, 1) * CAR_MASS * 1.6;
+	torquePitch += transfer * .9;
+	if (brake) torquePitch -= CAR_MASS * 2.2;
+	const ay = Fy / CAR_MASS - CAR_G;
+	v.vy += ay * dt;
+	v.vy *= hits >= 2 ? Math.max(0, 1 - 3.2 * dt) : 1;
+	v.y += v.vy * dt;
+	v.pitchRate += -torquePitch / I_PITCH * dt;
+	v.rollRate += torqueRoll / I_ROLL * dt;
+	v.pitchRate *= Math.max(0, 1 - 6.5 * dt);
+	v.rollRate *= Math.max(0, 1 - 7.2 * dt);
+	v.pitch += v.pitchRate * dt;
+	v.roll += v.rollRate * dt;
+	v.pitch = MathUtils.clamp(v.pitch, -.38, .32);
+	v.roll = MathUtils.clamp(v.roll, -.42, .42);
+	if (hits < 2) {
+		v.airborne = true;
+		v.vy -= CAR_G * .35 * dt;
+	} else {
+		v.airborne = false;
+		const gy = groundY(v.x, v.y + 6, v.z, 18);
+		const minY = gy + v.originY * .62;
+		const maxY = gy + v.originY + travel * .7;
+		if (v.y < minY) {
+			v.y = minY;
+			if (v.vy < 0) v.vy = 0;
+		}
+		if (v.y > maxY) v.y = MathUtils.lerp(v.y, maxY, .25);
+	}
+	v.visPitch = v.pitch;
+	v.visRoll = v.roll;
+	writeQuatFromEuler(v);
+	updateBasis(v);
+	return hits;
+}
+function stepCar(v, dt, input, driven) {
+	const throttle = driven && !input.mapOpen ? input.throttle : 0;
+	const steerIn = driven && !input.mapOpen ? input.steer : 0;
+	const nitro = driven && input.nitro;
+	const brake = driven && input.handbrake;
+	const max = nitro ? CAR_NITRO : CAR_MAX;
+	if (throttle > .04) v.speed += throttle * (nitro ? CAR_ACCEL * 1.55 : CAR_ACCEL) * dt;
+	else if (throttle < -.04) {
+		if (v.speed > .8) v.speed += throttle * CAR_BRAKE * dt;
+		else v.speed += throttle * CAR_REV * dt;
+	} else v.speed *= Math.max(0, 1 - CAR_DRAG * 1.6 * dt);
+	v.speed = MathUtils.clamp(v.speed, -12, max);
+	v.speed *= Math.max(0, 1 - CAR_DRAG * dt);
+	if (brake) v.speed *= Math.max(0, 1 - 1.85 * dt);
+	const speedF = MathUtils.clamp(Math.abs(v.speed) / 11, 0, 1);
+	const reverse = v.speed >= 0 ? 1 : -1;
+	const turn = steerIn * CAR_TURN * (.22 + .78 * speedF) * (1 - Math.abs(v.speed) / (max * 2.4));
+	v.yaw += turn * reverse * dt;
+	v.steerAngle = MathUtils.lerp(v.steerAngle, steerIn * .55, 1 - Math.exp(-10 * dt));
+	const grip = brake ? CAR_DRIFT_GRIP : CAR_GRIP;
+	const slide = brake ? .62 : .2;
+	v.lat += -steerIn * Math.abs(v.speed) * slide * dt;
+	if (brake && Math.abs(steerIn) > .15) v.lat += -steerIn * Math.abs(v.speed) * .28 * dt;
+	v.lat *= Math.max(0, 1 - grip * dt);
+	v.nitro = MathUtils.lerp(v.nitro, nitro ? 1 : 0, 1 - Math.exp(-8 * dt));
+	const fxh = -Math.sin(v.yaw);
+	const fzh = -Math.cos(v.yaw);
+	const rxh = Math.cos(v.yaw);
+	const rzh = -Math.sin(v.yaw);
+	writeQuatFromEuler(v);
+	updateBasis(v);
+	v.vx = fxh * v.speed + rxh * v.lat;
+	v.vz = fzh * v.speed + rzh * v.lat;
+	sweptMove(v, v.vx * dt, 0, v.vz * dt);
+	v.speed = v.vx * fxh + v.vz * fzh;
+	v.lat = v.vx * rxh + v.vz * rzh;
+	stepCarSuspension(v, dt, throttle, brake);
+	v.wheelSpin -= v.speed / Math.max(.2, v.wheelR) * dt;
+}
+function stepPlane(v, dt, input, driven) {
+	if (driven && !input.mapOpen) {
+		if (input.thrustSlider != null) v.thrust = MathUtils.clamp(input.thrustSlider, 0, 1);
+		else {
+			if (input.thrustUp) v.thrust = Math.min(1, v.thrust + PLANE_THRUST_RATE * dt);
+			if (input.thrustDown) v.thrust = Math.max(0, v.thrust - PLANE_THRUST_RATE * dt);
+		}
+	} else if (!driven) v.thrust = MathUtils.lerp(v.thrust, 0, dt * .4);
+	const gy = groundY(v.x, v.y + 14, v.z, 48);
+	const agl = v.y - v.originY - gy;
+	const pitchIn = driven && !input.mapOpen ? input.pitch : 0;
+	const rollIn = driven && !input.mapOpen ? input.roll : 0;
+	const yawIn = driven && !input.mapOpen ? input.yaw : 0;
+	if (v.airborne) {
+		if (agl > 3.4) v.gear = Math.max(0, v.gear - dt * 1.4);
+		else if (agl < 2.6 && v.pitch < .22 && v.pitch > -.35) v.gear = Math.min(1, v.gear + dt * 1.6);
+		const as = Math.max(v.speed, 1);
+		const ctrl = MathUtils.clamp(as / 42, .22, 1.55);
+		applyLocalRates(v, pitchIn * 1.45 * ctrl, yawIn * .62, rollIn * 2.15 * ctrl, dt);
+		const velFwd = v.vx * v.fx + v.vy * v.fy + v.vz * v.fz;
+		const velUp = v.vx * v.ux + v.vy * v.uy + v.vz * v.uz;
+		const aoa = Math.atan2(-velUp, Math.max(4, velFwd));
+		const stall = Math.abs(aoa) > .55 ? Math.max(.12, 1 - (Math.abs(aoa) - .55) * 2.4) : 1;
+		const liftAcc = v.speed * v.speed * PLANE_LIFT_K * (.9 + aoa * 1.55) * stall;
+		const drag = PLANE_DRAG + 4e-5 * v.speed + .035 * aoa * aoa;
+		const thrustAcc = v.thrust * PLANE_THRUST;
+		v.vx += (v.fx * thrustAcc + v.ux * liftAcc - v.vx * drag * Math.max(v.speed, 1)) * dt;
+		v.vy += (v.fy * thrustAcc + v.uy * liftAcc - v.vy * drag * Math.max(v.speed, 1) - GRAV) * dt;
+		v.vz += (v.fz * thrustAcc + v.uz * liftAcc - v.vz * drag * Math.max(v.speed, 1)) * dt;
+		const track = 1 - Math.exp(-dt * (.28 + v.speed * .014));
+		const spd = Math.hypot(v.vx, v.vy, v.vz);
+		v.vx += (v.fx * spd - v.vx) * track * .62;
+		v.vy += (v.fy * spd - v.vy) * track * .62;
+		v.vz += (v.fz * spd - v.vz) * track * .62;
+		v.speed = Math.min(PLANE_MAX, Math.hypot(v.vx, v.vy, v.vz));
+		if (v.speed > .001) {
+			const s = v.speed / Math.hypot(v.vx, v.vy, v.vz);
+			v.vx *= s;
+			v.vy *= s;
+			v.vz *= s;
+		}
+		sweptMove(v, v.vx * dt, v.vy * dt, v.vz * dt);
+		v.speed = Math.hypot(v.vx, v.vy, v.vz);
+		if (agl < .7 && v.uy > .55 && v.vy <= 6 && Math.abs(v.roll) < .85) {
+			v.airborne = false;
+			v.y = gy + v.originY;
+			v.vy = 0;
+			v.vx = v.fx * v.speed;
+			v.vz = v.fz * v.speed;
+			v.pitch *= .25;
+			v.roll *= .12;
+			v.gear = 1;
+			writeQuatFromEuler(v);
+			updateBasis(v);
+		}
+		v.visPitch = v.pitch;
+		v.visRoll = v.roll;
+	} else {
+		v.gear = Math.min(1, v.gear + dt * 2);
+		const steerIn = yawIn !== 0 ? yawIn : driven ? input.steer * .35 : 0;
+		const max = PLANE_TAXI * (.35 + v.thrust * .9);
+		if (v.thrust > .04) v.speed += v.thrust * 16 * dt;
+		else v.speed *= Math.max(0, 1 - .9 * dt);
+		if (driven && input.handbrake) v.speed *= Math.max(0, 1 - 1.6 * dt);
+		if (driven && input.throttle < -.2) v.speed += input.throttle * 14 * dt;
+		v.speed = MathUtils.clamp(v.speed, -8, max);
+		const speedF = MathUtils.clamp(Math.abs(v.speed) / 8, 0, 1);
+		v.yaw += steerIn * 1.15 * speedF * dt;
+		v.steerAngle = MathUtils.lerp(v.steerAngle, steerIn * .5, .2);
+		v.pitch = MathUtils.lerp(v.pitch, MathUtils.clamp(pitchIn * .22, -.12, .28), .16);
+		v.roll = MathUtils.lerp(v.roll, 0, .14);
+		writeQuatFromEuler(v);
+		updateBasis(v);
+		v.vx = v.fx * v.speed;
+		v.vz = v.fz * v.speed;
+		v.vy = 0;
+		sweptMove(v, v.vx * dt, 0, v.vz * dt);
+		const g2 = groundY(v.x, v.y + 8, v.z, 24);
+		v.y = MathUtils.lerp(v.y, g2 + v.originY, .45);
+		v.vy = 0;
+		if (v.speed > 32 && pitchIn > .28 && v.thrust > .45) {
+			v.airborne = true;
+			v.vy = 7.2;
+			v.vx = v.fx * v.speed;
+			v.vy += v.fy * v.speed * .15;
+			v.vz = v.fz * v.speed;
+			v.pitch = Math.max(v.pitch, .16);
+			v.y += .35;
+			writeQuatFromEuler(v);
+			updateBasis(v);
+		}
+		v.wheelSpin -= v.speed / Math.max(.2, v.wheelR) * dt;
+		v.visPitch = v.pitch;
+		v.visRoll = v.roll;
+	}
+}
+function stepVehicles(dt, input) {
+	if (!vehLive.ready) return;
+	const d = Math.min(.05, Math.max(.001, dt));
+	const occupied = getOccupied();
+	for (const v of vehLive.vehicles) {
+		const driven = occupied === v;
+		v.door += (v.doorTarget - v.door) * (1 - Math.exp(-8 * d));
+		if (v.occupyPhase !== 0) {
+			doorTimer -= d;
+			if (v.occupyPhase > 0 && doorTimer <= 0) v.doorTarget = 0;
+			if (v.occupyPhase < 0 && doorTimer <= 0) finishExit(v);
+		}
+		const spd = Math.hypot(v.speed, v.lat, v.vy);
+		const sub = Math.max(1, Math.min(8, Math.ceil(spd * d / .16) || 1));
+		const step = d / sub;
+		for (let i = 0; i < sub; i++) if (v.kind === "car") stepCar(v, step, input, driven);
+		else stepPlane(v, step, input, driven);
+	}
+	const v = getOccupied();
+	if (v) {
+		vehLive.x = v.x;
+		vehLive.y = v.y;
+		vehLive.z = v.z;
+		vehLive.yaw = v.yaw;
+		vehLive.pitch = v.pitch;
+		vehLive.roll = v.roll;
+		vehLive.qx = v.qx;
+		vehLive.qy = v.qy;
+		vehLive.qz = v.qz;
+		vehLive.qw = v.qw;
+		vehLive.fx = v.fx;
+		vehLive.fy = v.fy;
+		vehLive.fz = v.fz;
+		vehLive.rx = v.rx;
+		vehLive.ry = v.ry;
+		vehLive.rz = v.rz;
+		vehLive.ux = v.ux;
+		vehLive.uy = v.uy;
+		vehLive.uz = v.uz;
+		vehLive.visPitch = v.visPitch;
+		vehLive.visRoll = v.visRoll;
+		vehLive.speed = v.speed;
+		vehLive.thrust = v.thrust;
+		vehLive.nitro = v.nitro > .4;
+		vehLive.drifting = v.kind === "car" && input.handbrake && Math.abs(v.speed) > 6;
+		vehLive.gear = v.gear;
+		vehLive.door = v.door;
+		vehLive.airborne = v.airborne;
+		vehLive.kind = v.kind;
+		vehLive.eyeX = v.eyeX;
+		vehLive.eyeY = v.eyeY;
+		vehLive.eyeZ = v.eyeZ;
+		vehLive.steerIn = input.steer;
+		vehLive.camDist = v.kind === "plane" ? 18 + Math.min(10, Math.abs(v.speed) * .06) : 7.3 + Math.min(3.2, Math.abs(v.speed) * .05);
+		vehLive.camHeight = v.kind === "plane" ? 5.2 : 2.15;
+		fpLive.x = v.x;
+		fpLive.y = v.y - v.originY * .4;
+		fpLive.z = v.z;
+		fpLive.grounded = !v.airborne;
+		fpLive.sprinting = false;
+		fpLive.moveFwd = 0;
+		fpLive.moveSide = 0;
+		fpLive.stepDist = 0;
+		fpLive.velY = v.vy;
+	}
+	hudClock += d;
+	if (hudClock > .12) {
+		hudClock = 0;
+		const s = useStudio.getState();
+		if (s.inVehicle !== vehLive.inVehicle || Math.abs(s.vehicleSpeed - Math.abs(vehLive.speed) * 3.6) > .8 || s.vehicleThrust !== vehLive.thrust) useStudio.setState({
+			inVehicle: vehLive.inVehicle,
+			vehicleKind: vehLive.inVehicle ? vehLive.kind : null,
+			vehicleSpeed: Math.abs(vehLive.speed) * 3.6,
+			vehicleThrust: vehLive.thrust,
+			vehicleNitro: vehLive.nitro,
+			vehicleAirborne: vehLive.airborne,
+			vehicleGear: vehLive.gear > .5
+		});
+	}
+}
+function pushPlayerFromVehicles(x, y, z, r) {
+	let ox = x;
+	let oz = z;
+	for (const v of vehLive.vehicles) {
+		if (v.occupied) continue;
+		const dx = ox - v.x;
+		const dz = oz - v.z;
+		const localX = dx * v.rx + dz * v.rz;
+		const localZ = -(dx * v.fx + dz * v.fz);
+		const hx = v.halfW + r;
+		const hz = v.halfL + r;
+		if (Math.abs(localX) > hx || Math.abs(localZ) > hz) continue;
+		const feet = v.y - v.originY;
+		if (y > feet + v.height + 1.2 || y + 1.6 < feet) continue;
+		const px = hx - Math.abs(localX);
+		const pz = hz - Math.abs(localZ);
+		if (px < pz) {
+			const s = Math.sign(localX) || 1;
+			ox += v.rx * px * s;
+			oz += v.rz * px * s;
+		} else {
+			const s = Math.sign(localZ) || 1;
+			ox += -v.fx * pz * s;
+			oz += -v.fz * pz * s;
+		}
+	}
+	return {
+		x: ox,
+		z: oz
+	};
+}
+function vehicleHintAt(x, y, z) {
+	if (vehLive.inVehicle) return "";
+	const v = nearestVehicle(x, y, z);
+	if (!v) return "";
+	return v.kind === "plane" ? "按 F / 互动 进入战机" : "按 F / 互动 上车";
+}
+var GAME_CODES = /* @__PURE__ */ new Set([
+	"KeyW",
+	"KeyA",
+	"KeyS",
+	"KeyD",
+	"ArrowUp",
+	"ArrowDown",
+	"ArrowLeft",
+	"ArrowRight",
+	"Space",
+	"KeyC",
+	"KeyE",
+	"KeyF",
+	"KeyQ",
+	"ShiftLeft",
+	"ShiftRight"
+]);
+function radialDeadzone(x, y, dz = .15) {
+	const m = Math.hypot(x, y);
+	if (m < dz) return {
+		x: 0,
+		y: 0
+	};
+	const scale = (m - dz) / (1 - dz) / m;
+	return {
+		x: x * scale,
+		y: y * scale
+	};
+}
+function THREE_CLAMP(v, a, b) {
+	return v < a ? a : v > b ? b : v;
+}
+var CROUCH_LONG_MS = 500;
+var CROUCH_COOL_MS = 380;
+var CROUCH_STICKY_MS = 80;
+/** Tap vs long-press with sticky release so key-repeat cannot flicker posture. */
+var CrouchHold = class {
+	onTap;
+	onLong;
+	held = false;
+	downAt = 0;
+	longFired = false;
+	lastAction = 0;
+	longTimer = null;
+	stickyTimer = null;
+	constructor(onTap, onLong) {
+		this.onTap = onTap;
+		this.onLong = onLong;
+	}
+	setHeld(on) {
+		if (on) this.down();
+		else this.up();
+	}
+	reset() {
+		this.clearTimers();
+		this.held = false;
+		this.longFired = false;
+		this.downAt = 0;
+	}
+	down() {
+		if (this.stickyTimer) {
+			clearTimeout(this.stickyTimer);
+			this.stickyTimer = null;
+			if (this.held) {
+				if (!this.longFired) this.armLong();
+				return;
+			}
+		}
+		if (this.held) return;
+		this.held = true;
+		this.downAt = performance.now();
+		this.longFired = false;
+		this.armLong();
+	}
+	armLong() {
+		if (this.longTimer) clearTimeout(this.longTimer);
+		this.longTimer = setTimeout(() => {
+			this.longTimer = null;
+			const age = performance.now() - this.downAt;
+			if (!this.held || this.longFired) return;
+			if (age < 460) return;
+			this.longFired = true;
+			this.lastAction = performance.now();
+			this.onLong();
+		}, CROUCH_LONG_MS);
+	}
+	up() {
+		if (!this.held) return;
+		if (this.stickyTimer) return;
+		if (this.longTimer) {
+			clearTimeout(this.longTimer);
+			this.longTimer = null;
+		}
+		this.stickyTimer = setTimeout(() => this.commitUp(), CROUCH_STICKY_MS);
+	}
+	commitUp() {
+		this.stickyTimer = null;
+		if (!this.held) return;
+		this.held = false;
+		if (this.longTimer) {
+			clearTimeout(this.longTimer);
+			this.longTimer = null;
+		}
+		if (this.longFired) return;
+		const now = performance.now();
+		if (now - this.lastAction < CROUCH_COOL_MS) return;
+		this.lastAction = now;
+		this.onTap();
+	}
+	clearTimers() {
+		if (this.longTimer) {
+			clearTimeout(this.longTimer);
+			this.longTimer = null;
+		}
+		if (this.stickyTimer) {
+			clearTimeout(this.stickyTimer);
+			this.stickyTimer = null;
+		}
+	}
+};
+var FpInput = class {
+	keys = /* @__PURE__ */ new Set();
+	stickX = 0;
+	stickY = 0;
+	jumpTap = false;
+	crouchHold = false;
+	interactTap = false;
+	gate = null;
+	injected = [];
+	prevJump = false;
+	prevInteract = false;
+	prevF = false;
+	attach() {
+		this.prevJump = false;
+		this.prevInteract = false;
+		this.prevF = false;
+		this.keys.clear();
+		this.injected = [];
+		const down = (e) => {
+			if (e.repeat) {
+				if (GAME_CODES.has(e.code)) e.preventDefault();
+				return;
+			}
+			const tag = e.target?.tagName;
+			if (tag === "INPUT" || tag === "TEXTAREA") return;
+			this.keys.add(e.code);
+			if (e.code === "KeyC") this.gate?.setHeld(true);
+			if (GAME_CODES.has(e.code)) e.preventDefault();
+		};
+		const up = (e) => {
+			this.keys.delete(e.code);
+			if (e.code === "KeyC") this.gate?.setHeld(false);
+		};
+		const clear = () => {
+			this.keys.clear();
+			this.gate?.setHeld(false);
+		};
+		window.addEventListener("keydown", down, { capture: true });
+		window.addEventListener("keyup", up, { capture: true });
+		window.addEventListener("blur", clear);
+		document.addEventListener("visibilitychange", () => {
+			if (document.hidden) clear();
+		});
+		this.detach = () => {
+			window.removeEventListener("keydown", down, true);
+			window.removeEventListener("keyup", up, true);
+			window.removeEventListener("blur", clear);
+			this.keys.clear();
+		};
+	}
+	detach = () => {};
+	setKeys(codes) {
+		this.injected = codes.slice();
+		this.gate?.setHeld(codes.includes("KeyC"));
+	}
+	poll() {
+		const held = (code) => this.keys.has(code) || this.injected.includes(code);
+		let mx = this.stickX;
+		let my = this.stickY;
+		if (held("KeyD") || held("ArrowRight")) mx += 1;
+		if (held("KeyA") || held("ArrowLeft")) mx -= 1;
+		if (held("KeyW") || held("ArrowUp")) my += 1;
+		if (held("KeyS") || held("ArrowDown")) my -= 1;
+		let padCrouch = false;
+		const pad = typeof navigator !== "undefined" ? navigator.getGamepads?.()[0] : null;
+		if (pad && pad.mapping === "standard") {
+			const dz = radialDeadzone(pad.axes[0] ?? 0, -(pad.axes[1] ?? 0));
+			mx += dz.x;
+			my += dz.y;
+			if (pad.buttons[0]?.pressed) this.jumpTap = true;
+			if (pad.buttons[1]?.pressed) padCrouch = true;
+			if (pad.buttons[2]?.pressed) this.interactTap = true;
+		}
+		mx = THREE_CLAMP(mx, -1, 1);
+		my = THREE_CLAMP(my, -1, 1);
+		const mag = Math.hypot(mx, my);
+		if (mag > 1) {
+			mx /= mag;
+			my /= mag;
+		}
+		const jumpHeld = this.jumpTap || held("Space");
+		const jump = jumpHeld && !this.prevJump;
+		const fHeld = held("KeyF");
+		const interactHeld = this.interactTap || held("KeyE") || fHeld;
+		const interact = interactHeld && !this.prevInteract;
+		const interactF = (this.interactTap || fHeld) && !this.prevF;
+		const stickMag = Math.hypot(this.stickX, this.stickY);
+		let padSprint = false;
+		let padMag = 0;
+		if (pad && pad.mapping === "standard") {
+			padSprint = Boolean(pad.buttons[10]?.pressed);
+			padMag = Math.hypot(pad.axes[0] ?? 0, pad.axes[1] ?? 0);
+		}
+		const sprint = held("ShiftLeft") || held("ShiftRight") || stickMag >= .72 || padSprint || padMag >= .88;
+		this.prevJump = jumpHeld;
+		this.prevInteract = interactHeld;
+		this.prevF = this.interactTap || fHeld;
+		this.jumpTap = false;
+		this.interactTap = false;
+		return {
+			moveX: mx,
+			moveY: my,
+			jump,
+			crouchHeld: this.crouchHold || padCrouch || held("KeyC"),
+			interact,
+			interactF,
+			sprint,
+			spaceHeld: jumpHeld,
+			qHeld: held("KeyQ"),
+			eHeld: held("KeyE"),
+			cHeld: held("KeyC"),
+			fHeld
+		};
+	}
+};
 function cn(...inputs) {
 	return twMerge(clsx(inputs));
 }
@@ -5688,8 +6909,13 @@ function Overlay() {
 				useStudio.getState().setCityMapOpen(false);
 				return;
 			}
+			if (useStudio.getState().firstPerson && useStudio.getState().inVehicle && e.code === "KeyV") {
+				e.preventDefault();
+				useStudio.getState().toggleVehicleCam();
+				return;
+			}
 			if (useStudio.getState().firstPerson) {
-				if (e.code === "KeyW" || e.code === "KeyA" || e.code === "KeyS" || e.code === "KeyD" || e.code === "Space" || e.code === "KeyC" || e.code === "KeyE" || e.code === "KeyF" || e.code.startsWith("Arrow")) return;
+				if (e.code === "KeyW" || e.code === "KeyA" || e.code === "KeyS" || e.code === "KeyD" || e.code === "Space" || e.code === "KeyC" || e.code === "KeyE" || e.code === "KeyF" || e.code === "KeyQ" || e.code.startsWith("Arrow")) return;
 			}
 			if (e.key === "r" || e.key === "R") resetSim();
 			if (e.key === "b" || e.key === "B") setParam("breathing", !useStudio.getState().breathing);
@@ -7326,12 +8552,26 @@ function FirstPersonHud() {
 	const crouch = useStudio((s) => s.fpCrouch);
 	const prone = useStudio((s) => s.fpProne);
 	const cityMapOpen = useStudio((s) => s.cityMapOpen);
+	const inVehicle = useStudio((s) => s.inVehicle);
+	const vehicleKind = useStudio((s) => s.vehicleKind);
+	const vehicleSpeed = useStudio((s) => s.vehicleSpeed);
+	const vehicleThrust = useStudio((s) => s.vehicleThrust);
+	const vehicleNitro = useStudio((s) => s.vehicleNitro);
+	const vehicleAirborne = useStudio((s) => s.vehicleAirborne);
+	const vehicleCam = useStudio((s) => s.vehicleCam);
+	const toggleVehicleCam = useStudio((s) => s.toggleVehicleCam);
 	const setFpStick = useStudio((s) => s.setFpStick);
 	const setFpCrouchHeld = useStudio((s) => s.setFpCrouchHeld);
 	const tapFpJump = useStudio((s) => s.tapFpJump);
 	const tapFpInteract = useStudio((s) => s.tapFpInteract);
+	const setVehNitroHeld = useStudio((s) => s.setVehNitroHeld);
+	const setVehDriftHeld = useStudio((s) => s.setVehDriftHeld);
+	const setVehYawHeld = useStudio((s) => s.setVehYawHeld);
+	const setVehThrustSlider = useStudio((s) => s.setVehThrustSlider);
+	const vehThrustSlider = useStudio((s) => s.vehThrustSlider);
 	const portalHint = useStudio((s) => s.portalHint);
 	const stickRef = (0, import_react.useRef)(null);
+	const thrustRef = (0, import_react.useRef)(null);
 	const [knob, setKnob] = (0, import_react.useState)({
 		x: 0,
 		y: 0,
@@ -7362,6 +8602,20 @@ function FirstPersonHud() {
 		firstPerson,
 		setFpStick,
 		setFpCrouchHeld
+	]);
+	(0, import_react.useEffect)(() => {
+		if (!inVehicle) {
+			setVehNitroHeld(false);
+			setVehDriftHeld(false);
+			setVehYawHeld(0);
+			setVehThrustSlider(null);
+		}
+	}, [
+		inVehicle,
+		setVehNitroHeld,
+		setVehDriftHeld,
+		setVehYawHeld,
+		setVehThrustSlider
 	]);
 	if (!firstPerson) {
 		if (cityMapOpen) return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(FpZoomBar, {});
@@ -7411,18 +8665,59 @@ function FirstPersonHud() {
 		if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
 	};
 	const btn = "pointer-events-auto inline-flex size-16 flex-col items-center justify-center gap-0.5 rounded-full border border-border/50 bg-surface/70 text-fg shadow-sm backdrop-blur-[2px] active:scale-[0.97]";
+	const setThrustFromY = (clientY) => {
+		const el = thrustRef.current;
+		if (!el) return;
+		const r = el.getBoundingClientRect();
+		const t = 1 - (clientY - r.top) / r.height;
+		setVehThrustSlider(Math.max(0, Math.min(1, t)));
+	};
+	const walkHint = prone ? "匍匐中 · 点按 C 起身 · 长按取消匍匐" : crouch ? "下蹲中 · C 起身 · 长按匍匐" : "右键锁定视角 · WASD 移动 · Shift 奔跑 · M 地图 · C 点按蹲 · 长按匍匐";
+	const vehHint = vehicleKind === "plane" ? vehicleAirborne ? "Shift/C 推力 · W 推杆俯冲 · S 拉杆抬头 · A/D 滚转 · Q/E 偏航 · V 视角 · F 下车" : "滑行中 · Shift/C 推力 · Q/E 转向 · 加速后拉杆(S)起飞 · V 视角 · F 下车" : "W 加速 · S 刹车/倒车 · A/D 转向 · Shift 氮气 · 空格 手刹 · V 视角 · F 下车";
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [
-		cityMapOpen ? null : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		cityMapOpen || inVehicle ? null : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 			className: "pointer-events-none absolute top-1/2 left-1/2 z-20 size-4 -translate-x-1/2 -translate-y-1/2",
 			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "absolute top-1/2 left-0 h-px w-full bg-fg/70" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "absolute top-0 left-1/2 h-full w-px bg-fg/70" })]
 		}),
 		cityMapOpen ? null : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 			className: "pointer-events-none absolute top-5 left-1/2 z-20 -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-2.5 py-0.5 text-[10px] tracking-wide text-muted",
-			children: fpView === "body" ? "角色视角" : "观察"
+			children: inVehicle ? (vehicleKind === "plane" ? "驾驶 · 战机" : "驾驶 · 跑车") + (vehicleCam === "first" ? " · 第一人称" : " · 第三人称") : fpView === "body" ? "角色视角" : "观察"
 		}),
-		cityMapOpen || !portalHint ? null : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
+		cityMapOpen || inVehicle ? null : !portalHint ? null : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 			className: "pointer-events-none absolute top-14 left-1/2 z-20 -translate-x-1/2 rounded-full border border-accent/50 bg-accent/80 px-3 py-1 text-[12px] font-medium text-accent-fg",
 			children: portalHint
+		}),
+		cityMapOpen || !inVehicle ? null : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			className: "absolute top-14 left-1/2 z-20 flex -translate-x-1/2 items-center gap-2",
+			children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+				className: "pointer-events-none flex items-center gap-2 rounded-full border border-border/40 bg-surface/60 px-3 py-1 text-[11px] tabular-nums text-fg",
+				children: [
+					/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Gauge, { className: "size-3.5 text-muted" }),
+					/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", { children: [Math.round(vehicleSpeed), " km/h"] }),
+					vehicleKind === "plane" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("span", {
+						className: "text-muted",
+						children: [
+							"推力 ",
+							Math.round(vehicleThrust * 100),
+							"%"
+						]
+					}) : null,
+					vehicleNitro ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "text-accent",
+						children: "氮气"
+					}) : null,
+					vehicleKind === "plane" && !vehicleAirborne && vehicleSpeed >= PLANE_TAKEOFF_KMH - 8 ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "text-accent",
+						children: "拉杆起飞"
+					}) : null
+				]
+			}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+				type: "button",
+				"aria-label": vehicleCam === "first" ? "第三人称" : "第一人称",
+				className: "pointer-events-auto inline-flex h-8 items-center gap-1.5 rounded-full border border-border/50 bg-surface/75 px-2.5 text-[11px] font-medium text-fg backdrop-blur-[2px] hover:bg-surface",
+				onClick: () => toggleVehicleCam(),
+				children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "size-3.5" }), vehicleCam === "first" ? "第一人称" : "第三人称"]
+			})]
 		}),
 		/* @__PURE__ */ (0, import_jsx_runtime.jsx)(FpZoomBar, {}),
 		cityMapOpen ? null : lookLocked ? /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
@@ -7430,11 +8725,11 @@ function FirstPersonHud() {
 			children: "右键解除视角锁定"
 		}) : /* @__PURE__ */ (0, import_jsx_runtime.jsx)("p", {
 			className: "pointer-events-none absolute bottom-6 left-1/2 z-20 hidden -translate-x-1/2 rounded-full border border-border/40 bg-surface/50 px-3 py-1 text-[11px] text-muted sm:block",
-			children: prone ? "匍匐中 · 点按 C 起身 · 长按取消匍匐" : crouch ? "下蹲中 · C 起身 · 长按匍匐" : "右键锁定视角 · WASD 移动 · Shift 奔跑 · M 地图 · C 点按蹲 · 长按匍匐"
+			children: inVehicle ? vehHint : walkHint
 		}),
 		cityMapOpen || !touchUi ? null : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 			ref: stickRef,
-			className: cn("pointer-events-auto absolute bottom-8 left-5 z-20 grid size-32 place-items-center touch-none rounded-full border backdrop-blur-[2px]", knob.mag >= .72 ? "border-accent bg-accent/25" : "border-border/50 bg-surface/45"),
+			className: cn("pointer-events-auto absolute bottom-8 left-5 z-20 grid size-32 place-items-center touch-none rounded-full border backdrop-blur-[2px]", !inVehicle && knob.mag >= .72 ? "border-accent bg-accent/25" : "border-border/50 bg-surface/45"),
 			style: { marginBottom: "env(safe-area-inset-bottom)" },
 			onPointerDown: onStickDown,
 			onPointerMove: onStickMove,
@@ -7444,15 +8739,123 @@ function FirstPersonHud() {
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "pointer-events-none absolute inset-0 m-auto size-[46%] rounded-full border border-border/40 bg-fg/10" }),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", { className: "pointer-events-none absolute inset-0 z-[1] m-auto size-1.5 rounded-full bg-fg/50" }),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
-					className: cn("pointer-events-none relative z-10 size-12 rounded-full shadow-sm", knob.mag >= .72 ? "bg-accent" : "bg-accent/90"),
+					className: cn("pointer-events-none relative z-10 size-12 rounded-full shadow-sm", !inVehicle && knob.mag >= .72 ? "bg-accent" : "bg-accent/90"),
 					style: { transform: `translate(${knob.x}px, ${knob.y}px)` }
 				}),
 				/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
 					className: "pointer-events-none absolute -bottom-5 left-1/2 -translate-x-1/2 text-[10px] tracking-wide text-muted",
-					children: knob.mag >= .72 ? "奔跑" : "外圈奔跑"
+					children: inVehicle ? vehicleKind === "plane" ? "后拉抬头 / 滚转" : "油门 / 转向" : knob.mag >= .72 ? "奔跑" : "外圈奔跑"
 				})
 			]
-		}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+		}), inVehicle ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+			className: "absolute right-5 z-20 flex flex-col items-end gap-3",
+			style: { bottom: "calc(2rem + env(safe-area-inset-bottom))" },
+			children: [
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+					type: "button",
+					"aria-label": "下车",
+					className: btn,
+					onPointerDown: (e) => {
+						e.preventDefault();
+						tapFpInteract();
+					},
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(LogOut, { className: "size-5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "text-[10px] font-medium leading-none",
+						children: "下车"
+					})]
+				}),
+				/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+					type: "button",
+					"aria-label": "切换视角",
+					className: btn,
+					onPointerDown: (e) => {
+						e.preventDefault();
+						toggleVehicleCam();
+					},
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Camera, { className: "size-5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "text-[10px] font-medium leading-none",
+						children: vehicleCam === "first" ? "第一人称" : "第三人称"
+					})]
+				}),
+				vehicleKind === "plane" ? /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					className: "flex gap-2",
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						"aria-label": "左偏航",
+						className: btn,
+						onPointerDown: (e) => {
+							e.preventDefault();
+							setVehYawHeld(1);
+						},
+						onPointerUp: () => setVehYawHeld(0),
+						onPointerCancel: () => setVehYawHeld(0),
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronsLeft, { className: "size-5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+							className: "text-[10px] font-medium leading-none",
+							children: "Q"
+						})]
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+						type: "button",
+						"aria-label": "右偏航",
+						className: btn,
+						onPointerDown: (e) => {
+							e.preventDefault();
+							setVehYawHeld(-1);
+						},
+						onPointerUp: () => setVehYawHeld(0),
+						onPointerCancel: () => setVehYawHeld(0),
+						children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(ChevronsRight, { className: "size-5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+							className: "text-[10px] font-medium leading-none",
+							children: "E"
+						})]
+					})]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
+					ref: thrustRef,
+					className: "pointer-events-auto relative h-36 w-11 touch-none rounded-full border border-border/50 bg-surface/55",
+					onPointerDown: (e) => {
+						e.currentTarget.setPointerCapture(e.pointerId);
+						setThrustFromY(e.clientY);
+					},
+					onPointerMove: (e) => {
+						if (e.currentTarget.hasPointerCapture(e.pointerId)) setThrustFromY(e.clientY);
+					},
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "absolute right-0 bottom-0 left-0 rounded-full bg-accent/80",
+						style: { height: `${Math.round((vehThrustSlider ?? vehicleThrust) * 100)}%` }
+					}), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "pointer-events-none absolute -left-8 top-1/2 -translate-y-1/2 text-[10px] text-muted",
+						children: "推力"
+					})]
+				})] }) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)(import_jsx_runtime.Fragment, { children: [/* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+					type: "button",
+					"aria-label": "氮气",
+					className: cn(btn, vehicleNitro ? "border-accent bg-accent text-accent-fg" : ""),
+					onPointerDown: (e) => {
+						e.preventDefault();
+						setVehNitroHeld(true);
+					},
+					onPointerUp: () => setVehNitroHeld(false),
+					onPointerCancel: () => setVehNitroHeld(false),
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Flame, { className: "size-5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "text-[10px] font-medium leading-none",
+						children: "氮气"
+					})]
+				}), /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("button", {
+					type: "button",
+					"aria-label": "漂移",
+					className: btn,
+					onPointerDown: (e) => {
+						e.preventDefault();
+						setVehDriftHeld(true);
+					},
+					onPointerUp: () => setVehDriftHeld(false),
+					onPointerCancel: () => setVehDriftHeld(false),
+					children: [/* @__PURE__ */ (0, import_jsx_runtime.jsx)(Wind, { className: "size-5" }), /* @__PURE__ */ (0, import_jsx_runtime.jsx)("span", {
+						className: "text-[10px] font-medium leading-none",
+						children: "漂移"
+					})]
+				})] })
+			]
+		}) : /* @__PURE__ */ (0, import_jsx_runtime.jsxs)("div", {
 			className: "absolute right-5 z-20 flex flex-col gap-3",
 			style: { bottom: "calc(2rem + env(safe-area-inset-bottom))" },
 			children: [
@@ -7701,7 +9104,7 @@ function Toggle({ active, onClick, icon, label }) {
 		children: [icon, label]
 	});
 }
-var Scene = (0, import_react.lazy)(() => import("./scene-0zSDavV6.mjs"));
+var Scene = (0, import_react.lazy)(() => import("./scene-DPzDEjxr.mjs"));
 function StudioApp() {
 	const [mounted, setMounted] = (0, import_react.useState)(false);
 	(0, import_react.useEffect)(() => setMounted(true), []);
@@ -7727,4 +9130,4 @@ function Home() {
 	return /* @__PURE__ */ (0, import_jsx_runtime.jsx)(StudioApp, {});
 }
 //#endregion
-export { isLocoPose as C, isDancePose as S, getCitySpawn as _, navelInsertMorph as a, LOCO_POSES as b, HOME_EXIT as c, cityMoveCapsule as d, cityRayDown as f, getCityRuntime as g, getCityDebugAabbs as h, FpInput as i, HOME_RETURN_SPAWN as l, citySurfaceAt as m, loadCityModel as n, useStudio as o, cityRayPick as p, CrouchHold as r, routes_exports as t, bakeCityCollision as u, nearCityPortal as v, SoftSkeleton as x, nearHomeExit as y };
+export { getCityDebugAabbs as A, HOME_EXIT as C, cityRayDown as D, cityMoveCapsule as E, LOCO_POSES as F, SoftSkeleton as I, isDancePose as L, getCitySpawn as M, nearCityPortal as N, cityRayPick as O, nearHomeExit as P, isLocoPose as R, bakeCityCollision as T, loadCityModel as _, applyWheelLayout as a, navelInsertMorph as b, getVehicles as c, spawnVehicles as d, stepVehicles as f, vehicleHintAt as g, vehLive as h, applyCockpit as i, getCityRuntime as j, citySurfaceAt as k, pushPlayerFromVehicles as l, tryExitVehicle as m, CrouchHold as n, approachVehicle as o, tryEnterVehicle as p, FpInput as r, getOccupied as s, routes_exports as t, resetVehicles as u, loadVehicleModels as v, HOME_RETURN_SPAWN as w, useStudio as x, fpLive as y };

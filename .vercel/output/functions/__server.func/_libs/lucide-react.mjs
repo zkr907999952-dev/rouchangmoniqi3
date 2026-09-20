@@ -202,6 +202,32 @@ var ChevronsDown = createLucideIcon("chevrons-down", [["path", {
 * This source code is licensed under the ISC license.
 * See the LICENSE file in the root directory of this source tree.
 */
+var ChevronsLeft = createLucideIcon("chevrons-left", [["path", {
+	d: "m11 17-5-5 5-5",
+	key: "13zhaf"
+}], ["path", {
+	d: "m18 17-5-5 5-5",
+	key: "h8a8et"
+}]]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var ChevronsRight = createLucideIcon("chevrons-right", [["path", {
+	d: "m6 17 5-5-5-5",
+	key: "xnjwq"
+}], ["path", {
+	d: "m13 17 5-5-5-5",
+	key: "17xmmf"
+}]]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
 var ChevronsUpDown = createLucideIcon("chevrons-up-down", [["path", {
 	d: "m7 15 5 5 5-5",
 	key: "1hf1tw"
@@ -289,6 +315,29 @@ var Eye = createLucideIcon("eye", [["path", {
 	cy: "12",
 	r: "3",
 	key: "1v7zrd"
+}]]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var Flame = createLucideIcon("flame", [["path", {
+	d: "M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.072-2.143-.224-4.054 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.153.433-2.294 1-3a2.5 2.5 0 0 0 2.5 2.5z",
+	key: "96xj49"
+}]]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var Gauge = createLucideIcon("gauge", [["path", {
+	d: "m12 14 4-4",
+	key: "9kzdfg"
+}], ["path", {
+	d: "M3.34 19a10 10 0 1 1 17.32 0",
+	key: "19p75a"
 }]]);
 /**
 * @license lucide-react v0.510.0 - ISC
@@ -441,6 +490,29 @@ var House = createLucideIcon("house", [["path", {
 	d: "M3 10a2 2 0 0 1 .709-1.528l7-5.999a2 2 0 0 1 2.582 0l7 5.999A2 2 0 0 1 21 10v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z",
 	key: "1d0kgt"
 }]]);
+/**
+* @license lucide-react v0.510.0 - ISC
+*
+* This source code is licensed under the ISC license.
+* See the LICENSE file in the root directory of this source tree.
+*/
+var LogOut = createLucideIcon("log-out", [
+	["path", {
+		d: "M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4",
+		key: "1uf3rs"
+	}],
+	["polyline", {
+		points: "16 17 21 12 16 7",
+		key: "1gabdz"
+	}],
+	["line", {
+		x1: "21",
+		x2: "9",
+		y1: "12",
+		y2: "12",
+		key: "1uyos4"
+	}]
+]);
 /**
 * @license lucide-react v0.510.0 - ISC
 *
@@ -808,4 +880,4 @@ var ZoomIn = createLucideIcon("zoom-in", [
 	}]
 ]);
 //#endregion
-export { Box as A, Grab as C, ChevronsUpDown as D, Crosshair as E, ArrowDown as F, Activity as I, ArrowUp as M, ArrowRight as N, ChevronsDown as O, ArrowLeft as P, Grid3x3 as S, EyeOff as T, Map as _, User as a, Hand as b, Settings2 as c, RotateCcw as d, Rotate3d as f, Move as g, Pause as h, Wind as i, Bone as j, Camera as k, Scan as l, Pointer as m, Zap as n, TriangleAlert as o, Repeat as p, Wrench as r, Sword as s, ZoomIn as t, RotateCw as u, House as v, Eye as w, GripHorizontal as x, Heart as y };
+export { ChevronsUpDown as A, ArrowDown as B, Grid3x3 as C, Eye as D, Flame as E, Box as F, Bone as I, ArrowUp as L, ChevronsLeft as M, ChevronsDown as N, EyeOff as O, Camera as P, ArrowRight as R, GripHorizontal as S, Gauge as T, Activity as V, Map as _, User as a, Heart as b, Settings2 as c, RotateCcw as d, Rotate3d as f, Move as g, Pause as h, Wind as i, ChevronsRight as j, Crosshair as k, Scan as l, Pointer as m, Zap as n, TriangleAlert as o, Repeat as p, Wrench as r, Sword as s, ZoomIn as t, RotateCw as u, LogOut as v, Grab as w, Hand as x, House as y, ArrowLeft as z };
