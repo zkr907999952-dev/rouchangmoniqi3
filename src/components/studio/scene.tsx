@@ -749,6 +749,7 @@ function FirstPersonRig({
   const distWalk = useRef(0);
   const input = useRef(new FpInput());
   const lookTouch = useRef<{ id: number; x: number; y: number } | null>(null);
+  const vehOrbit = useRef<{ id: number; x: number; y: number } | null>(null);
   const orbitSnap = useRef<{
     px: number;
     py: number;
@@ -971,19 +972,34 @@ function FirstPersonRig({
     };
     const onMouseMove = (e: MouseEvent) => {
       if (useStudio.getState().cityMapOpen) return;
-      if (!useStudio.getState().fpLookLocked) return;
-      const sens = FP_SENS * useStudio.getState().fpLookSpeed;
+      const st = useStudio.getState();
+      const vehThird = (st.inVehicle || vehLive.inVehicle) && st.vehicleCam === "third";
+      if (vehThird) return;
+      if (!st.fpLookLocked) return;
+      const sens = FP_SENS * st.fpLookSpeed;
       yaw.current -= e.movementX * sens;
       pitch.current -= e.movementY * sens;
       pitch.current = THREE.MathUtils.clamp(pitch.current, -FP_PITCH_LIM, FP_PITCH_LIM);
-      if (e.movementX || e.movementY) lookIdle.current = 0;
     };
     const onPointerDown = (e: PointerEvent) => {
       if (useStudio.getState().cityMapOpen) return;
+      const st = useStudio.getState();
+      const vehThird = (st.inVehicle || vehLive.inVehicle) && st.vehicleCam === "third";
+      if (e.button === 0 && vehThird) {
+        vehOrbit.current = { id: e.pointerId, x: e.clientX, y: e.clientY };
+        lookIdle.current = 0;
+        try {
+          el.setPointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+        e.preventDefault();
+        return;
+      }
       if (e.button === 2) {
         e.preventDefault();
         e.stopPropagation();
-        const st = useStudio.getState();
+        if (vehThird) return;
         if (st.fpLookLocked) {
           st.setFpLookLocked(false);
           if (document.pointerLockElement) document.exitPointerLock();
@@ -1006,6 +1022,18 @@ function FirstPersonRig({
     };
     const onPointerMove = (e: PointerEvent) => {
       if (useStudio.getState().cityMapOpen) return;
+      const orbit = vehOrbit.current;
+      if (orbit && e.pointerId === orbit.id) {
+        const dx = e.clientX - orbit.x;
+        const dy = e.clientY - orbit.y;
+        orbit.x = e.clientX;
+        orbit.y = e.clientY;
+        yaw.current -= dx * FP_TOUCH_SENS * useStudio.getState().fpLookSpeed;
+        pitch.current -= dy * FP_TOUCH_SENS * useStudio.getState().fpLookSpeed;
+        pitch.current = THREE.MathUtils.clamp(pitch.current, -FP_PITCH_LIM, FP_PITCH_LIM);
+        lookIdle.current = 0;
+        return;
+      }
       const t = lookTouch.current;
       if (!t || e.pointerId !== t.id) return;
       const dx = e.clientX - t.x;
@@ -1015,9 +1043,18 @@ function FirstPersonRig({
       yaw.current -= dx * FP_TOUCH_SENS * useStudio.getState().fpLookSpeed;
       pitch.current -= dy * FP_TOUCH_SENS * useStudio.getState().fpLookSpeed;
       pitch.current = THREE.MathUtils.clamp(pitch.current, -FP_PITCH_LIM, FP_PITCH_LIM);
-      if (dx || dy) lookIdle.current = 0;
     };
     const onPointerUp = (e: PointerEvent) => {
+      if (vehOrbit.current?.id === e.pointerId) {
+        vehOrbit.current = null;
+        lookIdle.current = 0;
+        try {
+          if (el.hasPointerCapture(e.pointerId)) el.releasePointerCapture(e.pointerId);
+        } catch {
+          /* ignore */
+        }
+        return;
+      }
       if (lookTouch.current?.id !== e.pointerId) return;
       lookTouch.current = null;
       try {
@@ -1528,7 +1565,7 @@ function FirstPersonRig({
       const rx = v.rx;
       const ry = v.ry;
       const rz = v.rz;
-      lookIdle.current += d;
+      lookIdle.current = vehOrbit.current ? 0 : lookIdle.current + d;
       const persp = camera as THREE.PerspectiveCamera;
       const kick =
         v.kind === "plane"
@@ -1566,11 +1603,11 @@ function FirstPersonRig({
         return;
       }
       pitch.current = THREE.MathUtils.clamp(pitch.current, -1.25, 0.55);
-      if (lookIdle.current >= 3) {
+      if (!vehOrbit.current) {
         const dyaw = Math.atan2(Math.sin(v.yaw - yaw.current), Math.cos(v.yaw - yaw.current));
-        yaw.current += dyaw * (1 - Math.exp(-2.4 * d));
+        yaw.current += dyaw * (1 - Math.exp(-3.2 * d));
         const wantPitch = v.kind === "plane" && v.airborne ? -0.12 : -0.18;
-        pitch.current += (wantPitch - pitch.current) * (1 - Math.exp(-2 * d));
+        pitch.current += (wantPitch - pitch.current) * (1 - Math.exp(-2.8 * d));
       }
       const dist = vehLive.camDist;
       const height = vehLive.camHeight;
@@ -1584,7 +1621,7 @@ function FirstPersonRig({
       let camY = lookY - ly * dist + height * 0.12;
       let camZ = v.z - lz * dist;
       if (v.kind === "plane" && v.airborne) {
-        const rec = THREE.MathUtils.clamp((lookIdle.current - 3) / 0.8, 0, 1);
+        const rec = vehOrbit.current ? 0 : THREE.MathUtils.clamp(lookIdle.current / 0.4, 0, 1);
         const chaseX = v.x - fx * dist + ux * height * 0.55;
         const chaseY = v.y - fy * dist + uy * height * 0.55;
         const chaseZ = v.z - fz * dist + uz * height * 0.55;
@@ -1616,7 +1653,7 @@ function FirstPersonRig({
       camera.position.y += (camY - camera.position.y) * k;
       camera.position.z += (camZ - camera.position.z) * k;
       _fpFwd.set(v.x + fx * lookAhead - camera.position.x, lookY + fy * lookAhead + 0.2 - camera.position.y, v.z + fz * lookAhead - camera.position.z);
-      if (v.kind === "plane" && v.airborne && lookIdle.current >= 3) {
+      if (v.kind === "plane" && v.airborne && !vehOrbit.current) {
         _fpFwd.set(v.x + fx * lookAhead - camera.position.x, v.y + fy * lookAhead + uy * 0.4 - camera.position.y, v.z + fz * lookAhead - camera.position.z);
         applyLookDir(camera, _fpFwd, v.yaw);
       } else {

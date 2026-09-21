@@ -433,6 +433,29 @@ function splitTriangles(
   return out;
 }
 
+function medianTriY(meshes: THREE.Mesh[], wrap: THREE.Object3D) {
+  const ys: number[] = [];
+  for (const mesh of meshes) {
+    const src = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry;
+    const pos = src.getAttribute("position") as THREE.BufferAttribute | undefined;
+    if (!pos) continue;
+    mesh.updateMatrixWorld(true);
+    for (let i = 0; i < pos.count; i += 3) {
+      let sy = 0;
+      for (let k = 0; k < 3; k++) {
+        _p.fromBufferAttribute(pos, i + k);
+        mesh.localToWorld(_p);
+        wrap.worldToLocal(_p);
+        sy += _p.y;
+      }
+      ys.push(sy / 3);
+    }
+  }
+  if (!ys.length) return 0;
+  ys.sort((a, b) => a - b);
+  return ys[Math.floor(ys.length * 0.5)]!;
+}
+
 function makeHalfMesh(mesh: THREE.Mesh, geo: THREE.BufferGeometry, tag: string) {
   const half = new THREE.Mesh(geo, mesh.material);
   half.castShadow = false;
@@ -583,8 +606,8 @@ function flameMat(color: number, opacity: number) {
         float t = clamp(vT, 0.0, 1.0);
         float radial = length(vPos.xz) * 2.0;
         float core = 1.0 - smoothstep(0.0, 0.55, radial);
-        float head = smoothstep(0.0, 0.08, t);
-        float tail = 1.0 - smoothstep(0.48, 1.0, t);
+        float head = smoothstep(0.0, 0.06, t);
+        float tail = 1.0 - smoothstep(0.62, 1.0, t);
         float a = head * tail * (0.35 + core * 0.75) * uAlpha;
         vec3 col = mix(uColor * 1.65, uColor * 0.22, t);
         gl_FragColor = vec4(col, a);
@@ -600,23 +623,21 @@ function setFlame(mat: THREE.ShaderMaterial, color: number, alpha: number) {
 
 function makeTeardropGeo(rBase: number) {
   const pts: THREE.Vector2[] = [];
-  const n = 22;
+  const n = 24;
   for (let i = 0; i <= n; i++) {
     const t = i / n;
     const y = t - 0.5;
     let r: number;
-    if (t < 0.52) {
-      r = rBase * (1 - 0.08 * (t / 0.52));
+    if (t < 0.38) {
+      r = rBase * (1 - 0.1 * (t / 0.38));
     } else {
-      const u = (t - 0.52) / 0.48;
-      const taper = Math.pow(1 - u, 1.15);
-      const bulb = Math.sin(Math.min(1, u * 1.08) * Math.PI) * 0.22 * (u < 0.9 ? 1 : 0.35);
-      r = rBase * Math.max(0.02, 0.92 * taper + bulb * 0.28);
+      const u = (t - 0.38) / 0.62;
+      r = rBase * 0.9 * Math.pow(1 - u, 1.85);
     }
-    pts.push(new THREE.Vector2(r, y));
+    pts.push(new THREE.Vector2(Math.max(0.001, r), y));
   }
   pts.push(new THREE.Vector2(0, 0.5));
-  return new THREE.LatheGeometry(pts, 22);
+  return new THREE.LatheGeometry(pts, 20);
 }
 
 function makePlume(rBase: number) {
@@ -646,12 +667,13 @@ function setExhaust(fx: ExhaustBits, thrust: number, time: number) {
   const cr = THREE.MathUtils.clamp(thrust / 0.8, 0, 1);
   const ab = THREE.MathUtils.clamp((thrust - 0.8) / 0.2, 0, 1);
   const flicker = 1 + Math.sin(time * (28 + ab * 50)) * (0.02 + ab * 0.07);
-  const len = (1.05 + cr * 0.95 + ab * 2.8) * flicker;
-  const rad = 1.02 + cr * 0.1 + ab * 0.18;
-  fx.core.scale.set(rad, len, rad);
+  const pull = 1 + Math.sin(time * (9 + ab * 14)) * (0.06 + ab * 0.12);
+  const len = (1.2 + cr * 1.15 + ab * 3.8) * flicker * pull;
+  const rad = 0.98 + cr * 0.08 + ab * 0.12;
+  fx.core.scale.set(rad * 0.88, len, rad * 0.88);
   fx.core.position.z = len * 0.5;
-  fx.mid.scale.set(rad * 1.16, len * 0.92, rad * 1.16);
-  fx.mid.position.z = len * 0.46;
+  fx.mid.scale.set(rad * 1.08, len * 0.84, rad * 1.08);
+  fx.mid.position.z = len * 0.42;
   fx.glow.scale.set(rad * 1.05, rad * 0.7, rad * 1.05);
   fx.glow.position.z = 0.04;
   const coreCol = ab > 0.01 ? 0xfff1c2 : 0xe8fbff;
@@ -1095,11 +1117,12 @@ function preparePlane(src: THREE.Group) {
         const cx = (_box.min.x + _box.max.x) * 0.5;
         const cy = (_box.min.y + _box.max.y) * 0.5;
         const cz = (_box.min.z + _box.max.z) * 0.5;
+        const splitY = medianTriY(eng.made, wrap);
         const topMade: THREE.Mesh[] = [];
         const botMade: THREE.Mesh[] = [];
         for (const mesh of eng.made) {
-          const topGeo = splitTriangles(mesh, wrap, (_x, y) => y >= cy - 0.01);
-          const botGeo = splitTriangles(mesh, wrap, (_x, y) => y < cy + 0.01);
+          const topGeo = splitTriangles(mesh, wrap, (_x, y) => y >= splitY);
+          const botGeo = splitTriangles(mesh, wrap, (_x, y) => y < splitY);
           if (topGeo) {
             const h = makeHalfMesh(mesh, topGeo, `${eng.tag}T`);
             wrap.attach(h);
@@ -1121,22 +1144,20 @@ function preparePlane(src: THREE.Group) {
           const top = mountHinge(
             wrap,
             topMade[0]!,
-            { x: cx, y: _box.min.y, z: cz },
+            { x: cx, y: splitY, z: cz },
             "x",
             1,
-            0.52,
+            0.7,
             eng.tag === "L" ? "nozzleLT" : "nozzleRT",
             topMade.slice(1),
           );
-          _box.makeEmpty();
-          for (const m of botMade) _box.expandByObject(m);
           const bot = mountHinge(
             wrap,
             botMade[0]!,
-            { x: cx, y: _box.max.y, z: cz },
+            { x: cx, y: splitY, z: cz },
             "x",
             1,
-            0.52,
+            0.7,
             eng.tag === "L" ? "nozzleLB" : "nozzleRB",
             botMade.slice(1),
           );
@@ -1429,9 +1450,9 @@ export function VehicleWorld() {
         const pitchC = THREE.MathUtils.clamp(v.ctrlPitch, -1, 1);
         const rollC = THREE.MathUtils.clamp(v.ctrlRoll, -1, 1);
         const yawC = THREE.MathUtils.clamp(v.ctrlYaw || v.steerAngle * 1.6, -1, 1);
-        const gap = petalGap(v.thrust);
-        const vecL = -pitchC * 0.9 - rollC * 0.7;
-        const vecR = -pitchC * 0.9 + rollC * 0.7;
+        const gap = petalGap(v.thrust) * 0.45;
+        const vecL = -pitchC * 0.95 - rollC * 0.85;
+        const vecR = -pitchC * 0.95 + rollC * 0.85;
         for (const s of vis.surfaces) {
           let t = 0;
           switch (s.kind) {
