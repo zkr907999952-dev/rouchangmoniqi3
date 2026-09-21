@@ -56,6 +56,9 @@ type Visual = {
   flapT: number;
   exhausts: ExhaustBits[];
   trails: Contrail[];
+  throttle: { obj: THREE.Object3D; rest: THREE.Quaternion } | null;
+  wingTipL: THREE.Vector3;
+  wingTipR: THREE.Vector3;
 };
 
 const _box = new THREE.Box3();
@@ -518,27 +521,54 @@ function addGlow(wrap: THREE.Group, z: number, color: number, dist: number) {
 }
 
 function flameMat(color: number, opacity: number) {
-  return new THREE.MeshBasicMaterial({
-    color,
+  return new THREE.ShaderMaterial({
+    uniforms: {
+      uColor: { value: new THREE.Color(color) },
+      uAlpha: { value: opacity },
+    },
     transparent: true,
-    opacity,
     depthWrite: false,
     blending: THREE.AdditiveBlending,
     side: THREE.DoubleSide,
+    vertexShader: `
+      varying float vT;
+      void main() {
+        vT = position.y + 0.5;
+        gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+      }
+    `,
+    fragmentShader: `
+      uniform vec3 uColor;
+      uniform float uAlpha;
+      varying float vT;
+      void main() {
+        float t = clamp(vT, 0.0, 1.0);
+        float head = smoothstep(0.0, 0.16, t);
+        float tail = 1.0 - smoothstep(0.28, 1.0, t);
+        float a = head * tail * uAlpha;
+        vec3 col = mix(uColor * 1.55, uColor * 0.15, t);
+        gl_FragColor = vec4(col, a);
+      }
+    `,
   });
+}
+
+function setFlame(mat: THREE.ShaderMaterial, color: number, alpha: number) {
+  mat.uniforms.uColor.value.setHex(color);
+  mat.uniforms.uAlpha.value = alpha;
 }
 
 function makeJetExhaust(): ExhaustBits {
   const group = new THREE.Group();
   group.name = "JetExhaust";
-  const core = new THREE.Mesh(new THREE.ConeGeometry(0.11, 1, 14, 1, true), flameMat(0xd8f6ff, 0.72));
+  const core = new THREE.Mesh(new THREE.ConeGeometry(0.1, 1, 18, 1, true), flameMat(0xd8f6ff, 0.72));
   core.rotation.x = -Math.PI / 2;
-  const mid = new THREE.Mesh(new THREE.ConeGeometry(0.2, 1, 14, 1, true), flameMat(0x3ec7ff, 0.38));
+  const mid = new THREE.Mesh(new THREE.ConeGeometry(0.18, 1, 18, 1, true), flameMat(0x3ec7ff, 0.38));
   mid.rotation.x = -Math.PI / 2;
-  const glow = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), flameMat(0x9ad4ff, 0.45));
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(0.16, 12, 10), flameMat(0x9ad4ff, 0.45));
   const diamonds: THREE.Mesh[] = [];
   for (let i = 0; i < 4; i++) {
-    const d = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), flameMat(0xffe6b0, 0.0));
+    const d = new THREE.Mesh(new THREE.SphereGeometry(0.055, 8, 6), flameMat(0xffe6b0, 0.0));
     diamonds.push(d);
     group.add(d);
   }
@@ -550,44 +580,34 @@ function makeJetExhaust(): ExhaustBits {
 function setExhaust(fx: ExhaustBits, thrust: number, time: number) {
   const cr = THREE.MathUtils.clamp(thrust / 0.8, 0, 1);
   const ab = THREE.MathUtils.clamp((thrust - 0.8) / 0.2, 0, 1);
-  const flicker = 1 + Math.sin(time * (38 + ab * 90)) * (0.045 + ab * 0.14);
-  const len = (0.28 + cr * 1.35 + ab * 5.6) * flicker;
-  const r = 0.07 + cr * 0.05 + ab * 0.09;
-  fx.core.scale.set(r * 10, len, r * 10);
-  fx.core.position.z = len * 0.5;
-  fx.mid.scale.set(r * 16, len * 1.18, r * 16);
-  fx.mid.position.z = len * 0.52;
-  fx.glow.scale.setScalar(0.55 + cr * 0.5 + ab * 1.4);
-  fx.glow.position.z = 0.12;
-  const coreMat = fx.core.material as THREE.MeshBasicMaterial;
-  const midMat = fx.mid.material as THREE.MeshBasicMaterial;
-  const glowMat = fx.glow.material as THREE.MeshBasicMaterial;
-  if (ab > 0.02) {
-    coreMat.color.setHex(0xfff4d6);
-    midMat.color.setHex(0xff7a18);
-    glowMat.color.setHex(0xffc14d);
-    fx.light.color.setHex(0xff9a32);
-  } else {
-    coreMat.color.setHex(0xe8fbff);
-    midMat.color.setHex(0x3ec7ff);
-    glowMat.color.setHex(0x8ad8ff);
-    fx.light.color.setHex(0x66e0ff);
-  }
-  coreMat.opacity = (0.22 + cr * 0.45 + ab * 0.4) * flicker;
-  midMat.opacity = (0.12 + cr * 0.28 + ab * 0.38) * flicker;
-  glowMat.opacity = 0.15 + cr * 0.25 + ab * 0.4;
-  fx.light.intensity = cr * 4.2 + ab * 22;
-  fx.light.distance = 8 + ab * 18;
+  const flicker = 1 + Math.sin(time * (36 + ab * 70)) * (0.03 + ab * 0.1);
+  const len = (0.55 + cr * 1.15 + ab * 4.4) * flicker;
+  const r = 0.055 + cr * 0.04 + ab * 0.07;
+  fx.core.scale.set(r * 11, len, r * 11);
+  fx.core.position.z = len * 0.42;
+  fx.mid.scale.set(r * 18, len * 1.22, r * 18);
+  fx.mid.position.z = len * 0.4;
+  fx.glow.scale.setScalar(0.7 + cr * 0.45 + ab * 1.1);
+  fx.glow.position.z = 0.04;
+  const coreCol = ab > 0.01 ? 0xfff1c2 : 0xe8fbff;
+  const midCol = ab > 0.01 ? 0xff6a12 : 0x3ec7ff;
+  const glowCol = ab > 0.01 ? 0xffb24a : 0x8ad8ff;
+  setFlame(fx.core.material as THREE.ShaderMaterial, coreCol, (0.28 + cr * 0.42 + ab * 0.38) * flicker);
+  setFlame(fx.mid.material as THREE.ShaderMaterial, midCol, (0.14 + cr * 0.26 + ab * 0.32) * flicker);
+  setFlame(fx.glow.material as THREE.ShaderMaterial, glowCol, 0.18 + cr * 0.22 + ab * 0.32);
+  fx.light.color.setHex(ab > 0.15 ? 0xff9a32 : 0x66e0ff);
+  fx.light.intensity = cr * 3.4 + ab * 16;
+  fx.light.distance = 7 + ab * 16;
   fx.group.visible = thrust > 0.02;
   for (let i = 0; i < fx.diamonds.length; i++) {
     const d = fx.diamonds[i]!;
-    const on = ab > 0.12;
+    const on = ab > 0.1;
     d.visible = on;
     if (!on) continue;
-    const z = 0.55 + i * (0.55 + ab * 0.55) * flicker;
+    const z = 0.35 + i * (0.48 + ab * 0.5) * flicker;
     d.position.z = z;
-    d.scale.setScalar((0.55 + (1 - i / 4) * 0.55) * (0.7 + ab * 0.7) * flicker);
-    (d.material as THREE.MeshBasicMaterial).opacity = (0.18 + ab * 0.45) * (1 - i * 0.16);
+    d.scale.setScalar((0.5 + (1 - i / 4) * 0.5) * (0.65 + ab * 0.7) * flicker);
+    setFlame(d.material as THREE.ShaderMaterial, 0xffe6b0, (0.16 + ab * 0.4) * (1 - i * 0.16));
   }
 }
 
@@ -673,9 +693,80 @@ function updateContrail(tr: Contrail, tip: THREE.Vector3, emit: boolean) {
 
 function attachExhaust(hub: THREE.Object3D, z = 0.55) {
   const fx = makeJetExhaust();
-  fx.group.position.set(0, 0, z);
+  hub.updateWorldMatrix(true, true);
+  const box = new THREE.Box3();
+  hub.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh || !m.geometry) return;
+    if (!m.geometry.boundingBox) m.geometry.computeBoundingBox();
+    const b = m.geometry.boundingBox;
+    if (!b) return;
+    for (const corner of [b.min, b.max]) {
+      _p.copy(corner);
+      m.localToWorld(_p);
+      hub.worldToLocal(_p);
+      box.expandByPoint(_p);
+    }
+  });
+  const zExit = box.isEmpty() ? z : box.max.z;
+  fx.group.position.set(0, 0, zExit - 0.42);
   hub.add(fx.group);
   return fx;
+}
+
+function measureWingtips(wrap: THREE.Group) {
+  wrap.updateMatrixWorld(true);
+  const parts = [...findNamed(wrap, /^wing_/), ...findNamed(wrap, /^aileron_/)];
+  _box.makeEmpty();
+  for (const o of parts) _box.expandByObject(o);
+  if (_box.isEmpty()) {
+    return { l: new THREE.Vector3(-5.2, 0.2, 0.3), r: new THREE.Vector3(5.2, 0.2, 0.3) };
+  }
+  const y = _box.min.y * 0.2 + _box.max.y * 0.8;
+  const z = _box.min.z * 0.25 + _box.max.z * 0.75;
+  return {
+    l: localPoint(wrap, new THREE.Vector3(_box.min.x, y, z)),
+    r: localPoint(wrap, new THREE.Vector3(_box.max.x, y, z)),
+  };
+}
+
+function findThrottle(wrap: THREE.Group, stick: THREE.Object3D | null): THREE.Object3D | null {
+  wrap.updateMatrixWorld(true);
+  let sx = 0;
+  let sy = 1.4;
+  let sz = -5.5;
+  if (stick) {
+    _box.setFromObject(stick);
+    _box.getCenter(_center);
+    wrap.worldToLocal(_center);
+    sx = _center.x;
+    sy = _center.y;
+    sz = _center.z;
+  }
+  let best: THREE.Object3D | null = null;
+  let bestScore = -1e9;
+  wrap.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (!m.isMesh) return;
+    if (/wheel|gear|wing|aileron|rudder|elevator|door|window|flap|bonnet|boot|airbrake|weapon|bodyshell|exhaust|hinge|scissor/i.test(m.name)) return;
+    _box.setFromObject(m);
+    if (_box.isEmpty()) return;
+    _box.getSize(_size);
+    if (_size.x > 0.55 || _size.y > 0.7 || _size.z > 0.7) return;
+    if (_size.x * _size.y * _size.z < 0.00002) return;
+    _box.getCenter(_center);
+    wrap.worldToLocal(_center);
+    if (_center.x > sx - 0.06) return;
+    if (_center.x < sx - 1.15) return;
+    if (Math.abs(_center.z - sz) > 1.1) return;
+    if (Math.abs(_center.y - sy) > 0.55) return;
+    const score = -_center.x * 2 - Math.abs(_center.z - sz) - Math.abs(_center.y - sy) * 0.6 - _size.x * _size.y * _size.z * 8;
+    if (score > bestScore) {
+      bestScore = score;
+      best = m;
+    }
+  });
+  return best;
 }
 
 function prepareCar(src: THREE.Group) {
@@ -816,16 +907,14 @@ function preparePlane(src: THREE.Group) {
   for (const obj of findNamed(wrap, /^gear_door_f[lr]/)) {
     const a = worldAabb(obj);
     const left = a.cx < 0;
-    gearDoors.push(
-      mountHinge(wrap, obj, { x: left ? a.minX : a.maxX, y: a.maxY, z: a.cz }, "z", left ? -1 : 1, 1.25, "gearDoor"),
-    );
+    const inX = left ? Math.max(a.minX, a.cx + (a.maxX - a.minX) * 0.08) : Math.min(a.maxX, a.cx - (a.maxX - a.minX) * 0.08);
+    gearDoors.push(mountHinge(wrap, obj, { x: inX, y: a.maxY + 0.01, z: a.cz }, "z", left ? 1 : -1, 1.56, "gearDoor"));
   }
   for (const obj of findNamed(wrap, /^gear_door_r[lr]/)) {
     const a = worldAabb(obj);
     const left = a.cx < 0;
-    gearDoors.push(
-      mountHinge(wrap, obj, { x: left ? a.maxX : a.minX, y: a.maxY, z: a.cz }, "z", left ? -1 : 1, 1.18, "gearDoor"),
-    );
+    const inX = left ? a.maxX : a.minX;
+    gearDoors.push(mountHinge(wrap, obj, { x: inX, y: a.maxY + 0.01, z: a.cz }, "z", left ? 1 : -1, 1.56, "gearDoor"));
   }
 
   const surfaces: PivotBind[] = [];
@@ -935,7 +1024,24 @@ function preparePlane(src: THREE.Group) {
     exhausts.push(attachExhaust(l, 0.15), attachExhaust(r, 0.15));
   }
   const glow = [addGlow(wrap, 7.6, 0x4ea7ff, 9), addGlow(wrap, 7.2, 0xff7a32, 6)];
-  return { wrap, wheels: hubs.length ? hubs : wheels, doors, gears, gearDoors, surfaces, steer, glow, originY, cockpit, exhausts };
+  const tips = measureWingtips(wrap);
+  const throttleObj = findThrottle(wrap, steer);
+  return {
+    wrap,
+    wheels: hubs.length ? hubs : wheels,
+    doors,
+    gears,
+    gearDoors,
+    surfaces,
+    steer,
+    glow,
+    originY,
+    cockpit,
+    exhausts,
+    throttle: throttleObj,
+    wingTipL: tips.l,
+    wingTipR: tips.r,
+  };
 }
 
 function layoutFromWheels(wheels: WheelBind[], kind: "car" | "plane") {
@@ -1042,6 +1148,9 @@ export function VehicleWorld() {
               flapT: 0,
               exhausts: [],
               trails: [],
+              throttle: null,
+              wingTipL: new THREE.Vector3(),
+              wingTipR: new THREE.Vector3(),
             });
           } else {
             const prep = planePrep;
@@ -1062,6 +1171,9 @@ export function VehicleWorld() {
               flapT: 0,
               exhausts: prep.exhausts,
               trails: [makeContrail(), makeContrail()],
+              throttle: prep.throttle ? { obj: prep.throttle, rest: prep.throttle.quaternion.clone() } : null,
+              wingTipL: prep.wingTipL.clone(),
+              wingTipR: prep.wingTipR.clone(),
             });
           }
         }
@@ -1110,7 +1222,7 @@ export function VehicleWorld() {
       for (const d of vis.doors) applyPivot(d, doorT);
       const gearUp = 1 - v.gear;
       for (const g of vis.gears) applyPivot(g, gearUp);
-      const doorClose = gearUp < 0.68 ? 0 : (gearUp - 0.68) / 0.32;
+      const doorClose = THREE.MathUtils.smoothstep(0.52, 0.98, gearUp);
       for (const g of vis.gearDoors) applyPivot(g, doorClose);
       if (v.kind === "plane") {
         const pitchC = THREE.MathUtils.clamp(v.ctrlPitch, -1, 1);
@@ -1153,13 +1265,22 @@ export function VehicleWorld() {
         }
       }
       if (vis.steerWheel) {
-        const axis = (vis.steerWheel.obj.userData.steerAxis as "x" | "y" | "z") || "z";
-        _eul.set(0, 0, 0);
-        const ang = -v.steerAngle * 2.6;
-        if (axis === "x") _eul.x = ang;
-        else if (axis === "y") _eul.y = ang;
-        else _eul.z = ang;
-        vis.steerWheel.obj.quaternion.copy(vis.steerWheel.rest).multiply(_q.setFromEuler(_eul));
+        if (v.kind === "plane") {
+          _eul.set(-v.ctrlPitch * 0.22, 0, v.ctrlRoll * 0.2);
+          vis.steerWheel.obj.quaternion.copy(vis.steerWheel.rest).multiply(_q.setFromEuler(_eul));
+        } else {
+          const axis = (vis.steerWheel.obj.userData.steerAxis as "x" | "y" | "z") || "z";
+          _eul.set(0, 0, 0);
+          const ang = -v.steerAngle * 2.6;
+          if (axis === "x") _eul.x = ang;
+          else if (axis === "y") _eul.y = ang;
+          else _eul.z = ang;
+          vis.steerWheel.obj.quaternion.copy(vis.steerWheel.rest).multiply(_q.setFromEuler(_eul));
+        }
+      }
+      if (vis.throttle) {
+        _eul.set(-v.thrust * 0.62, 0, 0);
+        vis.throttle.obj.quaternion.copy(vis.throttle.rest).multiply(_q.setFromEuler(_eul));
       }
       vis.glow?.forEach((light, i) => {
         if (v.kind === "car") light.intensity = v.nitro * (i === 0 ? 6.2 : 2.4);
@@ -1169,8 +1290,8 @@ export function VehicleWorld() {
       if (vis.trails.length >= 2) {
         vis.group.updateMatrixWorld(true);
         const emit = v.airborne && v.speed > 52 && v.y > 18;
-        _tipL.set(-4.6, 0.15, 0.35).applyMatrix4(vis.group.matrixWorld);
-        _tipR.set(4.6, 0.15, 0.35).applyMatrix4(vis.group.matrixWorld);
+        _tipL.copy(vis.wingTipL).applyMatrix4(vis.group.matrixWorld);
+        _tipR.copy(vis.wingTipR).applyMatrix4(vis.group.matrixWorld);
         updateContrail(vis.trails[0]!, _tipL, emit);
         updateContrail(vis.trails[1]!, _tipR, emit);
       }

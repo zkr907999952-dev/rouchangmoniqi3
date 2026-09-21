@@ -659,7 +659,7 @@ function syncFpProjection(camera: THREE.Camera, worldMap: string, fpView: string
   const city = worldMap === "city";
   const body = fpView === "body";
   const near = city ? 0.12 : body ? 0.04 : 0.08;
-  const far = city ? 2200 : 40;
+  const far = city ? 5200 : 40;
   if (persp.fov === fov && persp.near === near && persp.far === far) return;
   persp.fov = fov;
   persp.near = near;
@@ -1549,7 +1549,7 @@ function FirstPersonRig({
         camera.quaternion.copy(_vehQ).multiply(_lookQ);
         const fov = Math.min(82, st.fpFov + kick * 0.45);
         const near = 0.06;
-        const far = 2400;
+        const far = 5200;
         if (persp.fov !== fov || persp.near !== near || persp.far !== far) {
           persp.fov = fov;
           persp.near = near;
@@ -1616,7 +1616,7 @@ function FirstPersonRig({
       }
       const fov = Math.min(88, st.fpFov + kick);
       const near = 0.45;
-      const far = 2400;
+      const far = 5200;
       if (persp.fov !== fov || persp.near !== near || persp.far !== far) {
         persp.fov = fov;
         persp.near = near;
@@ -1659,12 +1659,12 @@ function WorldClip() {
   useEffect(() => {
     const p = camera as THREE.PerspectiveCamera;
     const city = world === "city";
-    p.far = city ? 2200 : 40;
+    p.far = city ? 5200 : 40;
     if (!useStudio.getState().firstPerson) p.near = city ? 0.2 : 0.05;
     p.updateProjectionMatrix();
     const bg = city ? "#7eafd0" : "#1a1614";
     scene.background = new THREE.Color(bg);
-    scene.fog = city ? new THREE.Fog(0x7eafd0, 90, 780) : null;
+    scene.fog = city ? new THREE.Fog(0x7eafd0, 220, 3400) : null;
     gl.setClearColor(bg);
   }, [world, camera, scene, gl]);
   return null;

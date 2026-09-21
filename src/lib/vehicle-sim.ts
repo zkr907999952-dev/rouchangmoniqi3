@@ -909,7 +909,7 @@ function stepPlane(v: Vehicle, dt: number, input: VehInput, driven: boolean) {
     v.visRoll = v.roll;
   } else {
     v.gear = Math.min(1, v.gear + dt * 2);
-    const steerIn = yawIn !== 0 ? yawIn : driven ? input.steer * 0.35 : 0;
+    const steerIn = yawIn;
     const max = PLANE_TAXI * (0.35 + v.thrust * 0.9);
     if (v.thrust > 0.04) v.speed += v.thrust * 24 * dt;
     else v.speed *= Math.max(0, 1 - 0.9 * dt);
@@ -918,9 +918,13 @@ function stepPlane(v: Vehicle, dt: number, input: VehInput, driven: boolean) {
     v.speed = THREE.MathUtils.clamp(v.speed, -8, max);
     const speedF = THREE.MathUtils.clamp(Math.abs(v.speed) / 8, 0, 1);
     v.yaw += steerIn * 1.15 * speedF * dt;
-    v.steerAngle = THREE.MathUtils.lerp(v.steerAngle, steerIn * 0.5, 0.2);
-    v.pitch = THREE.MathUtils.lerp(v.pitch, THREE.MathUtils.clamp(pitchIn * 0.22, -0.12, 0.28), 0.16);
-    v.roll = THREE.MathUtils.lerp(v.roll, 0, 0.14);
+    v.steerAngle = THREE.MathUtils.lerp(v.steerAngle, 0, 0.2);
+    if (pitchIn > 0.25 && v.speed > PLANE_TAKEOFF * 0.82) {
+      v.pitch = THREE.MathUtils.lerp(v.pitch, 0.15, 0.12);
+    } else {
+      v.pitch = THREE.MathUtils.lerp(v.pitch, 0, 0.2);
+    }
+    v.roll = THREE.MathUtils.lerp(v.roll, 0, 0.22);
     writeQuatFromEuler(v);
     updateBasis(v);
     v.vx = v.fx * v.speed;
@@ -1002,8 +1006,8 @@ export function stepVehicles(dt: number, input: VehInput) {
     vehLive.eyeY = v.eyeY;
     vehLive.eyeZ = v.eyeZ;
     vehLive.steerIn = input.steer;
-    vehLive.camDist = v.kind === "plane" ? 11.2 + Math.min(5.2, Math.abs(v.speed) * 0.016) : 7.3 + Math.min(2.4, Math.abs(v.speed) * 0.04);
-    vehLive.camHeight = v.kind === "plane" ? 3.05 : 2.15;
+    vehLive.camDist = v.kind === "plane" ? 14.8 + Math.min(6.5, Math.abs(v.speed) * 0.02) : 7.3 + Math.min(2.4, Math.abs(v.speed) * 0.04);
+    vehLive.camHeight = v.kind === "plane" ? 3.55 : 2.15;
     fpLive.x = v.x;
     fpLive.y = v.y - v.originY * 0.4;
     fpLive.z = v.z;
