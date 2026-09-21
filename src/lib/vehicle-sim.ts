@@ -5,6 +5,7 @@ import { useStudio } from "@/lib/studio-store";
 import { fpLive } from "@/lib/fp-pose";
 import {
   cityLowestSurface,
+  cityIsOutdoors,
   cityMoveCapsule,
   cityRayDown,
   cityRayHit,
@@ -296,6 +297,11 @@ export function spawnVehicles() {
   const avoid = [{ x: sp.x, z: sp.z, r: 6 }];
   const near: { x: number; y: number; z: number; yaw: number }[] = [];
   const rings: [number, number][] = [
+    [8.4, 3.2],
+    [10.2, -3.6],
+    [-8.8, 4.4],
+    [4.6, 9.5],
+    [-6.5, -8.2],
     [22.5, 6.2],
     [-20.8, 5.4],
     [8.2, 21.5],
@@ -303,16 +309,15 @@ export function spawnVehicles() {
   for (const [dx, dz] of rings) {
     const x = sp.x + dx;
     const z = sp.z + dz;
-    const y = cityLowestSurface(x, z, 0.02, 2.4);
-    if (y > 0.05 && y < 1.9) {
-      const yaw = Math.atan2(sp.x - x, sp.z - z);
-      near.push({ x, y, z, yaw });
-      avoid.push({ x, z, r: 8 });
-      if (near.length >= 1) break;
-    }
+    const y = cityIsOutdoors(x, z);
+    if (y == null) continue;
+    const yaw = Math.atan2(sp.x - x, sp.z - z);
+    near.push({ x, y, z, yaw });
+    avoid.push({ x, z, r: 8 });
+    if (near.length >= 2) break;
   }
   const extra = sampleRoadPoints(4, avoid);
-  const carSpawns = [...near, ...extra].slice(0, 5);
+  const carSpawns = [...near, ...extra].slice(0, 6);
   if (!carSpawns.length) {
     carSpawns.push({ x: sp.x + 6.5, y: sp.y, z: sp.z + 1.4, yaw: 0 });
   }

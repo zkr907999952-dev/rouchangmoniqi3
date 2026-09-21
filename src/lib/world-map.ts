@@ -4,10 +4,10 @@ import { MeshBVH } from "three-mesh-bvh";
 export const CITY_URL = "/models/city.glb";
 export const CITY_BYTES = 8_037_544;
 export const CITY_SCALE = 1;
-export const CITY_BAKE_ID = "house-v11";
+export const CITY_BAKE_ID = "house-v12";
 
-export const HOME_EXIT = { x: -3.58, y: 0, z: 0.12, r: 0.92 };
-export const HOME_RETURN_SPAWN = { x: -1.22, y: 0, z: 0.12, yaw: -Math.PI / 2, pitch: -0.08 };
+export const HOME_EXIT = { x: -1.98, y: 0, z: 0.18, r: 0.82 };
+export const HOME_RETURN_SPAWN = { x: -1.18, y: 0, z: 0.18, yaw: -Math.PI / 2, pitch: -0.08 };
 
 export const PLAYER_R = 0.3;
 export const CITY_MAP_H_MIN = 36;
@@ -317,34 +317,12 @@ export function bakeCityCollision(root: THREE.Group) {
   city.ready = true;
   city.bakeId = CITY_BAKE_ID;
   city.houseCount = houseBoxes.length;
-  const fx = 40.97;
-  const fz = 30.6;
-  let sx = fx;
-  let sz = fz;
-  let sy = cityLowestSurface(fx, fz);
-  const probes: [number, number][] = [
-    [0, 0],
-    [0, 4],
-    [4, 0],
-    [-3, 2],
-    [0, -3],
-    [2, 3.4],
-    [-2, 3.4],
-  ];
-  for (const [dx, dz] of probes) {
-    const y = cityLowestSurface(fx + dx, fz + dz);
-    if (y > 0.08 && y < 1.8) {
-      sx = fx + dx;
-      sz = fz + dz;
-      sy = y;
-      break;
-    }
-  }
-  city.spawn = { x: sx, y: sy, z: sz, yaw: 0, pitch: -0.06 };
-  city.portal = { x: sx, z: sz, r: 1.85 };
-  gatherColliders(sx - 3, sx + 3, sz - 3, sz + 3, _query);
+  const picked = pickOutdoorSpawn(40.97, 30.6);
+  city.spawn = { x: picked.x, y: picked.y, z: picked.z, yaw: picked.yaw, pitch: -0.06 };
+  city.portal = { x: picked.x, z: picked.z, r: 1.85 };
+  gatherColliders(picked.x - 3, picked.x + 3, picked.z - 3, picked.z + 3, _query);
   city.probeN = _query.length;
-  city.probeY = cityRayDown(sx, city.maxY + 80, sz, city.maxY + 220);
+  city.probeY = cityRayDown(picked.x, city.maxY + 80, picked.z, city.maxY + 220);
   captureLandmarks(root);
 }
 
@@ -456,6 +434,66 @@ export function citySurfaceAt(x: number, z: number) {
 
 export function cityGroundY(x: number, z: number) {
   return citySurfaceAt(x, z);
+}
+
+/** Outdoor walkable ground — rejects indoor floors under a roof. */
+export function cityIsOutdoors(x: number, z: number): number | null {
+  const ground = cityLowestSurface(x, z, 0.02, 1.85);
+  if (!(ground > 0.04 && ground < 1.7)) return null;
+  const top = Math.max(city.maxY + 80, 80);
+  const first = cityRayDown(x, top, z, top - city.minY + 40);
+  if (first != null && first - ground > 1.65) return null;
+  return ground;
+}
+
+function pickOutdoorSpawn(fx: number, fz: number): { x: number; y: number; z: number; yaw: number } {
+  const tryAt = (x: number, z: number) => {
+    const y = cityIsOutdoors(x, z);
+    if (y == null) return null;
+    let open = 0;
+    for (const [dx, dz] of [
+      [1.4, 0],
+      [-1.4, 0],
+      [0, 1.4],
+      [0, -1.4],
+    ] as [number, number][]) {
+      if (cityIsOutdoors(x + dx, z + dz) != null) open++;
+    }
+    if (open < 2) return null;
+    return y;
+  };
+
+  const radii = [0, 4, 8, 12, 18, 26, 36, 50, 70];
+  let best: { x: number; y: number; z: number; d: number } | null = null;
+  for (const r of radii) {
+    const n = r === 0 ? 1 : Math.max(8, Math.round((Math.PI * 2 * r) / 6));
+    for (let i = 0; i < n; i++) {
+      const a = (i / n) * Math.PI * 2 + 0.35;
+      const x = fx + (r === 0 ? 0 : Math.cos(a) * r);
+      const z = fz + (r === 0 ? 0 : Math.sin(a) * r);
+      const y = tryAt(x, z);
+      if (y == null) continue;
+      const d = Math.hypot(x - fx, z - fz);
+      if (!best || d < best.d) best = { x, y, z, d };
+    }
+    if (best && best.d <= r + 0.01) break;
+  }
+  if (!best) {
+    const y = cityLowestSurface(fx + 12, fz + 10, 0.02, 2.4);
+    return { x: fx + 12, y, z: fz + 10, yaw: 0 };
+  }
+  let yaw = 0;
+  let bestOpen = -1;
+  for (let k = 0; k < 8; k++) {
+    const a = (k / 8) * Math.PI * 2;
+    if (cityIsOutdoors(best.x + Math.cos(a) * 5, best.z + Math.sin(a) * 5) == null) continue;
+    const open = cityIsOutdoors(best.x + Math.cos(a) * 10, best.z + Math.sin(a) * 10) != null ? 2 : 1;
+    if (open > bestOpen) {
+      bestOpen = open;
+      yaw = Math.atan2(Math.cos(a), Math.sin(a));
+    }
+  }
+  return { x: best.x, y: best.y, z: best.z, yaw };
 }
 
 export function cityRayPick(
@@ -782,8 +820,8 @@ export function sampleRoadPoints(count: number, avoid: { x: number; z: number; r
     const z = THREE.MathUtils.lerp(b.minZ + pad, b.maxZ - pad, Math.abs(Math.sin(guard * 78.233 + 1.11 + out.length * 2.3)));
     if (avoid.some((a) => (x - a.x) ** 2 + (z - a.z) ** 2 < a.r * a.r)) continue;
     if (out.some((p) => (x - p.x) ** 2 + (z - p.z) ** 2 < 14 * 14)) continue;
-    const y = cityLowestSurface(x, z, 0.02, 2.6);
-    if (!(y > 0.04 && y < 2.2)) continue;
+    const y = cityIsOutdoors(x, z);
+    if (!(y != null && y > 0.04 && y < 2.2)) continue;
     const alongX = b.maxX - b.minX > b.maxZ - b.minZ;
     out.push({ x, y, z, yaw: alongX ? -Math.PI / 2 : 0 });
   }

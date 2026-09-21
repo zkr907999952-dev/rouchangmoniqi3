@@ -2039,7 +2039,7 @@ function HomeExitDoor() {
   const group = useMemo(() => {
     const g = makeDoorMarker("HomeExit", 0x7ad0ff);
     const pad = new THREE.Mesh(
-      new THREE.CircleGeometry(1.35, 24),
+      new THREE.CircleGeometry(0.48, 20),
       new THREE.MeshBasicMaterial({
         color: 0x243848,
         transparent: true,
@@ -2052,7 +2052,7 @@ function HomeExitDoor() {
     pad.position.y = 0.02;
     g.add(pad);
     const ring = new THREE.Mesh(
-      new THREE.RingGeometry(1.18, 1.38, 28),
+      new THREE.RingGeometry(0.4, 0.56, 24),
       new THREE.MeshBasicMaterial({
         color: 0x7ad0ff,
         transparent: true,
