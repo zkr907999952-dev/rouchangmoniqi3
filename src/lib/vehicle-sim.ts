@@ -152,7 +152,7 @@ const PLANE_THRUST_RATE = 0.62;
 export const PLANE_TAKEOFF = 36;
 export const PLANE_TAKEOFF_KMH = Math.round(PLANE_TAKEOFF * 3.6);
 export const PLANE_CRUISE = 0.8;
-const PLANE_MAX = 468;
+export const PLANE_MAX = 468;
 const PLANE_TAXI = 52;
 const PLANE_THRUST = 72;
 const PLANE_LIFT_K = 0.00115;
@@ -863,7 +863,9 @@ function stepPlane(v: Vehicle, dt: number, input: VehInput, driven: boolean) {
 
     const as = Math.max(v.speed, 1);
     const ctrl = THREE.MathUtils.clamp(as / 42, 0.22, 1.55);
-    applyLocalRates(v, pitchIn * 1.45 * ctrl, yawIn * 0.62, rollIn * 2.15 * ctrl, dt);
+    v.pitchRate = pitchIn * 1.45 * ctrl;
+    v.rollRate = rollIn * 2.15 * ctrl;
+    applyLocalRates(v, v.pitchRate, yawIn * 0.62, v.rollRate, dt);
 
     const velFwd = v.vx * v.fx + v.vy * v.fy + v.vz * v.fz;
     const velUp = v.vx * v.ux + v.vy * v.uy + v.vz * v.uz;

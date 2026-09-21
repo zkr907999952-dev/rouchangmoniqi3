@@ -6,6 +6,7 @@ import { useStudio } from "@/lib/studio-store";
 
 THREE.Cache.enabled = true;
 
+export const ASSET_VER = "6";
 export const MODEL_FILES = [
   { id: "character" as const, url: "/models/tifa.glb", bytes: 16_115_192, path: "/models/", hint: "角色", core: true },
   { id: "intestines" as const, url: "/models/intestines.glb", bytes: 15_629_192, path: "/models/", hint: "大小肠", core: true },
@@ -18,10 +19,14 @@ export const MODEL_FILES = [
 
 const TOTAL_BYTES = MODEL_FILES.reduce((s, f) => s + f.bytes, 0);
 const CORE_BYTES = MODEL_FILES.filter((f) => f.core).reduce((s, f) => s + f.bytes, 0);
-const CACHE_NAME = "vela-glb-v5";
+const CACHE_NAME = `vela-glb-v${ASSET_VER}`;
 export const CITY_FILE = { url: "/models/city.glb", bytes: 8_037_544, path: "/models/", hint: "城市" };
 export const CAR_FILE = { url: "/models/car.glb", bytes: 3_077_088, path: "/models/", hint: "跑车" };
 export const PLANE_FILE = { url: "/models/plane.glb", bytes: 5_627_304, path: "/models/", hint: "战机" };
+
+function versioned(url: string) {
+  return url.includes("?") ? `${url}&v=${ASSET_VER}` : `${url}?v=${ASSET_VER}`;
+}
 
 export type LoadedScenes = {
   character: THREE.Group;
@@ -46,9 +51,9 @@ function emptyGroup() {
   return g;
 }
 
-async function fromCache(url: string): Promise<ArrayBuffer | null> {
+async function fromCache(url: string, expected?: number): Promise<ArrayBuffer | null> {
   const ram = memBuf.get(url);
-  if (ram && ram.byteLength > 1024) return ram;
+  if (ram && ram.byteLength > 1024 && (expected == null || Math.abs(ram.byteLength - expected) < 4096)) return ram;
   if (!("caches" in window)) return null;
   try {
     const cache = await caches.open(CACHE_NAME);
@@ -56,6 +61,7 @@ async function fromCache(url: string): Promise<ArrayBuffer | null> {
     if (!hit) return null;
     const buf = await hit.arrayBuffer();
     if (buf.byteLength < 1024) return null;
+    if (expected != null && Math.abs(buf.byteLength - expected) > 4096) return null;
     memBuf.set(url, buf);
     return buf;
   } catch {
@@ -88,22 +94,23 @@ async function fetchBuffer(
   onBytes: (loaded: number) => void,
   bustCache: boolean,
 ) {
+  const key = versioned(url);
   if (!bustCache) {
-    const cached = await fromCache(url);
+    const cached = await fromCache(key, expected);
     if (cached) {
       onBytes(cached.byteLength);
       return cached;
     }
   }
-  const res = await fetch(bustCache ? `${url}?r=${Date.now()}` : url, {
-    cache: bustCache ? "reload" : "force-cache",
+  const res = await fetch(bustCache ? `${key}&r=${Date.now()}` : key, {
+    cache: "reload",
   });
   if (!res.ok) throw new Error(`下载失败 (${res.status})`);
   const body = res.body;
   if (!body) {
     const buf = await res.arrayBuffer();
     onBytes(buf.byteLength);
-    await toCache(url, buf);
+    await toCache(key, buf);
     return buf;
   }
   const reader = body.getReader();
@@ -126,7 +133,7 @@ async function fetchBuffer(
   }
   const out = buf.buffer;
   onBytes(out.byteLength);
-  await toCache(url, out);
+  await toCache(key, out);
   return out;
 }
 
@@ -196,6 +203,10 @@ export function useModelAssets(enabled: boolean): LoadedScenes | null {
 
     (async () => {
       try {
+        if ("caches" in window) {
+          const keys = await caches.keys();
+          await Promise.all(keys.filter((k) => k.startsWith("vela-glb-") && k !== CACHE_NAME).map((k) => caches.delete(k)));
+        }
         if (memScenes && !retryNonce) {
           useStudio.setState({ loading: true, loadError: null, loadProgress: 99, loadHint: "已缓存，正在组装" });
           setScenes(memScenes);
