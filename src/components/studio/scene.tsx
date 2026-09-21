@@ -761,6 +761,8 @@ function FirstPersonRig({
   const lastInteractNonce = useRef(0);
   const lastWarpNonce = useRef(-1);
   const lastVehCam = useRef<"first" | "third" | null>(null);
+  const lastVehYaw = useRef(0);
+  const lastVehId = useRef("");
   const speedRef = useRef(0);
   const crouchGate = useRef<CrouchHold | null>(null);
   const wasFp = useRef(false);
@@ -1243,7 +1245,8 @@ function FirstPersonRig({
       const v = getOccupied();
       if (vehLive.snapYaw != null) {
         yaw.current = vehLive.snapYaw;
-        pitch.current = live.vehicleCam === "first" ? 0 : -0.18;
+        lastVehYaw.current = vehLive.snapYaw;
+        pitch.current = live.vehicleCam === "first" ? -0.06 : -0.18;
         vehLive.snapYaw = null;
       }
       if (v) {
@@ -1500,11 +1503,13 @@ function FirstPersonRig({
     if (v) {
       const d = Math.min(0.05, Math.max(0.001, dt));
       const firstCam = st.vehicleCam === "first";
-      if (lastVehCam.current !== st.vehicleCam) {
+      if (lastVehCam.current !== st.vehicleCam || lastVehId.current !== v.id) {
         lastVehCam.current = st.vehicleCam;
-        if (firstCam) pitch.current = v.kind === "plane" ? 0.12 : 0.02;
-        else pitch.current = -0.18;
+        lastVehId.current = v.id;
         yaw.current = v.yaw;
+        lastVehYaw.current = v.yaw;
+        if (firstCam) pitch.current = v.kind === "plane" ? 0.04 : -0.06;
+        else pitch.current = -0.18;
       }
       const fx = v.fx;
       const fy = v.fy;
@@ -1516,27 +1521,31 @@ function FirstPersonRig({
       const ry = v.ry;
       const rz = v.rz;
       const accelerating = v.kind === "plane" ? v.thrust > 0.28 : v.speed > 5 && Math.abs(v.lat) < 8;
-      if (accelerating) {
+      if (accelerating && !firstCam) {
         const dyaw = Math.atan2(Math.sin(v.yaw - yaw.current), Math.cos(v.yaw - yaw.current));
         yaw.current += dyaw * (1 - Math.exp(-2.1 * d));
-        if (!firstCam) {
-          const wantPitch = v.kind === "plane" ? -0.12 : -0.18;
-          pitch.current += (wantPitch - pitch.current) * (1 - Math.exp(-1.4 * d));
-        }
+        const wantPitch = v.kind === "plane" ? -0.12 : -0.18;
+        pitch.current += (wantPitch - pitch.current) * (1 - Math.exp(-1.4 * d));
       }
       const persp = camera as THREE.PerspectiveCamera;
-      const kick = Math.min(18, Math.abs(v.speed) * 0.12 + v.nitro * 8);
+      const kick =
+        v.kind === "plane"
+          ? Math.min(4.5, Math.abs(v.speed) * 0.028 + Math.max(0, v.thrust - 0.8) * 6)
+          : Math.min(7, Math.abs(v.speed) * 0.055 + v.nitro * 3.2);
       if (firstCam) {
-        pitch.current = THREE.MathUtils.clamp(pitch.current, -0.55, 0.42);
-        if (pitch.current < -0.22) pitch.current += (0.0 - pitch.current) * (1 - Math.exp(-10 * d));
+        yaw.current += v.yaw - lastVehYaw.current;
+        lastVehYaw.current = v.yaw;
+        pitch.current = THREE.MathUtils.clamp(pitch.current, -FP_PITCH_LIM, FP_PITCH_LIM);
+        let dyaw = Math.atan2(Math.sin(yaw.current - v.yaw), Math.cos(yaw.current - v.yaw));
+        dyaw = THREE.MathUtils.clamp(dyaw, -2.4, 2.4);
+        yaw.current = v.yaw + dyaw;
         const camX = v.x + rx * v.eyeX + ux * v.eyeY - fx * v.eyeZ;
         const camY = v.y + ry * v.eyeX + uy * v.eyeY - fy * v.eyeZ;
         const camZ = v.z + rz * v.eyeX + uz * v.eyeY - fz * v.eyeZ;
         camera.position.set(camX, camY, camZ);
-        _vehQ.set(v.qx, v.qy, v.qz, v.qw);
-        const dyaw = Math.atan2(Math.sin(yaw.current - v.yaw), Math.cos(yaw.current - v.yaw));
-        _lookE.set(-pitch.current, dyaw, 0, "YXZ");
+        _lookE.set(pitch.current, dyaw, 0, "YXZ");
         _lookQ.setFromEuler(_lookE);
+        _vehQ.set(v.qx, v.qy, v.qz, v.qw);
         camera.quaternion.copy(_vehQ).multiply(_lookQ);
         const fov = Math.min(82, st.fpFov + kick * 0.45);
         const near = 0.06;

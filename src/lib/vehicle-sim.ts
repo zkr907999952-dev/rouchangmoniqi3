@@ -151,6 +151,7 @@ const I_ROLL = 900;
 const PLANE_THRUST_RATE = 0.62;
 export const PLANE_TAKEOFF = 36;
 export const PLANE_TAKEOFF_KMH = Math.round(PLANE_TAKEOFF * 3.6);
+export const PLANE_CRUISE = 0.8;
 const PLANE_MAX = 468;
 const PLANE_TAXI = 52;
 const PLANE_THRUST = 72;
@@ -836,12 +837,16 @@ function stepPlane(v: Vehicle, dt: number, input: VehInput, driven: boolean) {
   if (driven && !input.mapOpen) {
     if (input.thrustSlider != null) v.thrust = THREE.MathUtils.clamp(input.thrustSlider, 0, 1);
     else {
-      if (input.thrustUp) v.thrust = Math.min(1, v.thrust + PLANE_THRUST_RATE * dt);
       if (input.thrustDown) v.thrust = Math.max(0, v.thrust - PLANE_THRUST_RATE * dt);
+      else if (input.thrustUp) v.thrust = Math.min(1, v.thrust + PLANE_THRUST_RATE * dt);
+      if (!input.thrustUp && v.thrust > PLANE_CRUISE) {
+        v.thrust = Math.max(PLANE_CRUISE, v.thrust - PLANE_THRUST_RATE * 2.4 * dt);
+      }
     }
   } else if (!driven) {
     v.thrust = THREE.MathUtils.lerp(v.thrust, 0, dt * 0.4);
   }
+  v.nitro = THREE.MathUtils.clamp((v.thrust - PLANE_CRUISE) / (1 - PLANE_CRUISE), 0, 1);
   const gy = groundY(v.x, v.y + 14, v.z, 48);
   const agl = v.y - v.originY - gy;
   const pitchIn = driven && !input.mapOpen ? input.pitch : 0;
@@ -866,7 +871,7 @@ function stepPlane(v: Vehicle, dt: number, input: VehInput, driven: boolean) {
     const stall = Math.abs(aoa) > 0.55 ? Math.max(0.12, 1 - (Math.abs(aoa) - 0.55) * 2.4) : 1;
     const liftAcc = GRAV * THREE.MathUtils.clamp(v.speed / 40, 0, 1.22) * (1 + aoa * 1.35) * stall + v.speed * v.speed * PLANE_LIFT_K * aoa;
     const dragAcc = (PLANE_DRAG + 0.045 * aoa * aoa) * v.speed + 0.00016 * v.speed * v.speed;
-    const thrustAcc = v.thrust * PLANE_THRUST * (v.thrust > 0.85 ? 1.18 : 1);
+    const thrustAcc = v.thrust * PLANE_THRUST * (v.thrust > PLANE_CRUISE ? 1.22 : 1);
     const invSpd = 1 / Math.max(v.speed, 1);
     v.vx += (v.fx * thrustAcc + v.ux * liftAcc - v.vx * dragAcc * invSpd) * dt;
     v.vy += (v.fy * thrustAcc + v.uy * liftAcc - v.vy * dragAcc * invSpd - GRAV) * dt;
@@ -987,7 +992,7 @@ export function stepVehicles(dt: number, input: VehInput) {
     vehLive.visRoll = v.visRoll;
     vehLive.speed = v.speed;
     vehLive.thrust = v.thrust;
-    vehLive.nitro = v.nitro > 0.4;
+    vehLive.nitro = v.kind === "plane" ? v.nitro > 0.15 : v.nitro > 0.4;
     vehLive.drifting = v.kind === "car" && input.handbrake && Math.abs(v.speed) > 6;
     vehLive.gear = v.gear;
     vehLive.door = v.door;
@@ -997,8 +1002,8 @@ export function stepVehicles(dt: number, input: VehInput) {
     vehLive.eyeY = v.eyeY;
     vehLive.eyeZ = v.eyeZ;
     vehLive.steerIn = input.steer;
-    vehLive.camDist = v.kind === "plane" ? 18 + Math.min(32, Math.abs(v.speed) * 0.07) : 7.3 + Math.min(3.2, Math.abs(v.speed) * 0.05);
-    vehLive.camHeight = v.kind === "plane" ? 5.2 : 2.15;
+    vehLive.camDist = v.kind === "plane" ? 11.2 + Math.min(5.2, Math.abs(v.speed) * 0.016) : 7.3 + Math.min(2.4, Math.abs(v.speed) * 0.04);
+    vehLive.camHeight = v.kind === "plane" ? 3.05 : 2.15;
     fpLive.x = v.x;
     fpLive.y = v.y - v.originY * 0.4;
     fpLive.z = v.z;

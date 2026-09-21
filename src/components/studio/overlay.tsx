@@ -48,7 +48,7 @@ import { PRESETS, useStudio, type CamFocus, type PresetId, type StudioParams, FP
 import { ANIMATIONS, EXPRESSIONS, HAND_GESTURES, POSES } from "@/lib/softbody/soft-skeleton";
 import { STICK_SPRINT } from "@/lib/fp-control";
 import { CITY_MAP_H_MAX, CITY_MAP_H_MIN, citySurfaceAt, getCityRuntime } from "@/lib/world-map";
-import { PLANE_TAKEOFF_KMH } from "@/lib/vehicle-sim";
+import { PLANE_CRUISE, PLANE_TAKEOFF_KMH } from "@/lib/vehicle-sim";
 import { fpLive } from "@/lib/fp-pose";
 
 const SLIDERS: {
@@ -2071,8 +2071,8 @@ function FirstPersonHud() {
   const vehHint =
     vehicleKind === "plane"
       ? vehicleAirborne
-        ? "Shift/C 推力 · W 推杆俯冲 · S 拉杆抬头 · A/D 滚转 · Q/E 偏航 · V 视角 · F 下车"
-        : "滑行中 · Shift/C 推力 · Q/E 转向 · 加速后拉杆(S)起飞 · V 视角 · F 下车"
+        ? "Shift 加力 · C 减推力 · W 俯冲 · S 抬头 · A/D 滚转 · Q/E 偏航 · V 视角 · F 下车"
+        : "滑行中 · Shift 加速至巡航 · 满推力后按住 Shift 加力 · C 减推力 · 拉杆(S)起飞 · V 视角 · F 下车"
       : "W 加速 · S 刹车/倒车 · A/D 转向 · Shift 氮气 · 空格 手刹 · V 视角 · F 下车";
 
   return (
@@ -2099,7 +2099,8 @@ function FirstPersonHud() {
             <Gauge className="size-3.5 text-muted" />
             <span>{Math.round(vehicleSpeed)} km/h</span>
             {vehicleKind === "plane" ? <span className="text-muted">推力 {Math.round(vehicleThrust * 100)}%</span> : null}
-            {vehicleNitro ? <span className="text-accent">氮气</span> : null}
+            {vehicleKind === "plane" && vehicleThrust > PLANE_CRUISE ? <span className="text-red-400">加力</span> : null}
+            {vehicleKind !== "plane" && vehicleNitro ? <span className="text-accent">氮气</span> : null}
             {vehicleKind === "plane" && !vehicleAirborne && vehicleSpeed >= PLANE_TAKEOFF_KMH - 8 ? (
               <span className="text-accent">拉杆起飞</span>
             ) : null}
@@ -2217,7 +2218,7 @@ function FirstPersonHud() {
                   </div>
                   <div
                     ref={thrustRef}
-                    className="pointer-events-auto relative h-36 w-11 touch-none rounded-full border border-border/50 bg-surface/55"
+                    className="pointer-events-auto relative h-36 w-11 touch-none overflow-hidden rounded-full border border-border/50 bg-surface/55"
                     onPointerDown={(e) => {
                       e.currentTarget.setPointerCapture(e.pointerId);
                       setThrustFromY(e.clientY);
@@ -2227,9 +2228,14 @@ function FirstPersonHud() {
                     }}
                   >
                     <span
-                      className="absolute right-0 bottom-0 left-0 rounded-full bg-accent/80"
+                      className="pointer-events-none absolute top-0 right-0 left-0 bg-red-600/40"
+                      style={{ height: `${Math.round((1 - PLANE_CRUISE) * 100)}%` }}
+                    />
+                    <span
+                      className={`absolute right-0 bottom-0 left-0 rounded-full ${(vehThrustSlider ?? vehicleThrust) > PLANE_CRUISE ? "bg-red-500/90" : "bg-accent/80"}`}
                       style={{ height: `${Math.round((vehThrustSlider ?? vehicleThrust) * 100)}%` }}
                     />
+                    <span className="pointer-events-none absolute -left-10 top-[8%] text-[9px] text-red-400">加力</span>
                     <span className="pointer-events-none absolute -left-8 top-1/2 -translate-y-1/2 text-[10px] text-muted">
                       推力
                     </span>

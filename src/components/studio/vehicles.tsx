@@ -15,7 +15,7 @@ type WheelBind = {
   spinSign: number;
   offset: { x: number; y: number; z: number };
 };
-type PivotKind = "door" | "canopy" | "gear" | "gearDoor" | "aileronL" | "aileronR" | "elevator" | "nozzle" | "rudder" | "flap";
+type PivotKind = "door" | "canopy" | "gear" | "gearDoor" | "aileronL" | "aileronR" | "elevator" | "nozzle" | "nozzleL" | "nozzleR" | "rudder" | "flap";
 type PivotBind = {
   obj: THREE.Object3D;
   rest: THREE.Quaternion;
@@ -23,6 +23,23 @@ type PivotBind = {
   sign: number;
   max: number;
   kind?: PivotKind;
+};
+
+type ExhaustBits = {
+  group: THREE.Group;
+  core: THREE.Mesh;
+  mid: THREE.Mesh;
+  glow: THREE.Mesh;
+  diamonds: THREE.Mesh[];
+  light: THREE.PointLight;
+};
+
+type Contrail = {
+  mesh: THREE.Mesh;
+  hist: THREE.Vector3[];
+  pos: Float32Array;
+  col: Float32Array;
+  n: number;
 };
 
 type Visual = {
@@ -36,6 +53,9 @@ type Visual = {
   surfaces: PivotBind[];
   steerWheel: { obj: THREE.Object3D; rest: THREE.Quaternion } | null;
   glow: THREE.PointLight[];
+  flapT: number;
+  exhausts: ExhaustBits[];
+  trails: Contrail[];
 };
 
 const _box = new THREE.Box3();
@@ -103,24 +123,118 @@ function liftOrigin(wrap: THREE.Group, originY: number) {
   wrap.updateMatrixWorld(true);
 }
 
-function measureCockpit(wrap: THREE.Group, re: RegExp, fallback: { x: number; y: number; z: number }, behind: number, up: number) {
-  return measureCockpitObj(wrap, firstNamed(wrap, re), fallback, behind, up);
+function localPoint(wrap: THREE.Object3D, world: THREE.Vector3) {
+  return wrap.worldToLocal(world.clone());
 }
 
-function measureCockpitObj(
-  wrap: THREE.Group,
-  obj: THREE.Object3D | null,
-  fallback: { x: number; y: number; z: number },
-  behind: number,
-  up: number,
-) {
-  if (!obj) return fallback;
+function measureCarCockpit(wrap: THREE.Group, originY: number) {
   wrap.updateMatrixWorld(true);
-  _box.setFromObject(obj);
-  if (_box.isEmpty()) return fallback;
-  _box.getCenter(_center);
-  wrap.worldToLocal(_center);
-  return { x: _center.x, y: _center.y + up, z: _center.z + behind };
+  const wheel = firstNamed(wrap, /^Steering_wheel$/);
+  const seat = firstNamed(wrap, /^Seat$/);
+  let x = -0.34;
+  let y = 1.08;
+  let z = 0.08;
+  let wheelP: THREE.Vector3 | null = null;
+  if (wheel) {
+    _box.setFromObject(wheel);
+    _box.getCenter(_center);
+    wheelP = localPoint(wrap, _center);
+    x = wheelP.x;
+    y = wheelP.y + 0.12;
+    z = wheelP.z + 0.2;
+  }
+  if (seat) {
+    _box.setFromObject(seat);
+    const midY = (_box.min.y + _box.max.y) * 0.5;
+    const top = localPoint(wrap, new THREE.Vector3((_box.min.x + _box.max.x) * 0.5, midY, (_box.min.z + _box.max.z) * 0.5));
+    y = Math.min(y, top.y + 0.28);
+    if (wheelP) z = THREE.MathUtils.lerp(wheelP.z + 0.18, top.z, 0.38);
+    else z = top.z + 0.06;
+  }
+  return { x, y: THREE.MathUtils.clamp(y - originY, 0.5, 0.7), z };
+}
+
+function measurePlaneCockpit(wrap: THREE.Group, originY: number) {
+  wrap.updateMatrixWorld(true);
+  const stick = firstNamed(wrap, /steeringwheel/);
+  const canopy = firstNamed(wrap, /^door_dside_f/) ?? firstNamed(wrap, /^window_lf/);
+  let x = 0;
+  let y = 2.58;
+  let z = -6.05;
+  if (stick) {
+    _box.setFromObject(stick);
+    _box.getCenter(_center);
+    const p = localPoint(wrap, _center);
+    x = p.x * 0.2;
+    y = p.y + 0.42;
+    z = p.z + 0.4;
+  }
+  if (canopy) {
+    _box.setFromObject(canopy);
+    const min = localPoint(wrap, _box.min.clone());
+    const max = localPoint(wrap, _box.max.clone());
+    const y0 = Math.min(min.y, max.y);
+    const y1 = Math.max(min.y, max.y);
+    const z0 = Math.min(min.z, max.z);
+    const z1 = Math.max(min.z, max.z);
+    y = THREE.MathUtils.clamp(y, y0 + (y1 - y0) * 0.42, y1 - 0.16);
+    z = THREE.MathUtils.clamp(z, z0 + 0.7, z1 - 0.45);
+  }
+  return { x, y: y - originY + 0.16, z };
+}
+
+function localThinAxis(obj: THREE.Object3D): "x" | "y" | "z" {
+  const box = new THREE.Box3();
+  const v = new THREE.Vector3();
+  obj.updateWorldMatrix(true, true);
+  obj.traverse((o) => {
+    const mesh = o as THREE.Mesh;
+    if (!mesh.isMesh || !mesh.geometry) return;
+    const pos = mesh.geometry.getAttribute("position");
+    if (!pos) return;
+    const step = Math.max(1, Math.floor(pos.count / 280));
+    for (let i = 0; i < pos.count; i += step) {
+      v.fromBufferAttribute(pos, i);
+      mesh.localToWorld(v);
+      obj.worldToLocal(v);
+      box.expandByPoint(v);
+    }
+  });
+  if (box.isEmpty()) return "z";
+  box.getSize(_size);
+  if (_size.x <= _size.y && _size.x <= _size.z) return "x";
+  if (_size.y <= _size.x && _size.y <= _size.z) return "y";
+  return "z";
+}
+
+function makeGlass(root: THREE.Object3D, re: RegExp, opacity: number) {
+  const meshes = new Set<THREE.Mesh>();
+  for (const node of findNamed(root, re)) {
+    node.traverse((o) => {
+      const mesh = o as THREE.Mesh;
+      if (mesh.isMesh) meshes.add(mesh);
+    });
+  }
+  for (const mesh of meshes) {
+    if (/headlight|taillight|tail_light|daylight/i.test(mesh.name)) continue;
+    const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+    const next = mats.map((raw) => {
+      const src = (raw as THREE.MeshStandardMaterial).clone();
+      src.transparent = true;
+      src.opacity = opacity;
+      src.depthWrite = false;
+      src.side = THREE.DoubleSide;
+      src.alphaTest = 0;
+      if ("metalness" in src) src.metalness = 0.02;
+      if ("roughness" in src) src.roughness = 0.06;
+      if ("envMapIntensity" in src) src.envMapIntensity = 0.55;
+      if (src.map) src.map = null;
+      src.color.setHex(0x8ec4e6);
+      src.needsUpdate = true;
+      return src;
+    });
+    mesh.material = next.length === 1 ? next[0]! : next;
+  }
 }
 
 function mountWheels(wrap: THREE.Group, nameRe: RegExp): WheelBind[] {
@@ -403,6 +517,167 @@ function addGlow(wrap: THREE.Group, z: number, color: number, dist: number) {
   return light;
 }
 
+function flameMat(color: number, opacity: number) {
+  return new THREE.MeshBasicMaterial({
+    color,
+    transparent: true,
+    opacity,
+    depthWrite: false,
+    blending: THREE.AdditiveBlending,
+    side: THREE.DoubleSide,
+  });
+}
+
+function makeJetExhaust(): ExhaustBits {
+  const group = new THREE.Group();
+  group.name = "JetExhaust";
+  const core = new THREE.Mesh(new THREE.ConeGeometry(0.11, 1, 14, 1, true), flameMat(0xd8f6ff, 0.72));
+  core.rotation.x = -Math.PI / 2;
+  const mid = new THREE.Mesh(new THREE.ConeGeometry(0.2, 1, 14, 1, true), flameMat(0x3ec7ff, 0.38));
+  mid.rotation.x = -Math.PI / 2;
+  const glow = new THREE.Mesh(new THREE.SphereGeometry(0.22, 12, 10), flameMat(0x9ad4ff, 0.45));
+  const diamonds: THREE.Mesh[] = [];
+  for (let i = 0; i < 4; i++) {
+    const d = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6), flameMat(0xffe6b0, 0.0));
+    diamonds.push(d);
+    group.add(d);
+  }
+  const light = new THREE.PointLight(0x66e0ff, 0, 14, 2);
+  group.add(core, mid, glow, light);
+  return { group, core, mid, glow, diamonds, light };
+}
+
+function setExhaust(fx: ExhaustBits, thrust: number, time: number) {
+  const cr = THREE.MathUtils.clamp(thrust / 0.8, 0, 1);
+  const ab = THREE.MathUtils.clamp((thrust - 0.8) / 0.2, 0, 1);
+  const flicker = 1 + Math.sin(time * (38 + ab * 90)) * (0.045 + ab * 0.14);
+  const len = (0.28 + cr * 1.35 + ab * 5.6) * flicker;
+  const r = 0.07 + cr * 0.05 + ab * 0.09;
+  fx.core.scale.set(r * 10, len, r * 10);
+  fx.core.position.z = len * 0.5;
+  fx.mid.scale.set(r * 16, len * 1.18, r * 16);
+  fx.mid.position.z = len * 0.52;
+  fx.glow.scale.setScalar(0.55 + cr * 0.5 + ab * 1.4);
+  fx.glow.position.z = 0.12;
+  const coreMat = fx.core.material as THREE.MeshBasicMaterial;
+  const midMat = fx.mid.material as THREE.MeshBasicMaterial;
+  const glowMat = fx.glow.material as THREE.MeshBasicMaterial;
+  if (ab > 0.02) {
+    coreMat.color.setHex(0xfff4d6);
+    midMat.color.setHex(0xff7a18);
+    glowMat.color.setHex(0xffc14d);
+    fx.light.color.setHex(0xff9a32);
+  } else {
+    coreMat.color.setHex(0xe8fbff);
+    midMat.color.setHex(0x3ec7ff);
+    glowMat.color.setHex(0x8ad8ff);
+    fx.light.color.setHex(0x66e0ff);
+  }
+  coreMat.opacity = (0.22 + cr * 0.45 + ab * 0.4) * flicker;
+  midMat.opacity = (0.12 + cr * 0.28 + ab * 0.38) * flicker;
+  glowMat.opacity = 0.15 + cr * 0.25 + ab * 0.4;
+  fx.light.intensity = cr * 4.2 + ab * 22;
+  fx.light.distance = 8 + ab * 18;
+  fx.group.visible = thrust > 0.02;
+  for (let i = 0; i < fx.diamonds.length; i++) {
+    const d = fx.diamonds[i]!;
+    const on = ab > 0.12;
+    d.visible = on;
+    if (!on) continue;
+    const z = 0.55 + i * (0.55 + ab * 0.55) * flicker;
+    d.position.z = z;
+    d.scale.setScalar((0.55 + (1 - i / 4) * 0.55) * (0.7 + ab * 0.7) * flicker);
+    (d.material as THREE.MeshBasicMaterial).opacity = (0.18 + ab * 0.45) * (1 - i * 0.16);
+  }
+}
+
+function makeContrail(): Contrail {
+  const n = 52;
+  const pos = new Float32Array(n * 2 * 3);
+  const col = new Float32Array(n * 2 * 4);
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute("position", new THREE.BufferAttribute(pos, 3));
+  geo.setAttribute("color", new THREE.BufferAttribute(col, 4));
+  const idx: number[] = [];
+  for (let i = 0; i < n - 1; i++) {
+    const a = i * 2;
+    idx.push(a, a + 1, a + 2, a + 1, a + 3, a + 2);
+  }
+  geo.setIndex(idx);
+  const mesh = new THREE.Mesh(
+    geo,
+    new THREE.MeshBasicMaterial({
+      vertexColors: true,
+      transparent: true,
+      depthWrite: false,
+      side: THREE.DoubleSide,
+      blending: THREE.AdditiveBlending,
+    }),
+  );
+  mesh.frustumCulled = false;
+  mesh.visible = false;
+  return { mesh, hist: [], pos, col, n };
+}
+
+const _trailSide = new THREE.Vector3();
+const _trailFwd = new THREE.Vector3();
+const _upTmp = new THREE.Vector3(0, 1, 0);
+const _tipL = new THREE.Vector3();
+const _tipR = new THREE.Vector3();
+
+function updateContrail(tr: Contrail, tip: THREE.Vector3, emit: boolean) {
+  if (emit) {
+    if (!tr.hist.length || tr.hist[0]!.distanceToSquared(tip) > 2.4) {
+      tr.hist.unshift(tip.clone());
+      if (tr.hist.length > tr.n) tr.hist.pop();
+    } else {
+      tr.hist[0]!.copy(tip);
+    }
+  } else if (tr.hist.length > 2) {
+    tr.hist.pop();
+  }
+  const n = tr.n;
+  const h = tr.hist.length;
+  tr.mesh.visible = h > 2;
+  if (h < 2) return;
+  for (let i = 0; i < n; i++) {
+    const p = tr.hist[Math.min(i, h - 1)]!;
+    const q = tr.hist[Math.min(i + 1, h - 1)]!;
+    _trailFwd.subVectors(p, q);
+    if (_trailFwd.lengthSq() < 1e-6) _trailFwd.set(0, 0, 1);
+    _trailSide.crossVectors(_trailFwd, _upTmp).normalize();
+    if (_trailSide.lengthSq() < 1e-6) _trailSide.set(1, 0, 0);
+    const a = i / (n - 1);
+    const w = 0.22 + a * 1.15;
+    const fade = h < 3 ? 0 : Math.pow(1 - a, 1.15) * 0.38 * Math.min(1, (h - 2) / 8);
+    const o = i * 6;
+    tr.pos[o] = p.x - _trailSide.x * w;
+    tr.pos[o + 1] = p.y - _trailSide.y * w;
+    tr.pos[o + 2] = p.z - _trailSide.z * w;
+    tr.pos[o + 3] = p.x + _trailSide.x * w;
+    tr.pos[o + 4] = p.y + _trailSide.y * w;
+    tr.pos[o + 5] = p.z + _trailSide.z * w;
+    const c = i * 8;
+    for (let k = 0; k < 2; k++) {
+      tr.col[c + k * 4] = 0.92;
+      tr.col[c + k * 4 + 1] = 0.96;
+      tr.col[c + k * 4 + 2] = 1;
+      tr.col[c + k * 4 + 3] = fade;
+    }
+  }
+  const geo = tr.mesh.geometry;
+  (geo.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
+  (geo.getAttribute("color") as THREE.BufferAttribute).needsUpdate = true;
+  geo.computeBoundingSphere();
+}
+
+function attachExhaust(hub: THREE.Object3D, z = 0.55) {
+  const fx = makeJetExhaust();
+  fx.group.position.set(0, 0, z);
+  hub.add(fx.group);
+  return fx;
+}
+
 function prepareCar(src: THREE.Group) {
   const root = src.clone(true);
   root.traverse((o) => {
@@ -420,15 +695,16 @@ function prepareCar(src: THREE.Group) {
   wrap.updateMatrixWorld(true);
   const wheels = mountWheels(wrap, /^Wheel_(FL|FR|BL|BR)$/);
   const doors = makeScissorDoors(wrap);
+  makeGlass(wrap, /Windshield|Rear_window|Right&Left_window|Windows/i, 0.18);
   const originY = 0.48;
-  const cockpit = measureCockpit(wrap, /^Steering_wheel$/, { x: -0.38, y: 0.9, z: 0.18 }, 0.52, 0.12);
-  cockpit.y -= originY;
+  const cockpit = measureCarCockpit(wrap, originY);
   liftOrigin(wrap, originY);
   const hubs = collectHubs(wrap);
   wrap.userData.originY = originY;
   wrap.userData.cockpit = cockpit;
   wrap.userData.faceDbg = root.userData.faceDbg;
   const steer = firstNamed(wrap, /^Steering_wheel$/);
+  if (steer) steer.userData.steerAxis = localThinAxis(steer);
   const glow = [addGlow(wrap, 2.15, 0xff6a22, 4.2), addGlow(wrap, 2.05, 0xffc070, 2.4)];
   return { wrap, wheels: hubs.length ? hubs : wheels, doors, steer, glow, originY, cockpit };
 }
@@ -480,12 +756,7 @@ function preparePlane(src: THREE.Group) {
   wrap.updateMatrixWorld(true);
   const wheels = mountWheels(wrap, /^wheel_l[fr]/i);
   const originY = 1.28;
-  const stick = firstNamed(wrap, /steeringwheel/) ?? firstNamed(wrap, /canopy/);
-  const cockpit = measureCockpitObj(wrap, stick, { x: 0, y: 2.62, z: -5.2 }, 0.2, 0.08);
-  cockpit.y -= originY;
-  cockpit.x *= 0.15;
-  cockpit.z = Math.min(-4.15, cockpit.z + 0.85);
-  cockpit.y = Math.max(1.42, Math.min(1.62, cockpit.y));
+  const cockpit = measurePlaneCockpit(wrap, originY);
   liftOrigin(wrap, originY);
   wrap.updateMatrixWorld(true);
   snapshotWheelOffsets(wrap, wheels);
@@ -501,7 +772,7 @@ function preparePlane(src: THREE.Group) {
         { x: a.cx, y: a.maxY - 0.02, z: a.cz },
         "x",
         1,
-        1.62,
+        1.42,
         "gear",
         matchGearWheel(wheels, noseGear),
       ),
@@ -517,7 +788,7 @@ function preparePlane(src: THREE.Group) {
         { x: a.cx + 0.12, y: a.maxY - 0.02, z: a.cz },
         "z",
         -1,
-        1.72,
+        1.48,
         "gear",
         matchGearWheel(wheels, leftGear),
       ),
@@ -533,7 +804,7 @@ function preparePlane(src: THREE.Group) {
         { x: a.cx - 0.12, y: a.maxY - 0.02, z: a.cz },
         "z",
         1,
-        1.72,
+        1.48,
         "gear",
         matchGearWheel(wheels, rightGear),
       ),
@@ -570,9 +841,47 @@ function preparePlane(src: THREE.Group) {
     const a = worldAabb(obj);
     surfaces.push(mountHinge(wrap, obj, { x: a.cx, y: a.cy, z: a.minZ + 0.06 }, "x", 1, 0.38, "elevator"));
   }
-  for (const obj of findNamed(wrap, /^elevator_r/)) {
-    const a = worldAabb(obj);
-    surfaces.push(mountHinge(wrap, obj, { x: a.cx, y: a.cy, z: a.minZ + 0.04 }, "x", 1, 0.48, "nozzle"));
+  const nozzleSrc = firstNamed(wrap, /^elevator_r/);
+  if (nozzleSrc) {
+    wrap.updateMatrixWorld(true);
+    const meshes: THREE.Mesh[] = [];
+    nozzleSrc.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) meshes.push(m);
+    });
+    const halves: { side: "L" | "R"; made: THREE.Mesh[] }[] = [
+      { side: "L", made: [] },
+      { side: "R", made: [] },
+    ];
+    for (const side of ["L", "R"] as const) {
+      const pred = (x: number, _y: number, _z: number) => (side === "L" ? x < -0.04 : x > 0.04);
+      for (const mesh of meshes) {
+        const geo = splitTriangles(mesh, wrap, pred);
+        if (!geo) continue;
+        const half = makeHalfMesh(mesh, geo, side);
+        wrap.attach(half);
+        halves.find((h) => h.side === side)!.made.push(half);
+      }
+    }
+    if (halves[0]!.made.length && halves[1]!.made.length) {
+      nozzleSrc.visible = false;
+      for (const mesh of meshes) mesh.visible = false;
+      for (const h of halves) {
+        _box.makeEmpty();
+        for (const m of h.made) _box.expandByObject(m);
+        const cx = (_box.min.x + _box.max.x) * 0.5;
+        const cy = (_box.min.y + _box.max.y) * 0.5;
+        const cz = (_box.min.z + _box.max.z) * 0.5;
+        const main = h.made[0]!;
+        surfaces.push(
+          mountHinge(wrap, main, { x: cx, y: cy, z: cz }, "x", 1, 0.48, h.side === "L" ? "nozzleL" : "nozzleR", h.made.slice(1)),
+        );
+      }
+    } else {
+      for (const h of halves) for (const m of h.made) wrap.remove(m);
+      const a = worldAabb(nozzleSrc);
+      surfaces.push(mountHinge(wrap, nozzleSrc, { x: a.cx, y: a.cy, z: a.minZ + 0.04 }, "x", 1, 0.48, "nozzle"));
+    }
   }
   for (const obj of findNamed(wrap, /^rudder/)) {
     const a = worldAabb(obj);
@@ -609,8 +918,24 @@ function preparePlane(src: THREE.Group) {
   wrap.userData.cockpit = cockpit;
   wrap.userData.faceDbg = root.userData.faceDbg;
   const steer = firstNamed(wrap, /steeringwheel/);
+  if (steer) steer.userData.steerAxis = localThinAxis(steer);
+  makeGlass(wrap, /window_lf|door_dside_f/i, 0.1);
+  const exhausts: ExhaustBits[] = [];
+  for (const s of surfaces) {
+    if (s.kind === "nozzleL" || s.kind === "nozzleR" || s.kind === "nozzle") {
+      exhausts.push(attachExhaust(s.obj, 0.62));
+    }
+  }
+  if (!exhausts.length) {
+    const l = new THREE.Group();
+    const r = new THREE.Group();
+    l.position.set(-0.72, 0.08, 5.35);
+    r.position.set(0.72, 0.08, 5.35);
+    wrap.add(l, r);
+    exhausts.push(attachExhaust(l, 0.15), attachExhaust(r, 0.15));
+  }
   const glow = [addGlow(wrap, 7.6, 0x4ea7ff, 9), addGlow(wrap, 7.2, 0xff7a32, 6)];
-  return { wrap, wheels: hubs.length ? hubs : wheels, doors, gears, gearDoors, surfaces, steer, glow, originY, cockpit };
+  return { wrap, wheels: hubs.length ? hubs : wheels, doors, gears, gearDoors, surfaces, steer, glow, originY, cockpit, exhausts };
 }
 
 function layoutFromWheels(wheels: WheelBind[], kind: "car" | "plane") {
@@ -697,6 +1022,7 @@ export function VehicleWorld() {
               kind: "door" as const,
             }));
             const steer = firstNamed(wrap, /^Steering_wheel$/);
+            if (steer && !steer.userData.steerAxis) steer.userData.steerAxis = localThinAxis(steer);
             const glow: THREE.PointLight[] = [];
             wrap.traverse((o) => {
               const l = o as THREE.PointLight;
@@ -713,6 +1039,9 @@ export function VehicleWorld() {
               surfaces: [],
               steerWheel: steer ? { obj: steer, rest: steer.quaternion.clone() } : null,
               glow,
+              flapT: 0,
+              exhausts: [],
+              trails: [],
             });
           } else {
             const prep = planePrep;
@@ -730,6 +1059,9 @@ export function VehicleWorld() {
               surfaces: prep.surfaces,
               steerWheel: prep.steer ? { obj: prep.steer, rest: prep.steer.quaternion.clone() } : null,
               glow: prep.glow,
+              flapT: 0,
+              exhausts: prep.exhausts,
+              trails: [makeContrail(), makeContrail()],
             });
           }
         }
@@ -743,8 +1075,10 @@ export function VehicleWorld() {
     };
   }, [world]);
 
-  useFrame(() => {
+  useFrame((state, dt) => {
     if (world !== "city") return;
+    const d = Math.min(0.05, Math.max(0.001, dt));
+    const now = state.clock.elapsedTime;
     for (const vis of visuals) {
       const v = getVehicles().find((o) => o.id === vis.id);
       if (!v) {
@@ -756,11 +1090,18 @@ export function VehicleWorld() {
       vis.group.quaternion.set(v.qx, v.qy, v.qz, v.qw);
       const gearDown = v.kind === "plane" ? v.gear : 1;
       vis.wheels.forEach((w, i) => {
-        const sag = gearDown > 0.2 ? ((v.susp[i] ?? 0.4) - 0.4) : 0;
+        const inBay = v.kind === "plane" && gearDown < 0.18;
+        w.root.visible = !inBay;
+        if (inBay) {
+          w.root.position.copy(w.restPos);
+          w.root.quaternion.copy(w.restQuat);
+          return;
+        }
+        const sag = gearDown > 0.35 ? ((v.susp[i] ?? 0.4) - 0.4) : 0;
         w.root.position.copy(w.restPos);
         w.root.position.y += sag * 0.2;
         w.root.quaternion.copy(w.restQuat);
-        if (w.steer && gearDown > 0.35) w.root.rotateY(v.steerAngle * 0.9);
+        if (w.steer && gearDown > 0.4) w.root.rotateY(v.steerAngle * 0.9);
         const spin = v.wheelSpin * (w.spinSign || 1);
         if (w.axle === "z") w.root.rotateZ(spin);
         else w.root.rotateX(spin);
@@ -769,8 +1110,8 @@ export function VehicleWorld() {
       for (const d of vis.doors) applyPivot(d, doorT);
       const gearUp = 1 - v.gear;
       for (const g of vis.gears) applyPivot(g, gearUp);
-      const doorSwing = Math.sin(gearUp * Math.PI);
-      for (const g of vis.gearDoors) applyPivot(g, doorSwing);
+      const doorClose = gearUp < 0.68 ? 0 : (gearUp - 0.68) / 0.32;
+      for (const g of vis.gearDoors) applyPivot(g, doorClose);
       if (v.kind === "plane") {
         const pitchC = THREE.MathUtils.clamp(v.ctrlPitch, -1, 1);
         const rollC = THREE.MathUtils.clamp(v.ctrlRoll, -1, 1);
@@ -790,12 +1131,21 @@ export function VehicleWorld() {
             case "nozzle":
               t = -pitchC * 0.95 - v.thrust * 0.12;
               break;
+            case "nozzleL":
+              t = -pitchC * 0.9 - rollC * 0.7 - v.thrust * 0.1;
+              break;
+            case "nozzleR":
+              t = -pitchC * 0.9 + rollC * 0.7 - v.thrust * 0.1;
+              break;
             case "rudder":
               t = -yawC;
               break;
-            case "flap":
-              t = v.gear > 0.35 || v.speed < 55 ? 0.82 : THREE.MathUtils.lerp(0.82, 0, THREE.MathUtils.clamp((v.speed - 55) / 40, 0, 1));
+            case "flap": {
+              const want = !v.airborne && (Math.abs(v.speed) > 6.5 || v.thrust > 0.2) ? 0.88 : 0;
+              vis.flapT += (want - vis.flapT) * (1 - Math.exp(-3.4 * d));
+              t = vis.flapT;
               break;
+            }
             default:
               t = 0;
           }
@@ -803,13 +1153,27 @@ export function VehicleWorld() {
         }
       }
       if (vis.steerWheel) {
-        _eul.set(0, 0, -v.steerAngle * 2.4);
+        const axis = (vis.steerWheel.obj.userData.steerAxis as "x" | "y" | "z") || "z";
+        _eul.set(0, 0, 0);
+        const ang = -v.steerAngle * 2.6;
+        if (axis === "x") _eul.x = ang;
+        else if (axis === "y") _eul.y = ang;
+        else _eul.z = ang;
         vis.steerWheel.obj.quaternion.copy(vis.steerWheel.rest).multiply(_q.setFromEuler(_eul));
       }
       vis.glow?.forEach((light, i) => {
         if (v.kind === "car") light.intensity = v.nitro * (i === 0 ? 6.2 : 2.4);
-        else light.intensity = v.thrust * (v.airborne ? 1 : 0.35) * (i === 0 ? 8.5 : 5.5 * v.thrust);
+        else light.intensity = 0;
       });
+      for (const fx of vis.exhausts) setExhaust(fx, v.thrust, now);
+      if (vis.trails.length >= 2) {
+        vis.group.updateMatrixWorld(true);
+        const emit = v.airborne && v.speed > 52 && v.y > 18;
+        _tipL.set(-4.6, 0.15, 0.35).applyMatrix4(vis.group.matrixWorld);
+        _tipR.set(4.6, 0.15, 0.35).applyMatrix4(vis.group.matrixWorld);
+        updateContrail(vis.trails[0]!, _tipL, emit);
+        updateContrail(vis.trails[1]!, _tipR, emit);
+      }
     }
     const g = colRef.current;
     if (g) {
@@ -858,6 +1222,9 @@ export function VehicleWorld() {
       {visuals.map((v) => (
         <primitive key={v.id} object={v.group} />
       ))}
+      {visuals.flatMap((v) =>
+        v.trails.map((t, i) => <primitive key={`${v.id}-trail-${i}`} object={t.mesh} />),
+      )}
       <group ref={colRef} />
     </group>
   );
