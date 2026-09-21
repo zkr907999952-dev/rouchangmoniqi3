@@ -465,7 +465,7 @@ function prepareArm(src: THREE.Object3D) {
   }
   geo.computeVertexNormals();
   pos.needsUpdate = true;
-  pos.setUsage(THREE.DynamicDrawUsage);
+  if (typeof pos.setUsage === "function") pos.setUsage(THREE.DynamicDrawUsage);
 
   const mat = new THREE.MeshStandardMaterial({
     color: "#c9947a",

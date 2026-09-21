@@ -11,17 +11,17 @@ export const MODEL_FILES = [
   { id: "intestines" as const, url: "/models/intestines.glb", bytes: 15_629_192, path: "/models/", hint: "大小肠", core: true },
   { id: "pelvis" as const, url: "/models/pelvis.glb", bytes: 760_380, path: "/models/", hint: "盆腔", core: true },
   { id: "arm" as const, url: "/models/arm.glb", bytes: 139_896, path: "/models/", hint: "手臂", core: true },
-  { id: "bayonet" as const, url: "/models/bayonet.glb", bytes: 3_873_372, path: "/models/", hint: "刺刀", core: true },
+  { id: "bayonet" as const, url: "/models/bayonet.glb", bytes: 473_988, path: "/models/", hint: "刺刀", core: true },
   { id: "bayonetLong" as const, url: "/models/bayonet-long.glb", bytes: 158_192, path: "/models/", hint: "长刺刀", core: true },
-  { id: "room" as const, url: "/models/room.glb", bytes: 16_153_124, path: "/models/", hint: "房间", core: false },
+  { id: "room" as const, url: "/models/room.glb", bytes: 2_884_292, path: "/models/", hint: "房间", core: false },
 ];
 
 const TOTAL_BYTES = MODEL_FILES.reduce((s, f) => s + f.bytes, 0);
 const CORE_BYTES = MODEL_FILES.filter((f) => f.core).reduce((s, f) => s + f.bytes, 0);
-const CACHE_NAME = "vela-glb-v2";
+const CACHE_NAME = "vela-glb-v5";
 export const CITY_FILE = { url: "/models/city.glb", bytes: 8_037_544, path: "/models/", hint: "城市" };
-export const CAR_FILE = { url: "/models/car.glb", bytes: 5_679_708, path: "/models/", hint: "跑车" };
-export const PLANE_FILE = { url: "/models/plane.glb", bytes: 13_549_236, path: "/models/", hint: "战机" };
+export const CAR_FILE = { url: "/models/car.glb", bytes: 3_077_088, path: "/models/", hint: "跑车" };
+export const PLANE_FILE = { url: "/models/plane.glb", bytes: 5_627_304, path: "/models/", hint: "战机" };
 
 export type LoadedScenes = {
   character: THREE.Group;
@@ -130,6 +130,30 @@ async function fetchBuffer(
   return out;
 }
 
+function deinterleaveGeometry(geo: THREE.BufferGeometry) {
+  for (const name of Object.keys(geo.attributes)) {
+    const attr = geo.getAttribute(name) as THREE.InterleavedBufferAttribute | THREE.BufferAttribute;
+    if ((attr as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute) {
+      geo.setAttribute(name, (attr as THREE.InterleavedBufferAttribute).clone());
+    }
+  }
+  const morph = geo.morphAttributes as Record<string, Array<THREE.BufferAttribute | THREE.InterleavedBufferAttribute> | undefined>;
+  for (const name of Object.keys(morph)) {
+    const list = morph[name];
+    if (!list) continue;
+    morph[name] = list.map((a) =>
+      (a as THREE.InterleavedBufferAttribute).isInterleavedBufferAttribute ? (a as THREE.InterleavedBufferAttribute).clone() : a,
+    );
+  }
+}
+
+function deinterleaveScene(root: THREE.Object3D) {
+  root.traverse((o) => {
+    const m = o as THREE.Mesh;
+    if (m.isMesh && m.geometry) deinterleaveGeometry(m.geometry);
+  });
+}
+
 function parseGlb(data: ArrayBuffer, resourcePath: string) {
   return (async () => {
     const loader = new GLTFLoader();
@@ -140,7 +164,10 @@ function parseGlb(data: ArrayBuffer, resourcePath: string) {
       loader.parse(
         data,
         resourcePath,
-        (gltf) => resolve(gltf.scene),
+        (gltf) => {
+          deinterleaveScene(gltf.scene);
+          resolve(gltf.scene);
+        },
         (err) => reject(err instanceof Error ? err : new Error("模型解析失败")),
       );
     });

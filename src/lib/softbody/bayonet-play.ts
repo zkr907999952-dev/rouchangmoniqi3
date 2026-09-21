@@ -201,7 +201,7 @@ export class BayonetPlay {
       tex.needsUpdate = true;
       this.woundTex = tex;
     };
-    img.src = "/textures/wounds.png";
+    img.src = "/textures/wounds.webp";
   }
 
   pick(point: THREE.Vector3, normal: THREE.Vector3, mesh?: THREE.Mesh, faceIndex?: number) {

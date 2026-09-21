@@ -142,6 +142,32 @@ function authPopupPlugin(): Plugin {
   };
 }
 
+function stubSceneSsrPlugin(): Plugin {
+  const stubId = "\0stub-studio-scene";
+  return {
+    name: "stub-studio-scene-ssr",
+    enforce: "pre",
+    resolveId(source, importer, options) {
+      const envName = (this as { environment?: { name?: string } }).environment?.name;
+      const ssr = Boolean(options?.ssr) || envName === "ssr" || envName === "nitro";
+      if (!ssr) return null;
+      const src = source.replace(/\\/g, "/");
+      const from = importer?.replace(/\\/g, "/") ?? "";
+      const fromApp = from.includes("studio-app");
+      if (
+        src.includes("components/studio/scene") ||
+        ((src === "./scene" || src.endsWith("/scene") || src.endsWith("/scene.tsx")) && fromApp)
+      ) {
+        return stubId;
+      }
+      return null;
+    },
+    load(id) {
+      if (id === stubId) return "export default function Scene(){return null}\n";
+    },
+  };
+}
+
 // `0.0.0.0:8080` is the live-preview contract — don't change host/port.
 // The dev server starts once `src/router.tsx` and `src/routes/` exist — see
 // AGENTS.md § "First scaffold".
@@ -168,6 +194,7 @@ export default defineConfig(({ command, isPreview }) => ({
     appEnvPlugin(),
     // PWA head + ?install=1 tutorial page; runs before Start/Nitro.
     grokPwaPlugin(),
+    stubSceneSsrPlugin(),
     tailwindcss(),
     tanstackStart(),
     ...(command === "build" || isPreview

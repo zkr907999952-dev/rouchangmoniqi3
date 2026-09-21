@@ -76,7 +76,7 @@ export class GutHealth {
         color = new THREE.BufferAttribute(new Float32Array(pos.count * 3).fill(1), 3);
         mesh.geometry.setAttribute("color", color);
       }
-      color.setUsage(THREE.DynamicDrawUsage);
+      if (typeof color.setUsage === "function") color.setUsage(THREE.DynamicDrawUsage);
       const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
       for (const raw of mats) {
         const m = raw as THREE.MeshStandardMaterial;

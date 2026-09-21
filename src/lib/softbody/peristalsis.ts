@@ -337,7 +337,7 @@ export class GutPeristalsis {
       const adj = buildAdj(rest, pos.count, idx ? idx.array : null);
       const along = computeAlong(rest, pos.count, mesh.geometry, adj);
       const rad = computeRadial(rest, along, pos.count, adj);
-      pos.setUsage(THREE.DynamicDrawUsage);
+      if (typeof pos.setUsage === "function") pos.setUsage(THREE.DynamicDrawUsage);
       this.tubes.push({ positions: pos.array, along, rad, count: pos.count });
     });
   }
