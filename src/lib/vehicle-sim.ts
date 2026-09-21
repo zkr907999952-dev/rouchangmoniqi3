@@ -11,6 +11,7 @@ import {
   cityRayHit,
   citySurfaceAt,
   getAirportSpawn,
+  getAirportPlaneSpawns,
   getCityRuntime,
   getCitySpawn,
   sampleRoadPoints,
@@ -325,9 +326,11 @@ export function spawnVehicles() {
   carSpawns.forEach((p, i) => {
     vehLive.vehicles.push(makeCar(`car-${i}`, p.x, p.y, p.z, p.yaw));
   });
-  const ap = getAirportSpawn();
-  if (ap) {
-    vehLive.vehicles.push(makePlane("plane-0", ap.x, ap.y, ap.z, ap.yaw));
+  const planes = getAirportPlaneSpawns();
+  if (planes.length) {
+    planes.forEach((p, i) => {
+      vehLive.vehicles.push(makePlane(`plane-${i}`, p.x, p.y, p.z, p.yaw));
+    });
   } else {
     const x = sp.x + 80;
     const z = sp.z - 40;
@@ -947,9 +950,57 @@ function stepPlane(v: Vehicle, dt: number, input: VehInput, driven: boolean) {
       writeQuatFromEuler(v);
       updateBasis(v);
     }
-    v.wheelSpin -= (v.speed / Math.max(0.2, v.wheelR)) * dt;
+    v.wheelSpin += (v.speed / Math.max(0.2, v.wheelR)) * dt;
     v.visPitch = v.pitch;
     v.visRoll = v.roll;
+  }
+}
+
+function collideVehicles() {
+  const vs = vehLive.vehicles;
+  for (let i = 0; i < vs.length; i++) {
+    const a = vs[i]!;
+    for (let j = i + 1; j < vs.length; j++) {
+      const b = vs[j]!;
+      if (Math.abs(a.y - b.y) > Math.max(a.height, b.height) + 1.4) continue;
+      const aLen = a.halfL * (a.kind === "plane" ? 0.82 : 1);
+      const bLen = b.halfL * (b.kind === "plane" ? 0.82 : 1);
+      const ar = a.kind === "plane" ? a.halfW * 2.15 + 0.7 : a.halfW + 0.32;
+      const br = b.kind === "plane" ? b.halfW * 2.15 + 0.7 : b.halfW + 0.32;
+      const ta = THREE.MathUtils.clamp((b.x - a.x) * a.fx + (b.z - a.z) * a.fz, -aLen, aLen);
+      const tb = THREE.MathUtils.clamp((a.x - b.x) * b.fx + (a.z - b.z) * b.fz, -bLen, bLen);
+      const ax = a.x + a.fx * ta;
+      const az = a.z + a.fz * ta;
+      const bx = b.x + b.fx * tb;
+      const bz = b.z + b.fz * tb;
+      const dx = bx - ax;
+      const dz = bz - az;
+      const dist = Math.hypot(dx, dz);
+      const min = ar + br;
+      if (dist >= min || dist < 1e-5) continue;
+      const nx = dx / dist;
+      const nz = dz / dist;
+      const pen = min - dist;
+      const aOcc = a.occupied ? 0.28 : 0.5;
+      const bOcc = b.occupied ? 0.28 : 0.5;
+      const sum = aOcc + bOcc;
+      a.x -= nx * pen * (aOcc / sum);
+      a.z -= nz * pen * (aOcc / sum);
+      b.x += nx * pen * (bOcc / sum);
+      b.z += nz * pen * (bOcc / sum);
+      const rel = (b.vx - a.vx) * nx + (b.vz - a.vz) * nz;
+      if (rel < 0) {
+        const bounce = 0.18 - rel * 0.04;
+        a.vx -= nx * bounce;
+        a.vz -= nz * bounce;
+        b.vx += nx * bounce;
+        b.vz += nz * bounce;
+        a.speed = a.vx * a.fx + a.vz * a.fz;
+        b.speed = b.vx * b.fx + b.vz * b.fz;
+        a.lat = a.vx * a.rx + a.vz * a.rz;
+        b.lat = b.vx * b.rx + b.vz * b.rz;
+      }
+    }
   }
 }
 
@@ -973,6 +1024,7 @@ export function stepVehicles(dt: number, input: VehInput) {
       else stepPlane(v, step, input, driven);
     }
   }
+  collideVehicles();
   const v = getOccupied();
   if (v) {
     vehLive.x = v.x;

@@ -764,46 +764,59 @@ export function getCityLandmark(name: string): Aabb | null {
 }
 
 export function getAirportSpawn(): { x: number; y: number; z: number; yaw: number } | null {
+  const all = getAirportPlaneSpawns();
+  return all[0] ?? null;
+}
+
+export function getAirportPlaneSpawns(): { x: number; y: number; z: number; yaw: number }[] {
   const track = city.landmarks.AirPort_Track ?? city.landmarks.Airport_Front ?? city.landmarks.AirPort;
   const hangar = city.landmarks.AirPort ?? city.landmarks.Airport_Front;
-  if (!track) return null;
+  if (!track) return [];
   const alongX = track.maxX - track.minX > track.maxZ - track.minZ;
-  const hx = hangar ? (hangar.minX + hangar.maxX) * 0.5 : (track.minX + track.maxX) * 0.5;
-  const hz = hangar ? (hangar.minZ + hangar.maxZ) * 0.5 : (track.minZ + track.maxZ) * 0.5;
-  let best: { x: number; y: number; z: number; yaw: number } | null = null;
-  let bestScore = -1e9;
-  const n = 18;
-  for (let i = 0; i < n; i++) {
-    const u = (i + 0.35) / n;
-    const x = alongX
-      ? THREE.MathUtils.lerp(track.minX + 14, track.maxX - 14, u)
-      : THREE.MathUtils.clamp(hx + (i % 2 === 0 ? 18 : -18), track.minX + 10, track.maxX - 10);
-    const z = alongX
-      ? THREE.MathUtils.clamp(hz + (i % 2 === 0 ? 18 : -18), track.minZ + 10, track.maxZ - 10)
-      : THREE.MathUtils.lerp(track.minZ + 14, track.maxZ - 14, u);
-    if (
-      hangar &&
-      x > hangar.minX + 6 &&
-      x < hangar.maxX - 6 &&
-      z > hangar.minZ + 6 &&
-      z < hangar.maxZ - 6
-    ) {
-      continue;
-    }
-    const y = cityLowestSurface(x, z, -2, 10);
-    if (!(Number.isFinite(y) && y > -0.4 && y < 3.4)) continue;
-    const dH = Math.hypot(x - hx, z - hz);
-    const score = -dH * 0.35 + (y < 1.6 ? 24 : 0) + (dH > 16 && dH < 70 ? 12 : 0);
-    if (score > bestScore) {
-      bestScore = score;
-      const yaw = alongX ? (x >= hx ? -Math.PI / 2 : Math.PI / 2) : z >= hz ? Math.PI : 0;
-      best = { x, y, z, yaw };
+  const out: { x: number; y: number; z: number; yaw: number }[] = [];
+  const place = (x: number, z: number, yaw: number) => {
+    const y = cityLowestSurface(x, z, -2, 14);
+    if (Number.isFinite(y) && y > -1 && y < 8) out.push({ x, y, z, yaw });
+    else out.push({ x, y: 0, z, yaw });
+  };
+
+  if (alongX) {
+    const zMid = (track.minZ + track.maxZ) * 0.5;
+    const yawRun = -Math.PI / 2;
+    place(track.minX + 32, zMid - 9, yawRun);
+    place(track.minX + 32, zMid + 9, yawRun);
+  } else {
+    const xMid = (track.minX + track.maxX) * 0.5;
+    const yawRun = Math.PI;
+    place(xMid - 9, track.minZ + 32, yawRun);
+    place(xMid + 9, track.minZ + 32, yawRun);
+  }
+
+  if (hangar) {
+    const hcx = (hangar.minX + hangar.maxX) * 0.5;
+    const hcz = (hangar.minZ + hangar.maxZ) * 0.5;
+    const tcx = (track.minX + track.maxX) * 0.5;
+    const tcz = (track.minZ + track.maxZ) * 0.5;
+    const dx = tcx - hcx;
+    const dz = tcz - hcz;
+    if (Math.abs(dx) >= Math.abs(dz)) {
+      const outSign = dx >= 0 ? 1 : -1;
+      const yaw = outSign > 0 ? -Math.PI / 2 : Math.PI / 2;
+      const inset = Math.min(14, Math.max(6, (hangar.maxX - hangar.minX) * 0.18));
+      const x = outSign > 0 ? hangar.maxX - inset : hangar.minX + inset;
+      place(x, hcz - 11, yaw);
+      place(x, hcz + 11, yaw);
+    } else {
+      const outSign = dz >= 0 ? 1 : -1;
+      const yaw = outSign > 0 ? Math.PI : 0;
+      const inset = Math.min(14, Math.max(6, (hangar.maxZ - hangar.minZ) * 0.18));
+      const z = outSign > 0 ? hangar.maxZ - inset : hangar.minZ + inset;
+      place(hcx - 11, z, yaw);
+      place(hcx + 11, z, yaw);
     }
   }
-  if (best) return best;
-  const x = THREE.MathUtils.clamp((track.minX + track.maxX) * 0.5, track.minX + 8, track.maxX - 8);
-  const z = THREE.MathUtils.clamp((track.minZ + track.maxZ) * 0.5, track.minZ + 8, track.maxZ - 8);
-  return { x, y: cityLowestSurface(x, z, -2, 12), z, yaw: alongX ? -Math.PI / 2 : 0 };
+
+  return out.slice(0, 4);
 }
 
 export function sampleRoadPoints(count: number, avoid: { x: number; z: number; r: number }[]): { x: number; y: number; z: number; yaw: number }[] {

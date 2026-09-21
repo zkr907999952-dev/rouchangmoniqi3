@@ -47,9 +47,32 @@ import { cn } from "@/lib/utils";
 import { PRESETS, useStudio, type CamFocus, type PresetId, type StudioParams, FP_FOV_MIN, FP_FOV_MAX, FP_LOOK_SPEED_MIN, FP_LOOK_SPEED_MAX, MIRROR_RES_MIN, MIRROR_RES_MAX, FP_BREAST_JIGGLE_MIN, FP_BREAST_JIGGLE_MAX } from "@/lib/studio-store";
 import { ANIMATIONS, EXPRESSIONS, HAND_GESTURES, POSES } from "@/lib/softbody/soft-skeleton";
 import { STICK_SPRINT } from "@/lib/fp-control";
-import { CITY_MAP_H_MAX, CITY_MAP_H_MIN, citySurfaceAt, getCityRuntime } from "@/lib/world-map";
+import { CITY_BAKE_ID, CITY_MAP_H_MAX, CITY_MAP_H_MIN, bakeCityCollision, citySurfaceAt, getCityRuntime, getCitySpawn } from "@/lib/world-map";
+import { loadCityModel } from "@/lib/load-models";
 import { PLANE_CRUISE, PLANE_TAKEOFF_KMH } from "@/lib/vehicle-sim";
 import { fpLive } from "@/lib/fp-pose";
+
+async function ensureCityForMap() {
+  if (getCityRuntime().ready) return true;
+  useStudio.setState({ loading: true, loadError: null, loadProgress: 6, loadHint: "载入城市地图" });
+  try {
+    const model = await loadCityModel((pct, hint) => {
+      useStudio.setState({ loadProgress: pct, loadHint: hint });
+    });
+    if (!getCityRuntime().ready || getCityRuntime().group !== model || getCityRuntime().bakeId !== CITY_BAKE_ID) {
+      bakeCityCollision(model);
+    }
+    useStudio.setState({ loading: false, loadProgress: 100, loadHint: "地图就绪" });
+    return true;
+  } catch (err) {
+    useStudio.setState({
+      loading: true,
+      loadError: err instanceof Error ? err.message : "城市地图载入失败",
+      loadHint: "载入失败",
+    });
+    return false;
+  }
+}
 
 const SLIDERS: {
   id: keyof Pick<
@@ -210,15 +233,19 @@ export function Overlay() {
       const tag = (e.target as HTMLElement | null)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA") return;
       if (e.code === "KeyM") {
+        e.preventDefault();
         const s = useStudio.getState();
-        if (s.worldMap === "city" && getCityRuntime().ready) {
-          e.preventDefault();
-          const next = !s.cityMapOpen;
-          s.setCityMapOpen(next);
-          if (next) {
-            s.setFpLookLocked(false);
+        const next = !s.cityMapOpen;
+        if (next) {
+          void (async () => {
+            const ok = await ensureCityForMap();
+            if (!ok) return;
+            useStudio.getState().setCityMapOpen(true);
+            useStudio.getState().setFpLookLocked(false);
             if (document.pointerLockElement) document.exitPointerLock();
-          }
+          })();
+        } else {
+          s.setCityMapOpen(false);
         }
         return;
       }
@@ -326,16 +353,21 @@ export function Overlay() {
         </div>
       ) : null}
 
-      {worldMap === "city" ? (
-        <button
+      <button
           type="button"
           aria-label="打开地图"
           onClick={() => {
             const next = !cityMapOpen;
-            setCityMapOpen(next);
             if (next) {
-              useStudio.getState().setFpLookLocked(false);
-              if (document.pointerLockElement) document.exitPointerLock();
+              void (async () => {
+                const ok = await ensureCityForMap();
+                if (!ok) return;
+                useStudio.getState().setCityMapOpen(true);
+                useStudio.getState().setFpLookLocked(false);
+                if (document.pointerLockElement) document.exitPointerLock();
+              })();
+            } else {
+              setCityMapOpen(false);
             }
           }}
           className={cn(
@@ -346,7 +378,6 @@ export function Overlay() {
         >
           <Map className="size-4" />
         </button>
-      ) : null}
       <CityMapPanel />
 
       <div className="pointer-events-auto absolute top-4 right-4 z-20 flex gap-2 sm:top-6 sm:right-6">
@@ -1869,6 +1900,11 @@ function CityMapPanel() {
   const teleport = () => {
     if (!marker) return;
     const y = citySurfaceAt(marker.x, marker.z);
+    const st = useStudio.getState();
+    if (st.worldMap !== "city") {
+      st.setFirstPerson(true, "body");
+      st.setWorldMap("city");
+    }
     warpFp(marker.x, y, marker.z);
   };
 
