@@ -15,7 +15,15 @@ type WheelBind = {
   spinSign: number;
   offset: { x: number; y: number; z: number };
 };
-type PivotBind = { obj: THREE.Object3D; rest: THREE.Quaternion; axis: "x" | "y" | "z"; sign: number; max: number };
+type PivotKind = "door" | "canopy" | "gear" | "gearDoor" | "aileronL" | "aileronR" | "elevator" | "nozzle" | "rudder" | "flap";
+type PivotBind = {
+  obj: THREE.Object3D;
+  rest: THREE.Quaternion;
+  axis: "x" | "y" | "z";
+  sign: number;
+  max: number;
+  kind?: PivotKind;
+};
 
 type Visual = {
   id: string;
@@ -141,6 +149,7 @@ function mountWheels(wrap: THREE.Group, nameRe: RegExp): WheelBind[] {
     hub.userData.steer = steer;
     hub.userData.axle = axle;
     hub.userData.spinSign = spinSign;
+    hub.userData.offset = { x: off.x, y: off.y, z: off.z };
     wheels.push({
       root: hub,
       restPos: hub.position.clone(),
@@ -157,30 +166,70 @@ function mountWheels(wrap: THREE.Group, nameRe: RegExp): WheelBind[] {
 
 function collectHubs(wrap: THREE.Group): WheelBind[] {
   const hubs = findNamed(wrap, /^WheelHub_/);
-  return hubs.map((hub) => ({
-    root: hub,
-    restPos: hub.position.clone(),
-    restQuat: hub.quaternion.clone(),
-    steer: Boolean(hub.userData.steer) || hub.position.z < 0,
-    axle: (hub.userData.axle as "x" | "z") || "x",
-    spinSign: typeof hub.userData.spinSign === "number" ? hub.userData.spinSign : 1,
-    offset: { x: hub.position.x, y: hub.position.y, z: hub.position.z },
-  }));
+  return hubs.map((hub) => {
+    const stored = hub.userData.offset as { x: number; y: number; z: number } | undefined;
+    const offset = stored ?? { x: hub.position.x, y: hub.position.y, z: hub.position.z };
+    return {
+      root: hub,
+      restPos: hub.position.clone(),
+      restQuat: hub.quaternion.clone(),
+      steer: Boolean(hub.userData.steer) || offset.z < 0,
+      axle: (hub.userData.axle as "x" | "z") || "x",
+      spinSign: typeof hub.userData.spinSign === "number" ? hub.userData.spinSign : 1,
+      offset,
+    };
+  });
 }
 
-function bindPivots(root: THREE.Group, items: { re: RegExp; axis: "x" | "y" | "z"; sign: number; max: number }[]): PivotBind[] {
-  const out: PivotBind[] = [];
-  for (const it of items) {
-    for (const obj of findNamed(root, it.re)) {
-      out.push({ obj, rest: obj.quaternion.clone(), axis: it.axis, sign: it.sign, max: it.max });
-    }
+function worldAabb(obj: THREE.Object3D) {
+  _box.setFromObject(obj);
+  return {
+    minX: _box.min.x,
+    minY: _box.min.y,
+    minZ: _box.min.z,
+    maxX: _box.max.x,
+    maxY: _box.max.y,
+    maxZ: _box.max.z,
+    cx: (_box.min.x + _box.max.x) * 0.5,
+    cy: (_box.min.y + _box.max.y) * 0.5,
+    cz: (_box.min.z + _box.max.z) * 0.5,
+  };
+}
+
+function mountHinge(
+  wrap: THREE.Group,
+  obj: THREE.Object3D,
+  hinge: { x: number; y: number; z: number },
+  axis: "x" | "y" | "z",
+  sign: number,
+  max: number,
+  kind: PivotKind,
+  extras: THREE.Object3D[] = [],
+): PivotBind {
+  const hub = new THREE.Group();
+  hub.name = `Hinge_${kind}_${obj.name}`;
+  wrap.add(hub);
+  hub.position.set(hinge.x, hinge.y, hinge.z);
+  hub.quaternion.identity();
+  hub.scale.set(1, 1, 1);
+  wrap.updateMatrixWorld(true);
+  wrap.attach(obj);
+  hub.attach(obj);
+  for (const ex of extras) {
+    if (!ex || ex === obj) continue;
+    wrap.attach(ex);
+    hub.attach(ex);
   }
-  return out;
+  hub.userData.axis = axis;
+  hub.userData.sign = sign;
+  hub.userData.max = max;
+  hub.userData.kind = kind;
+  return { obj: hub, rest: hub.quaternion.clone(), axis, sign, max, kind };
 }
 
 function applyPivot(b: PivotBind, t: number) {
   _eul.set(0, 0, 0, "XYZ");
-  const a = b.sign * b.max * t;
+  const a = b.sign * b.max * THREE.MathUtils.clamp(t, -1, 1);
   if (b.axis === "x") _eul.x = a;
   if (b.axis === "y") _eul.y = a;
   if (b.axis === "z") _eul.z = a;
@@ -331,7 +380,7 @@ function makeScissorDoors(wrap: THREE.Group): PivotBind[] {
     pivot.userData.axis = "z";
     pivot.userData.sign = sign;
     pivot.userData.max = 1.35;
-    out.push({ obj: pivot, rest: pivot.quaternion.clone(), axis: "z", sign, max: 1.35 });
+    out.push({ obj: pivot, rest: pivot.quaternion.clone(), axis: "z", sign, max: 1.35, kind: "door" });
   }
   if (out.length) {
     for (const src of sources) src.visible = false;
@@ -384,6 +433,37 @@ function prepareCar(src: THREE.Group) {
   return { wrap, wheels: hubs.length ? hubs : wheels, doors, steer, glow, originY, cockpit };
 }
 
+function matchGearWheel(wheels: WheelBind[], gear: THREE.Object3D): THREE.Object3D[] {
+  const a = worldAabb(gear);
+  const extras: THREE.Object3D[] = [];
+  for (const w of wheels) {
+    const wx = w.root.getWorldPosition(_p).x;
+    const wz = _p.z;
+    const nearX = Math.abs(wx - a.cx) < Math.max(1.6, (a.maxX - a.minX) * 0.9 + 0.55);
+    const nearZ = Math.abs(wz - a.cz) < Math.max(1.4, (a.maxZ - a.minZ) * 0.9 + 0.7);
+    if (nearX && nearZ) extras.push(w.root);
+  }
+  return extras;
+}
+
+function snapshotWheelOffsets(wrap: THREE.Group, wheels: WheelBind[]) {
+  wrap.updateMatrixWorld(true);
+  for (const w of wheels) {
+    w.root.getWorldPosition(_p);
+    wrap.worldToLocal(_p);
+    const off = { x: _p.x, y: _p.y, z: _p.z };
+    w.offset = off;
+    w.root.userData.offset = off;
+  }
+}
+
+function refreshWheelRests(wheels: WheelBind[]) {
+  for (const w of wheels) {
+    w.restPos.copy(w.root.position);
+    w.restQuat.copy(w.root.quaternion);
+  }
+}
+
 function preparePlane(src: THREE.Group) {
   const root = src.clone(true);
   root.traverse((o) => {
@@ -407,36 +487,127 @@ function preparePlane(src: THREE.Group) {
   cockpit.z = Math.min(-4.15, cockpit.z + 0.85);
   cockpit.y = Math.max(1.42, Math.min(1.62, cockpit.y));
   liftOrigin(wrap, originY);
+  wrap.updateMatrixWorld(true);
+  snapshotWheelOffsets(wrap, wheels);
+
+  const gears: PivotBind[] = [];
+  const noseGear = firstNamed(wrap, /^gear_f/);
+  if (noseGear) {
+    const a = worldAabb(noseGear);
+    gears.push(
+      mountHinge(
+        wrap,
+        noseGear,
+        { x: a.cx, y: a.maxY - 0.02, z: a.cz },
+        "x",
+        1,
+        1.62,
+        "gear",
+        matchGearWheel(wheels, noseGear),
+      ),
+    );
+  }
+  const leftGear = firstNamed(wrap, /^gear_lm1/);
+  if (leftGear) {
+    const a = worldAabb(leftGear);
+    gears.push(
+      mountHinge(
+        wrap,
+        leftGear,
+        { x: a.cx + 0.12, y: a.maxY - 0.02, z: a.cz },
+        "z",
+        -1,
+        1.72,
+        "gear",
+        matchGearWheel(wheels, leftGear),
+      ),
+    );
+  }
+  const rightGear = firstNamed(wrap, /^gear_rm1/);
+  if (rightGear) {
+    const a = worldAabb(rightGear);
+    gears.push(
+      mountHinge(
+        wrap,
+        rightGear,
+        { x: a.cx - 0.12, y: a.maxY - 0.02, z: a.cz },
+        "z",
+        1,
+        1.72,
+        "gear",
+        matchGearWheel(wheels, rightGear),
+      ),
+    );
+  }
+  refreshWheelRests(wheels);
+
+  const gearDoors: PivotBind[] = [];
+  for (const obj of findNamed(wrap, /^gear_door_f[lr]/)) {
+    const a = worldAabb(obj);
+    const left = a.cx < 0;
+    gearDoors.push(
+      mountHinge(wrap, obj, { x: left ? a.minX : a.maxX, y: a.maxY, z: a.cz }, "z", left ? -1 : 1, 1.25, "gearDoor"),
+    );
+  }
+  for (const obj of findNamed(wrap, /^gear_door_r[lr]/)) {
+    const a = worldAabb(obj);
+    const left = a.cx < 0;
+    gearDoors.push(
+      mountHinge(wrap, obj, { x: left ? a.maxX : a.minX, y: a.maxY, z: a.cz }, "z", left ? -1 : 1, 1.18, "gearDoor"),
+    );
+  }
+
+  const surfaces: PivotBind[] = [];
+  for (const obj of findNamed(wrap, /^aileron_l/)) {
+    const a = worldAabb(obj);
+    surfaces.push(mountHinge(wrap, obj, { x: a.cx, y: a.cy, z: a.minZ + 0.04 }, "x", 1, 0.42, "aileronL"));
+  }
+  for (const obj of findNamed(wrap, /^aileron_r/)) {
+    const a = worldAabb(obj);
+    surfaces.push(mountHinge(wrap, obj, { x: a.cx, y: a.cy, z: a.minZ + 0.04 }, "x", 1, 0.42, "aileronR"));
+  }
+  for (const obj of findNamed(wrap, /^elevator_l/)) {
+    const a = worldAabb(obj);
+    surfaces.push(mountHinge(wrap, obj, { x: a.cx, y: a.cy, z: a.minZ + 0.06 }, "x", 1, 0.38, "elevator"));
+  }
+  for (const obj of findNamed(wrap, /^elevator_r/)) {
+    const a = worldAabb(obj);
+    surfaces.push(mountHinge(wrap, obj, { x: a.cx, y: a.cy, z: a.minZ + 0.04 }, "x", 1, 0.48, "nozzle"));
+  }
+  for (const obj of findNamed(wrap, /^rudder/)) {
+    const a = worldAabb(obj);
+    surfaces.push(mountHinge(wrap, obj, { x: a.cx, y: a.minY + 0.15, z: a.minZ + 0.06 }, "y", 1, 0.46, "rudder"));
+  }
+  for (const obj of findNamed(wrap, /^wingflap_/)) {
+    const a = worldAabb(obj);
+    surfaces.push(mountHinge(wrap, obj, { x: a.cx, y: a.cy, z: a.minZ + 0.05 }, "x", 1, 0.36, "flap"));
+  }
+
+  const canopyParts = [...findNamed(wrap, /^door_dside_f/), ...findNamed(wrap, /^window_lf/)];
+  const doors: PivotBind[] = [];
+  if (canopyParts.length) {
+    const main = canopyParts[0]!;
+    wrap.updateMatrixWorld(true);
+    _box.makeEmpty();
+    for (const p of canopyParts) _box.expandByObject(p);
+    doors.push(
+      mountHinge(
+        wrap,
+        main,
+        { x: (_box.min.x + _box.max.x) * 0.5, y: _box.max.y - 0.04, z: _box.max.z - 0.08 },
+        "x",
+        1,
+        1.12,
+        "canopy",
+        canopyParts.slice(1),
+      ),
+    );
+  }
+
   const hubs = collectHubs(wrap);
   wrap.userData.originY = originY;
   wrap.userData.cockpit = cockpit;
   wrap.userData.faceDbg = root.userData.faceDbg;
-  const doors = bindPivots(wrap, [
-    { re: /door_hatch_l/, axis: "z", sign: 1, max: 1.15 },
-    { re: /door_hatch_r/, axis: "z", sign: -1, max: 1.15 },
-    { re: /door_dside_f/, axis: "z", sign: 1, max: 0.95 },
-    { re: /door_pside_f/, axis: "z", sign: -1, max: 0.95 },
-  ]);
-  const gears = bindPivots(wrap, [
-    { re: /^gear_f/, axis: "x", sign: 1, max: 1.45 },
-    { re: /^gear_lm1/, axis: "z", sign: -1, max: 1.35 },
-    { re: /^gear_rm1/, axis: "z", sign: 1, max: 1.35 },
-  ]);
-  const gearDoors = bindPivots(wrap, [
-    { re: /gear_door_fl/, axis: "x", sign: -1, max: 1.2 },
-    { re: /gear_door_fr/, axis: "x", sign: 1, max: 1.2 },
-    { re: /gear_door_rl1/, axis: "z", sign: 1, max: 1.1 },
-    { re: /gear_door_rr1/, axis: "z", sign: -1, max: 1.1 },
-  ]);
-  const surfaces = bindPivots(wrap, [
-    { re: /aileron_l/, axis: "z", sign: 1, max: 0.45 },
-    { re: /aileron_r/, axis: "z", sign: -1, max: 0.45 },
-    { re: /elevator_l/, axis: "x", sign: 1, max: 0.4 },
-    { re: /elevator_r/, axis: "x", sign: 1, max: 0.4 },
-    { re: /^rudder_/, axis: "y", sign: 1, max: 0.45 },
-    { re: /wingflap_l/, axis: "x", sign: 1, max: 0.35 },
-    { re: /wingflap_r/, axis: "x", sign: 1, max: 0.35 },
-  ]);
   const steer = firstNamed(wrap, /steeringwheel/);
   const glow = [addGlow(wrap, 7.6, 0x4ea7ff, 9), addGlow(wrap, 7.2, 0xff7a32, 6)];
   return { wrap, wheels: hubs.length ? hubs : wheels, doors, gears, gearDoors, surfaces, steer, glow, originY, cockpit };
@@ -500,6 +671,13 @@ export function VehicleWorld() {
           plane: planePrep.wrap.userData.faceDbg,
           carEye: carPrep.cockpit,
           planeEye: planePrep.cockpit,
+          planeHinges: {
+            gears: planePrep.gears.map((g) => g.obj.name),
+            gearDoors: planePrep.gearDoors.map((g) => g.obj.name),
+            surfaces: planePrep.surfaces.map((s) => `${s.kind}:${s.obj.name}`),
+            doors: planePrep.doors.map((d) => d.obj.name),
+            wheels: planePrep.wheels.map((w) => `${w.root.name}@${w.root.parent?.name ?? ""}`),
+          },
         };
         const list: Visual[] = [];
         for (const v of getVehicles()) {
@@ -516,6 +694,7 @@ export function VehicleWorld() {
               axis: (obj.userData.axis as "x" | "y" | "z") || "z",
               sign: typeof obj.userData.sign === "number" ? obj.userData.sign : /_L$/.test(obj.name) ? -1 : 1,
               max: typeof obj.userData.max === "number" ? obj.userData.max : 1.35,
+              kind: "door" as const,
             }));
             const steer = firstNamed(wrap, /^Steering_wheel$/);
             const glow: THREE.PointLight[] = [];
@@ -575,12 +754,13 @@ export function VehicleWorld() {
       vis.group.visible = true;
       vis.group.position.set(v.x, v.y, v.z);
       vis.group.quaternion.set(v.qx, v.qy, v.qz, v.qw);
+      const gearDown = v.kind === "plane" ? v.gear : 1;
       vis.wheels.forEach((w, i) => {
-        const sag = (v.susp[i] ?? 0.4) - 0.4;
+        const sag = gearDown > 0.2 ? ((v.susp[i] ?? 0.4) - 0.4) : 0;
         w.root.position.copy(w.restPos);
         w.root.position.y += sag * 0.2;
         w.root.quaternion.copy(w.restQuat);
-        if (w.steer) w.root.rotateY(v.steerAngle * 0.9);
+        if (w.steer && gearDown > 0.35) w.root.rotateY(v.steerAngle * 0.9);
         const spin = v.wheelSpin * (w.spinSign || 1);
         if (w.axle === "z") w.root.rotateZ(spin);
         else w.root.rotateX(spin);
@@ -589,18 +769,36 @@ export function VehicleWorld() {
       for (const d of vis.doors) applyPivot(d, doorT);
       const gearUp = 1 - v.gear;
       for (const g of vis.gears) applyPivot(g, gearUp);
-      for (const g of vis.gearDoors) applyPivot(g, gearUp);
+      const doorSwing = Math.sin(gearUp * Math.PI);
+      for (const g of vis.gearDoors) applyPivot(g, doorSwing);
       if (v.kind === "plane") {
-        const pitchN = THREE.MathUtils.clamp(v.pitch / 0.4, -1, 1);
-        const rollN = THREE.MathUtils.clamp(v.roll / 0.6, -1, 1);
+        const pitchC = THREE.MathUtils.clamp(v.ctrlPitch, -1, 1);
+        const rollC = THREE.MathUtils.clamp(v.ctrlRoll, -1, 1);
+        const yawC = THREE.MathUtils.clamp(v.ctrlYaw || v.steerAngle * 1.6, -1, 1);
         for (const s of vis.surfaces) {
-          const name = s.obj.name;
           let t = 0;
-          if (/aileron_l/.test(name)) t = rollN;
-          else if (/aileron_r/.test(name)) t = rollN;
-          else if (/elevator/.test(name)) t = -pitchN;
-          else if (/rudder/.test(name)) t = THREE.MathUtils.clamp(v.steerAngle, -1, 1);
-          else if (/wingflap/.test(name)) t = v.gear > 0.4 || v.speed < 50 ? 0.7 : 0;
+          switch (s.kind) {
+            case "aileronL":
+              t = -rollC;
+              break;
+            case "aileronR":
+              t = rollC;
+              break;
+            case "elevator":
+              t = -pitchC;
+              break;
+            case "nozzle":
+              t = -pitchC * 0.95 - v.thrust * 0.12;
+              break;
+            case "rudder":
+              t = -yawC;
+              break;
+            case "flap":
+              t = v.gear > 0.35 || v.speed < 55 ? 0.82 : THREE.MathUtils.lerp(0.82, 0, THREE.MathUtils.clamp((v.speed - 55) / 40, 0, 1));
+              break;
+            default:
+              t = 0;
+          }
           applyPivot(s, t);
         }
       }

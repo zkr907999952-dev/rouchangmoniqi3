@@ -1957,8 +1957,9 @@ function CollisionDebug() {
 
   useFrame(() => {
     const show = on && world === "city" && getCityRuntime().ready;
+    const inVeh = useStudio.getState().inVehicle || vehLive.inVehicle;
     boxes.visible = show;
-    cap.visible = show;
+    cap.visible = show && !inVeh;
     if (!show) return;
     const list = getCityDebugAabbs(fpLive.x, fpLive.z, 28, 56);
     for (let i = 0; i < boxes.children.length; i++) {
