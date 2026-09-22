@@ -32,6 +32,7 @@ export type VehInput = {
   thrustSlider: number | null;
   mapOpen: boolean;
   gearToggle: boolean;
+  dragBrake: boolean;
 };
 
 export type Vehicle = {
@@ -896,7 +897,7 @@ function stepPlane(v: Vehicle, dt: number, input: VehInput, driven: boolean) {
   v.ctrlPitch = THREE.MathUtils.lerp(v.ctrlPitch, pitchIn, follow);
   v.ctrlRoll = THREE.MathUtils.lerp(v.ctrlRoll, rollIn, follow);
   v.ctrlYaw = THREE.MathUtils.lerp(v.ctrlYaw, yawIn, follow);
-  const wantBrake = driven && !input.mapOpen && input.thrustDown ? 1 : 0;
+  const wantBrake = driven && !input.mapOpen && (input.thrustDown || input.dragBrake) ? 1 : 0;
   v.speedBrake = THREE.MathUtils.lerp(v.speedBrake, wantBrake, 1 - Math.exp(-10 * dt));
   const gearTap = driven && !input.mapOpen && input.gearToggle && !gearKeyPrev;
   gearKeyPrev = driven && input.gearToggle;
@@ -927,7 +928,7 @@ function stepPlane(v: Vehicle, dt: number, input: VehInput, driven: boolean) {
     const aoa = Math.atan2(-velUp, Math.max(4, velFwd));
     const stall = Math.abs(aoa) > 0.55 ? Math.max(0.12, 1 - (Math.abs(aoa) - 0.55) * 2.4) : 1;
     const liftAcc = GRAV * THREE.MathUtils.clamp(v.speed / 40, 0, 1.22) * (1 + aoa * 1.35) * stall + v.speed * v.speed * PLANE_LIFT_K * aoa;
-    const dragAcc = (PLANE_DRAG + 0.045 * aoa * aoa) * v.speed + 0.00016 * v.speed * v.speed;
+    const dragAcc = (PLANE_DRAG + 0.045 * aoa * aoa) * v.speed + 0.00016 * v.speed * v.speed + v.speedBrake * (0.72 * v.speed + 0.0014 * v.speed * v.speed);
     const thrustAcc = v.thrust * PLANE_THRUST * (v.thrust > PLANE_CRUISE ? 1.22 : 1);
     const invSpd = 1 / Math.max(v.speed, 1);
     v.vx += (v.fx * thrustAcc + v.ux * liftAcc - v.vx * dragAcc * invSpd) * dt;
@@ -969,6 +970,7 @@ function stepPlane(v: Vehicle, dt: number, input: VehInput, driven: boolean) {
     const max = PLANE_TAXI * (0.35 + v.thrust * 0.9);
     if (v.thrust > 0.04) v.speed += v.thrust * 24 * dt;
     else v.speed *= Math.max(0, 1 - 0.9 * dt);
+    if (v.speedBrake > 0.15) v.speed *= Math.max(0, 1 - 1.25 * v.speedBrake * dt);
     v.speed = THREE.MathUtils.clamp(v.speed, 0, max);
     const speedF = THREE.MathUtils.clamp(Math.abs(v.speed) / 8, 0, 1);
     v.yaw += steerIn * 1.15 * speedF * dt;
@@ -999,7 +1001,7 @@ function stepPlane(v: Vehicle, dt: number, input: VehInput, driven: boolean) {
       writeQuatFromEuler(v);
       updateBasis(v);
     }
-    v.wheelSpin += (v.speed / Math.max(0.2, v.wheelR)) * dt;
+    v.wheelSpin -= (v.speed / Math.max(0.2, v.wheelR)) * dt;
     v.visPitch = v.pitch;
     v.visRoll = v.roll;
   }

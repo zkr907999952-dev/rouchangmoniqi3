@@ -1283,6 +1283,7 @@ function FirstPersonRig({
         thrustSlider: inVeh ? live.vehThrustSlider : null,
         mapOpen,
         gearToggle: inVeh && act.ctrlHeld,
+        dragBrake: inVeh && act.qHeld && act.eHeld,
       });
     }
     if (inVeh) {

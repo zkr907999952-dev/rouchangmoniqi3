@@ -681,11 +681,11 @@ function flameMat(color: number, opacity: number) {
       void main() {
         float t = clamp(vT, 0.0, 1.0);
         float radial = length(vPos.xz) * 2.0;
-        float core = 1.0 - smoothstep(0.0, 0.55, radial);
-        float head = smoothstep(0.0, 0.06, t);
-        float tail = 1.0 - smoothstep(0.62, 1.0, t);
-        float a = head * tail * (0.35 + core * 0.75) * uAlpha;
-        vec3 col = mix(uColor * 1.65, uColor * 0.22, t);
+        float core = 1.0 - smoothstep(0.0, 0.62, radial);
+        float head = smoothstep(0.0, 0.045, t);
+        float tail = pow(1.0 - smoothstep(0.28, 1.0, t), 1.55);
+        float a = head * tail * (0.22 + core * 0.88) * uAlpha;
+        vec3 col = mix(uColor * 1.75, uColor * 0.05, pow(t, 0.62));
         gl_FragColor = vec4(col, a);
       }
     `,
@@ -699,21 +699,21 @@ function setFlame(mat: THREE.ShaderMaterial, color: number, alpha: number) {
 
 function makeTeardropGeo(rBase: number) {
   const pts: THREE.Vector2[] = [];
-  const n = 24;
+  const n = 40;
   for (let i = 0; i <= n; i++) {
     const t = i / n;
     const y = t - 0.5;
     let r: number;
-    if (t < 0.38) {
-      r = rBase * (1 - 0.1 * (t / 0.38));
+    if (t < 0.16) {
+      const u = t / 0.16;
+      r = rBase * (0.9 + 0.12 * u);
     } else {
-      const u = (t - 0.38) / 0.62;
-      r = rBase * 0.9 * Math.pow(1 - u, 1.85);
+      const u = (t - 0.16) / 0.84;
+      r = rBase * 1.02 * Math.pow(1 - u, 1.08) * (1 - 0.35 * u);
     }
-    pts.push(new THREE.Vector2(Math.max(0.001, r), y));
+    pts.push(new THREE.Vector2(Math.max(0.00035, r), y));
   }
-  pts.push(new THREE.Vector2(0, 0.5));
-  return new THREE.LatheGeometry(pts, 20);
+  return new THREE.LatheGeometry(pts, 24);
 }
 
 function makePlume(rBase: number) {
@@ -742,22 +742,22 @@ function makeJetExhaust(): ExhaustBits {
 function setExhaust(fx: ExhaustBits, thrust: number, time: number) {
   const cr = THREE.MathUtils.clamp(thrust / 0.8, 0, 1);
   const ab = THREE.MathUtils.clamp((thrust - 0.8) / 0.2, 0, 1);
-  const flicker = 1 + Math.sin(time * (28 + ab * 50)) * (0.02 + ab * 0.07);
-  const pull = 1 + Math.sin(time * (9 + ab * 14)) * (0.06 + ab * 0.12);
-  const len = (1.2 + cr * 1.15 + ab * 3.8) * flicker * pull;
-  const rad = 0.98 + cr * 0.08 + ab * 0.12;
-  fx.core.scale.set(rad * 0.88, len, rad * 0.88);
-  fx.core.position.z = len * 0.28;
-  fx.mid.scale.set(rad * 1.08, len * 0.84, rad * 1.08);
-  fx.mid.position.z = len * 0.22;
-  fx.glow.scale.set(rad * 1.05, rad * 0.7, rad * 1.05);
-  fx.glow.position.z = 0.02;
+  const flicker = 1 + Math.sin(time * (22 + ab * 36)) * (0.018 + ab * 0.05);
+  const pull = 1 + Math.sin(time * (7 + ab * 10)) * (0.05 + ab * 0.1);
+  const len = (2.8 + cr * 3.4 + ab * 8.6) * flicker * pull;
+  const rad = 0.95 + cr * 0.08 + ab * 0.14;
+  fx.core.scale.set(rad * 0.78, len, rad * 0.78);
+  fx.core.position.z = len * 0.42;
+  fx.mid.scale.set(rad * 1.12, len * 1.22, rad * 1.12);
+  fx.mid.position.z = len * 0.5;
+  fx.glow.scale.set(rad * 1.08, rad * 0.72, rad * 1.08);
+  fx.glow.position.z = 0.04;
   const coreCol = ab > 0.01 ? 0xe8f6ff : 0xffe08a;
   const midCol = ab > 0.01 ? 0x3aa0ff : 0xff2a00;
   const glowCol = ab > 0.01 ? 0x7ec8ff : 0xff5a10;
-  setFlame(fx.core.material as THREE.ShaderMaterial, coreCol, (0.34 + cr * 0.4 + ab * 0.32) * flicker);
-  setFlame(fx.mid.material as THREE.ShaderMaterial, midCol, (0.2 + cr * 0.28 + ab * 0.3) * flicker);
-  setFlame(fx.glow.material as THREE.ShaderMaterial, glowCol, 0.24 + cr * 0.22 + ab * 0.28);
+  setFlame(fx.core.material as THREE.ShaderMaterial, coreCol, (0.3 + cr * 0.38 + ab * 0.28) * flicker);
+  setFlame(fx.mid.material as THREE.ShaderMaterial, midCol, (0.16 + cr * 0.2 + ab * 0.26) * flicker);
+  setFlame(fx.glow.material as THREE.ShaderMaterial, glowCol, 0.22 + cr * 0.2 + ab * 0.26);
   fx.light.color.setHex(ab > 0.15 ? 0x66c8ff : 0xff4a12);
   fx.light.intensity = cr * 3.4 + ab * 16;
   fx.light.distance = 7 + ab * 16;
@@ -767,9 +767,9 @@ function setExhaust(fx: ExhaustBits, thrust: number, time: number) {
     const on = ab > 0.1;
     d.visible = on;
     if (!on) continue;
-    d.position.z = 0.28 + i * (0.32 + ab * 0.28) * flicker;
-    d.scale.set(rad * (0.7 - i * 0.12), rad * 0.38, rad * (0.7 - i * 0.12));
-    setFlame(d.material as THREE.ShaderMaterial, 0xffe6b0, (0.14 + ab * 0.32) * (1 - i * 0.22));
+    d.position.z = 0.45 + i * (0.55 + ab * 0.42) * flicker;
+    d.scale.set(rad * (0.62 - i * 0.1), rad * 0.32, rad * (0.62 - i * 0.1));
+    setFlame(d.material as THREE.ShaderMaterial, 0xffe6b0, (0.1 + ab * 0.26) * (1 - i * 0.22));
   }
 }
 
@@ -807,16 +807,27 @@ const _upTmp = new THREE.Vector3(0, 1, 0);
 const _tipL = new THREE.Vector3();
 const _tipR = new THREE.Vector3();
 
-function updateContrail(tr: Contrail, tip: THREE.Vector3, emit: boolean, width0 = 0.22, fade0 = 0.38, vertical = false) {
-  if (emit) {
-    if (!tr.hist.length || tr.hist[0]!.distanceToSquared(tip) > 1.6) {
-      tr.hist.unshift(tip.clone());
-      if (tr.hist.length > tr.n) tr.hist.pop();
-    } else {
-      tr.hist[0]!.copy(tip);
+function updateContrail(
+  tr: Contrail,
+  tip: THREE.Vector3,
+  emit: boolean,
+  width0 = 0.22,
+  fade0 = 0.38,
+  vertical = false,
+  pale = false,
+  manageHist = true,
+) {
+  if (manageHist) {
+    if (emit) {
+      if (!tr.hist.length || tr.hist[0]!.distanceToSquared(tip) > 1.6) {
+        tr.hist.unshift(tip.clone());
+        if (tr.hist.length > tr.n) tr.hist.pop();
+      } else {
+        tr.hist[0]!.copy(tip);
+      }
+    } else if (tr.hist.length > 2) {
+      tr.hist.pop();
     }
-  } else if (tr.hist.length > 2) {
-    tr.hist.pop();
   }
   const n = tr.n;
   const h = tr.hist.length;
@@ -835,8 +846,8 @@ function updateContrail(tr: Contrail, tip: THREE.Vector3, emit: boolean, width0 
       if (_trailSide.lengthSq() < 1e-6) _trailSide.set(1, 0, 0);
     }
     const a = i / (n - 1);
-    const w = width0 + a * (width0 * (vertical ? 2.4 : 4.2));
-    const fade = h < 3 ? 0 : Math.pow(1 - a, 1.05) * fade0 * Math.min(1, (h - 2) / 8);
+    const w = width0 + a * (width0 * (vertical ? 2.4 : pale ? 3.6 : 4.2));
+    const fade = h < 3 ? 0 : Math.pow(1 - a, pale ? 0.82 : 1.05) * fade0 * Math.min(1, (h - 2) / 8);
     const o = i * 6;
     tr.pos[o] = p.x - _trailSide.x * w;
     tr.pos[o + 1] = p.y - _trailSide.y * w;
@@ -845,10 +856,13 @@ function updateContrail(tr: Contrail, tip: THREE.Vector3, emit: boolean, width0 
     tr.pos[o + 4] = p.y + _trailSide.y * w;
     tr.pos[o + 5] = p.z + _trailSide.z * w;
     const c = i * 8;
+    const cr = pale ? 0.78 : vertical ? 0.88 : 0.92;
+    const cg = pale ? 0.82 : vertical ? 0.93 : 0.96;
+    const cb = pale ? 0.88 : 1;
     for (let k = 0; k < 2; k++) {
-      tr.col[c + k * 4] = vertical ? 0.88 : 0.92;
-      tr.col[c + k * 4 + 1] = vertical ? 0.93 : 0.96;
-      tr.col[c + k * 4 + 2] = 1;
+      tr.col[c + k * 4] = cr;
+      tr.col[c + k * 4 + 1] = cg;
+      tr.col[c + k * 4 + 2] = cb;
       tr.col[c + k * 4 + 3] = fade;
     }
   }
@@ -856,6 +870,32 @@ function updateContrail(tr: Contrail, tip: THREE.Vector3, emit: boolean, width0 
   (geo.getAttribute("position") as THREE.BufferAttribute).needsUpdate = true;
   (geo.getAttribute("color") as THREE.BufferAttribute).needsUpdate = true;
   geo.computeBoundingSphere();
+}
+
+const _vPath = [new THREE.Vector3(), new THREE.Vector3(), new THREE.Vector3()];
+
+function updateBodyVortex(tr: Contrail, group: THREE.Object3D, side: number, emit: boolean) {
+  const sx = 1.42 * side;
+  _vPath[0].set(sx, 0.62, -1.2).applyMatrix4(group.matrixWorld);
+  _vPath[1].set(sx * 0.22, 0.86, 1.55).applyMatrix4(group.matrixWorld);
+  _vPath[2].set(sx * 0.38, 0.42, 5.35).applyMatrix4(group.matrixWorld);
+  if (emit) {
+    if (tr.hist.length < 3) {
+      tr.hist = _vPath.map((p) => p.clone());
+    } else {
+      tr.hist[0]!.copy(_vPath[0]!);
+      tr.hist[1]!.copy(_vPath[1]!);
+      const aft = tr.hist[2]!;
+      if (aft.distanceToSquared(_vPath[2]!) > 2.4) {
+        tr.hist.splice(3, 0, aft.clone());
+        if (tr.hist.length > tr.n) tr.hist.pop();
+      }
+      aft.copy(_vPath[2]!);
+    }
+  } else if (tr.hist.length > 0) {
+    tr.hist.pop();
+  }
+  updateContrail(tr, _vPath[2]!, false, 1.35, 0.28, false, true, false);
 }
 
 function attachExhaust(hub: THREE.Object3D, _z = 0.55) {
@@ -1733,14 +1773,11 @@ export function VehicleWorld() {
           const velFwd = v.vx * v.fx + v.vy * v.fy + v.vz * v.fz;
           const velUp = v.vx * v.ux + v.vy * v.uy + v.vz * v.uz;
           const aoa = Math.atan2(-velUp, Math.max(4, velFwd));
-          const gEst = Math.abs(v.pitchRate) * Math.abs(v.speed) * 0.04 + Math.abs(v.ctrlPitch) * THREE.MathUtils.clamp(v.speed / 70, 0, 1.5);
-          const vortex = v.airborne && v.speed > 48 && (Math.abs(aoa) > 0.2 || gEst > 0.65);
-          _upTmp.set(v.ux, v.uy, v.uz);
-          _tipL.set(-0.48, 0.18, -2.6).applyMatrix4(vis.group.matrixWorld);
-          _tipR.set(0.48, 0.18, -2.6).applyMatrix4(vis.group.matrixWorld);
-          updateContrail(vis.trails[2]!, _tipL, vortex, 0.48, 0.78, true);
-          updateContrail(vis.trails[3]!, _tipR, vortex, 0.48, 0.78, true);
-          _upTmp.set(0, 1, 0);
+          const pullUp = v.ctrlPitch > 0.32;
+          const gEst = Math.max(0, v.ctrlPitch) * THREE.MathUtils.clamp(v.speed / 55, 0, 2.2) + Math.max(0, v.pitchRate) * v.speed * 0.028;
+          const vortex = v.airborne && pullUp && v.speed > 72 && (aoa > 0.18 || gEst > 1.35);
+          updateBodyVortex(vis.trails[2]!, vis.group, -1, vortex);
+          updateBodyVortex(vis.trails[3]!, vis.group, 1, vortex);
         }
       }
       if (vis.sonic) {

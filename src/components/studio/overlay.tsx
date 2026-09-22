@@ -2171,8 +2171,8 @@ function FirstPersonHud() {
   const vehHint =
     vehicleKind === "plane"
       ? vehicleAirborne
-        ? "左键拖视角 · Shift 加力 · C 减推力 · CTRL 起落架 · W 俯冲 · S 抬头 · A/D 滚转 · Q/E 偏航 · V 视角 · F 下车"
-        : "左键拖视角 · 滑行中 · Q/E 转弯 · WASD 只动翼面 · Shift 巡航/加力 · C 减推力 · CTRL 起落架 · 拉杆(S)起飞 · V 视角 · F 下车"
+        ? "左键拖视角 · Shift 加力 · C 减推力 · Q+E 减速板 · CTRL 起落架 · W 俯冲 · S 抬头 · A/D 滚转 · Q/E 偏航 · V 视角 · F 下车"
+        : "左键拖视角 · 滑行中 · Q/E 转弯 · Q+E 减速板 · WASD 只动翼面 · Shift 巡航/加力 · C 减推力 · CTRL 起落架 · 拉杆(S)起飞 · V 视角 · F 下车"
       : "左键拖视角 · W 加速 · S 刹车/倒车 · A/D 转向 · Shift 氮气 · 空格 手刹 · V 视角 · F 下车";
 
   return (
