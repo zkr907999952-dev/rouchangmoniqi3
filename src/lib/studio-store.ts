@@ -421,6 +421,7 @@ type StudioState = StudioParams & {
   vehDriftHeld: boolean;
   vehYawHeld: number;
   vehThrustSlider: number | null;
+  vehSpawnNonce: number;
   setParam: <K extends keyof StudioParams>(key: K, value: StudioParams[K]) => void;
   applyPreset: (id: PresetId) => void;
   setInteractMode: (mode: InteractMode) => void;
@@ -482,6 +483,7 @@ type StudioState = StudioParams & {
   setVehDriftHeld: (v: boolean) => void;
   setVehYawHeld: (v: number) => void;
   setVehThrustSlider: (v: number | null) => void;
+  bumpVehSpawn: () => void;
   toggleVehicleCam: () => void;
   setVehicleCam: (v: VehicleCam) => void;
   shake: () => void;
@@ -572,6 +574,7 @@ export const useStudio = create<StudioState>((set) => ({
   vehDriftHeld: false,
   vehYawHeld: 0,
   vehThrustSlider: null,
+  vehSpawnNonce: 0,
   setParam: (key, value) =>
     set((s) => ({
       ...s,
@@ -904,6 +907,7 @@ export const useStudio = create<StudioState>((set) => ({
   setVehDriftHeld: (vehDriftHeld) => set({ vehDriftHeld }),
   setVehYawHeld: (vehYawHeld) => set({ vehYawHeld: Math.max(-1, Math.min(1, vehYawHeld)) }),
   setVehThrustSlider: (vehThrustSlider) => set({ vehThrustSlider }),
+  bumpVehSpawn: () => set((s) => ({ vehSpawnNonce: s.vehSpawnNonce + 1 })),
   toggleVehicleCam: () => set((s) => ({ vehicleCam: s.vehicleCam === "first" ? "third" : "first" })),
   setVehicleCam: (vehicleCam) => set({ vehicleCam }),
   shake: () => set((s) => ({ shakeNonce: s.shakeNonce + 1 })),

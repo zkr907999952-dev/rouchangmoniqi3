@@ -12,6 +12,7 @@ export type FpActions = {
   qHeld: boolean;
   eHeld: boolean;
   cHeld: boolean;
+  ctrlHeld: boolean;
   fHeld: boolean;
 };
 
@@ -31,6 +32,8 @@ const GAME_CODES = new Set([
   "KeyQ",
   "ShiftLeft",
   "ShiftRight",
+  "ControlLeft",
+  "ControlRight",
 ]);
 
 function radialDeadzone(x: number, y: number, dz = 0.15) {
@@ -261,6 +264,7 @@ export class FpInput {
       qHeld: held("KeyQ"),
       eHeld: held("KeyE"),
       cHeld: held("KeyC"),
+      ctrlHeld: held("ControlLeft") || held("ControlRight"),
       fHeld,
     };
   }

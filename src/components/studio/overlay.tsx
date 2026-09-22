@@ -41,6 +41,8 @@ import {
   Gauge,
   ChevronsLeft,
   ChevronsRight,
+  Car,
+  Plane,
 } from "lucide-react";
 import * as Slider from "@radix-ui/react-slider";
 import { cn } from "@/lib/utils";
@@ -49,7 +51,7 @@ import { ANIMATIONS, EXPRESSIONS, HAND_GESTURES, POSES } from "@/lib/softbody/so
 import { STICK_SPRINT } from "@/lib/fp-control";
 import { CITY_BAKE_ID, CITY_MAP_H_MAX, CITY_MAP_H_MIN, bakeCityCollision, citySurfaceAt, getCityRuntime, getCitySpawn } from "@/lib/world-map";
 import { loadCityModel } from "@/lib/load-models";
-import { PLANE_CRUISE, PLANE_TAKEOFF_KMH } from "@/lib/vehicle-sim";
+import { PLANE_CRUISE, PLANE_TAKEOFF_KMH, spawnVehicleInFront } from "@/lib/vehicle-sim";
 import { fpLive } from "@/lib/fp-pose";
 
 async function ensureCityForMap() {
@@ -131,6 +133,7 @@ export function Overlay() {
   const [open, setOpen] = useState(false);
   const [panel, setPanel] = useState<PanelId>("settings");
   const [camOpen, setCamOpen] = useState(false);
+  const [vehMenuOpen, setVehMenuOpen] = useState(false);
   const preset = useStudio((s) => s.preset);
   const breathing = useStudio((s) => s.breathing);
   const slowMo = useStudio((s) => s.slowMo);
@@ -353,12 +356,17 @@ export function Overlay() {
         </div>
       ) : null}
 
-      <button
+      <div
+        className="pointer-events-auto absolute top-4 left-4 z-20 flex items-start gap-2 sm:top-6 sm:left-6"
+        style={{ marginTop: "env(safe-area-inset-top)" }}
+      >
+        <button
           type="button"
           aria-label="打开地图"
           onClick={() => {
             const next = !cityMapOpen;
             if (next) {
+              setVehMenuOpen(false);
               void (async () => {
                 const ok = await ensureCityForMap();
                 if (!ok) return;
@@ -371,13 +379,69 @@ export function Overlay() {
             }
           }}
           className={cn(
-            "pointer-events-auto absolute top-4 left-4 z-20 inline-flex h-11 w-11 items-center justify-center rounded-full border sm:top-6 sm:left-6",
+            "inline-flex h-11 w-11 items-center justify-center rounded-full border",
             cityMapOpen ? "border-accent bg-accent text-accent-fg" : "border-border bg-surface text-fg",
           )}
-          style={{ marginTop: "env(safe-area-inset-top)" }}
         >
           <Map className="size-4" />
         </button>
+        <div className="relative">
+          <button
+            type="button"
+            aria-label="载具菜单"
+            onClick={() => {
+              setVehMenuOpen((v) => !v);
+              setCityMapOpen(false);
+            }}
+            className={cn(
+              "inline-flex h-11 w-11 items-center justify-center rounded-full border",
+              vehMenuOpen ? "border-accent bg-accent text-accent-fg" : "border-border bg-surface text-fg",
+            )}
+          >
+            <Car className="size-4" />
+          </button>
+          {vehMenuOpen ? (
+            <div className="absolute top-12 left-0 z-30 w-44 overflow-hidden rounded-xl border border-border bg-surface/95 p-1.5 shadow-lg backdrop-blur">
+              <p className="px-2 py-1 text-[10px] tracking-wide text-muted">在面前生成</p>
+              {(
+                [
+                  { kind: "car" as const, label: "兰博基尼", Icon: Car },
+                  { kind: "plane" as const, label: "F-22 战机", Icon: Plane },
+                ] as const
+              ).map((item) => (
+                <button
+                  key={item.kind}
+                  type="button"
+                  className="flex h-10 w-full items-center gap-2 rounded-lg px-2 text-left text-sm text-fg hover:bg-surface-2"
+                  onClick={() => {
+                    void (async () => {
+                      const ok = await ensureCityForMap();
+                      if (!ok) return;
+                      const st = useStudio.getState();
+                      if (st.worldMap !== "city") {
+                        const sp = getCitySpawn();
+                        st.setWorldMap("city");
+                        st.warpFp(sp.x, sp.y + 0.2, sp.z);
+                        window.setTimeout(() => {
+                          spawnVehicleInFront(item.kind);
+                          useStudio.getState().bumpVehSpawn();
+                        }, 700);
+                      } else {
+                        spawnVehicleInFront(item.kind);
+                        st.bumpVehSpawn();
+                      }
+                      setVehMenuOpen(false);
+                    })();
+                  }}
+                >
+                  <item.Icon className="size-4" />
+                  {item.label}
+                </button>
+              ))}
+            </div>
+          ) : null}
+        </div>
+      </div>
       <CityMapPanel />
 
       <div className="pointer-events-auto absolute top-4 right-4 z-20 flex gap-2 sm:top-6 sm:right-6">
@@ -2107,8 +2171,8 @@ function FirstPersonHud() {
   const vehHint =
     vehicleKind === "plane"
       ? vehicleAirborne
-        ? "左键拖视角 · Shift 加力 · C 减推力 · W 俯冲 · S 抬头 · A/D 滚转 · Q/E 偏航 · V 视角 · F 下车"
-        : "左键拖视角 · 滑行中 · Q/E 转弯 · WASD 只动翼面 · Shift 巡航/加力 · C 减推力 · 拉杆(S)起飞 · V 视角 · F 下车"
+        ? "左键拖视角 · Shift 加力 · C 减推力 · CTRL 起落架 · W 俯冲 · S 抬头 · A/D 滚转 · Q/E 偏航 · V 视角 · F 下车"
+        : "左键拖视角 · 滑行中 · Q/E 转弯 · WASD 只动翼面 · Shift 巡航/加力 · C 减推力 · CTRL 起落架 · 拉杆(S)起飞 · V 视角 · F 下车"
       : "左键拖视角 · W 加速 · S 刹车/倒车 · A/D 转向 · Shift 氮气 · 空格 手刹 · V 视角 · F 下车";
 
   return (

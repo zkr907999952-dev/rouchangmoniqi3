@@ -31,6 +31,8 @@ type PivotKind =
   | "nozzleRT"
   | "nozzleRB"
   | "rudder"
+  | "rudderL"
+  | "rudderR"
   | "flap";
 type PivotBind = {
   obj: THREE.Object3D;
@@ -63,6 +65,7 @@ type NozzleEngine = {
   bot: PivotBind;
   aim: THREE.Group;
   exitZ: number;
+  throatZ: number;
 };
 
 type SonicFx = {
@@ -103,6 +106,8 @@ const _eul = new THREE.Euler();
 const _q = new THREE.Quaternion();
 const _p = new THREE.Vector3();
 const _scale = new THREE.Vector3();
+const _dir = new THREE.Vector3();
+const _upAxis = new THREE.Vector3(0, 1, 0);
 
 function findNamed(root: THREE.Object3D, re: RegExp) {
   const out: THREE.Object3D[] = [];
@@ -357,11 +362,17 @@ function mountHinge(
   max: number,
   kind: PivotKind,
   extras: THREE.Object3D[] = [],
+  parent: THREE.Object3D = wrap,
 ): PivotBind {
   const hub = new THREE.Group();
   hub.name = `Hinge_${kind}_${obj.name}`;
-  wrap.add(hub);
-  hub.position.set(hinge.x, hinge.y, hinge.z);
+  parent.add(hub);
+  _p.set(hinge.x, hinge.y, hinge.z);
+  if (parent !== wrap) {
+    wrap.localToWorld(_p);
+    parent.worldToLocal(_p);
+  }
+  hub.position.copy(_p);
   hub.quaternion.identity();
   hub.scale.set(1, 1, 1);
   wrap.updateMatrixWorld(true);
@@ -377,6 +388,33 @@ function mountHinge(
   hub.userData.max = max;
   hub.userData.kind = kind;
   return { obj: hub, rest: hub.quaternion.clone(), axis, sign, max, kind };
+}
+
+function mountCantedHinge(
+  wrap: THREE.Group,
+  obj: THREE.Object3D,
+  hinge: { x: number; y: number; z: number },
+  tip: { x: number; y: number; z: number },
+  sign: number,
+  max: number,
+  kind: PivotKind,
+): PivotBind {
+  const hub = new THREE.Group();
+  hub.name = `Hinge_${kind}_${obj.name}`;
+  wrap.add(hub);
+  hub.position.set(hinge.x, hinge.y, hinge.z);
+  _dir.set(tip.x - hinge.x, tip.y - hinge.y, tip.z - hinge.z);
+  if (_dir.lengthSq() < 1e-6) _dir.set(0, 1, 0);
+  else _dir.normalize();
+  hub.quaternion.setFromUnitVectors(_upAxis, _dir);
+  wrap.updateMatrixWorld(true);
+  wrap.attach(obj);
+  hub.attach(obj);
+  hub.userData.axis = "y";
+  hub.userData.sign = sign;
+  hub.userData.max = max;
+  hub.userData.kind = kind;
+  return { obj: hub, rest: hub.quaternion.clone(), axis: "y", sign, max, kind };
 }
 
 function applyPivot(b: PivotBind, t: number) {
@@ -416,7 +454,7 @@ function splitTriangles(
     }
     if (pred(sx / 3, sy / 3, sz / 3)) keep.push(i, i + 1, i + 2);
   }
-  if (keep.length < 24) return null;
+  if (keep.length < 9) return null;
   const out = new THREE.BufferGeometry();
   for (const name of Object.keys(src.attributes)) {
     const attr = src.getAttribute(name) as THREE.BufferAttribute;
@@ -454,6 +492,44 @@ function medianTriY(meshes: THREE.Mesh[], wrap: THREE.Object3D) {
   if (!ys.length) return 0;
   ys.sort((a, b) => a - b);
   return ys[Math.floor(ys.length * 0.5)]!;
+}
+
+function bakeToWrap(mesh: THREE.Mesh, wrap: THREE.Object3D) {
+  const src = mesh.geometry.index ? mesh.geometry.toNonIndexed() : mesh.geometry.clone();
+  const pos = src.getAttribute("position") as THREE.BufferAttribute;
+  mesh.updateMatrixWorld(true);
+  wrap.updateMatrixWorld(true);
+  for (let i = 0; i < pos.count; i++) {
+    _p.fromBufferAttribute(pos, i);
+    mesh.localToWorld(_p);
+    wrap.worldToLocal(_p);
+    pos.setXYZ(i, _p.x, _p.y, _p.z);
+  }
+  pos.needsUpdate = true;
+  src.computeVertexNormals();
+  src.computeBoundingBox();
+  mesh.geometry = src;
+  mesh.position.set(0, 0, 0);
+  mesh.quaternion.identity();
+  mesh.scale.set(1, 1, 1);
+}
+
+function mirrorMeshY(mesh: THREE.Mesh, cy: number, wrap: THREE.Group, tag: string) {
+  bakeToWrap(mesh, wrap);
+  const geo = mesh.geometry.clone();
+  const pos = geo.getAttribute("position") as THREE.BufferAttribute;
+  for (let i = 0; i < pos.count; i++) {
+    pos.setY(i, 2 * cy - pos.getY(i));
+  }
+  pos.needsUpdate = true;
+  geo.computeVertexNormals();
+  geo.computeBoundingBox();
+  const half = new THREE.Mesh(geo, mesh.material);
+  half.castShadow = false;
+  half.receiveShadow = false;
+  half.name = `${mesh.name}_${tag}`;
+  wrap.add(half);
+  return half;
 }
 
 function makeHalfMesh(mesh: THREE.Mesh, geo: THREE.BufferGeometry, tag: string) {
@@ -671,18 +747,18 @@ function setExhaust(fx: ExhaustBits, thrust: number, time: number) {
   const len = (1.2 + cr * 1.15 + ab * 3.8) * flicker * pull;
   const rad = 0.98 + cr * 0.08 + ab * 0.12;
   fx.core.scale.set(rad * 0.88, len, rad * 0.88);
-  fx.core.position.z = len * 0.5;
+  fx.core.position.z = len * 0.28;
   fx.mid.scale.set(rad * 1.08, len * 0.84, rad * 1.08);
-  fx.mid.position.z = len * 0.42;
+  fx.mid.position.z = len * 0.22;
   fx.glow.scale.set(rad * 1.05, rad * 0.7, rad * 1.05);
-  fx.glow.position.z = 0.04;
-  const coreCol = ab > 0.01 ? 0xfff1c2 : 0xe8fbff;
-  const midCol = ab > 0.01 ? 0xff6a12 : 0x4ec8ff;
-  const glowCol = ab > 0.01 ? 0xffb24a : 0x8ad8ff;
+  fx.glow.position.z = 0.02;
+  const coreCol = ab > 0.01 ? 0xe8f6ff : 0xffe08a;
+  const midCol = ab > 0.01 ? 0x3aa0ff : 0xff2a00;
+  const glowCol = ab > 0.01 ? 0x7ec8ff : 0xff5a10;
   setFlame(fx.core.material as THREE.ShaderMaterial, coreCol, (0.34 + cr * 0.4 + ab * 0.32) * flicker);
-  setFlame(fx.mid.material as THREE.ShaderMaterial, midCol, (0.16 + cr * 0.22 + ab * 0.28) * flicker);
-  setFlame(fx.glow.material as THREE.ShaderMaterial, glowCol, 0.22 + cr * 0.2 + ab * 0.28);
-  fx.light.color.setHex(ab > 0.15 ? 0xff9a32 : 0x66e0ff);
+  setFlame(fx.mid.material as THREE.ShaderMaterial, midCol, (0.2 + cr * 0.28 + ab * 0.3) * flicker);
+  setFlame(fx.glow.material as THREE.ShaderMaterial, glowCol, 0.24 + cr * 0.22 + ab * 0.28);
+  fx.light.color.setHex(ab > 0.15 ? 0x66c8ff : 0xff4a12);
   fx.light.intensity = cr * 3.4 + ab * 16;
   fx.light.distance = 7 + ab * 16;
   fx.group.visible = thrust > 0.02;
@@ -784,7 +860,7 @@ function updateContrail(tr: Contrail, tip: THREE.Vector3, emit: boolean, width0 
 
 function attachExhaust(hub: THREE.Object3D, _z = 0.55) {
   const fx = makeJetExhaust();
-  fx.group.position.set(0, 0, 0.06);
+  fx.group.position.set(0, 0.02, -0.28);
   hub.add(fx.group);
   return fx;
 }
@@ -1081,117 +1157,133 @@ function preparePlane(src: THREE.Group) {
     const a = worldAabb(obj);
     surfaces.push(mountHinge(wrap, obj, { x: a.cx, y: a.cy, z: a.minZ + 0.04 }, "x", 1, 0.42, "aileronR"));
   }
-  for (const obj of findNamed(wrap, /^elevator_l/)) {
-    const a = worldAabb(obj);
-    surfaces.push(mountHinge(wrap, obj, { x: a.cx, y: a.cy, z: a.minZ + 0.06 }, "x", 1, 0.38, "elevator"));
-  }
-  const nozzleSrc = firstNamed(wrap, /^elevator_r/);
-  const nozzleEngines: NozzleEngine[] = [];
-  if (nozzleSrc) {
-    wrap.updateMatrixWorld(true);
-    const meshes: THREE.Mesh[] = [];
-    nozzleSrc.traverse((o) => {
+  const elevMeshes: THREE.Mesh[] = [];
+  const upperNoz: THREE.Mesh[] = [];
+  const lowerNoz: THREE.Mesh[] = [];
+  const el = firstNamed(wrap, /^elevator_l/);
+  if (el) {
+    el.updateMatrixWorld(true);
+    el.traverse((o) => {
       const m = o as THREE.Mesh;
-      if (m.isMesh) meshes.push(m);
+      if (!m.isMesh) return;
+      const a = worldAabb(m);
+      const xSpan = a.maxX - a.minX;
+      const zSpan = a.maxZ - a.minZ;
+      if (zSpan < 2.2 && xSpan < 3.4) upperNoz.push(m);
+      else elevMeshes.push(m);
     });
-    const engines: { tag: "L" | "R"; made: THREE.Mesh[] }[] = [
-      { tag: "L", made: [] },
-      { tag: "R", made: [] },
-    ];
-    for (const tag of ["L", "R"] as const) {
-      const pred = (x: number, _y: number, _z: number) => (tag === "L" ? x < -0.03 : x > 0.03);
-      for (const mesh of meshes) {
-        const geo = splitTriangles(mesh, wrap, pred);
+  }
+  const er = firstNamed(wrap, /^elevator_r/);
+  if (er) {
+    er.updateMatrixWorld(true);
+    er.traverse((o) => {
+      const m = o as THREE.Mesh;
+      if (m.isMesh) lowerNoz.push(m);
+    });
+  }
+  for (const mesh of elevMeshes) {
+    const a = worldAabb(mesh);
+    if (a.minX < -0.35 && a.maxX > 0.35) {
+      for (const tag of ["L", "R"] as const) {
+        const geo = splitTriangles(mesh, wrap, (x) => (tag === "L" ? x < 0 : x > 0));
         if (!geo) continue;
-        const half = makeHalfMesh(mesh, geo, tag);
-        wrap.attach(half);
-        engines.find((e) => e.tag === tag)!.made.push(half);
+        const h = makeHalfMesh(mesh, geo, `elev${tag}`);
+        wrap.attach(h);
+        const aa = worldAabb(h);
+        surfaces.push(mountHinge(wrap, h, { x: aa.cx, y: aa.cy, z: aa.minZ + 0.06 }, "x", 1, 0.38, "elevator"));
       }
-    }
-    if (engines[0]!.made.length && engines[1]!.made.length) {
-      nozzleSrc.visible = false;
-      for (const mesh of meshes) mesh.visible = false;
-      for (const eng of engines) {
-        _box.makeEmpty();
-        for (const m of eng.made) _box.expandByObject(m);
-        const cx = (_box.min.x + _box.max.x) * 0.5;
-        const cy = (_box.min.y + _box.max.y) * 0.5;
-        const cz = (_box.min.z + _box.max.z) * 0.5;
-        const splitY = medianTriY(eng.made, wrap);
-        const topMade: THREE.Mesh[] = [];
-        const botMade: THREE.Mesh[] = [];
-        for (const mesh of eng.made) {
-          const topGeo = splitTriangles(mesh, wrap, (_x, y) => y >= splitY);
-          const botGeo = splitTriangles(mesh, wrap, (_x, y) => y < splitY);
-          if (topGeo) {
-            const h = makeHalfMesh(mesh, topGeo, `${eng.tag}T`);
-            wrap.attach(h);
-            topMade.push(h);
-          }
-          if (botGeo) {
-            const h = makeHalfMesh(mesh, botGeo, `${eng.tag}B`);
-            wrap.attach(h);
-            botMade.push(h);
-          }
-          wrap.remove(mesh);
-        }
-        const aim = new THREE.Group();
-        aim.name = `NozzleAim_${eng.tag}`;
-        wrap.add(aim);
-        if (topMade.length && botMade.length) {
-          _box.makeEmpty();
-          for (const m of topMade) _box.expandByObject(m);
-          const top = mountHinge(
-            wrap,
-            topMade[0]!,
-            { x: cx, y: splitY, z: cz },
-            "x",
-            1,
-            0.7,
-            eng.tag === "L" ? "nozzleLT" : "nozzleRT",
-            topMade.slice(1),
-          );
-          const bot = mountHinge(
-            wrap,
-            botMade[0]!,
-            { x: cx, y: splitY, z: cz },
-            "x",
-            1,
-            0.7,
-            eng.tag === "L" ? "nozzleLB" : "nozzleRB",
-            botMade.slice(1),
-          );
-          wrap.updateMatrixWorld(true);
-          _box.makeEmpty();
-          for (const m of topMade) _box.expandByObject(m);
-          for (const m of botMade) _box.expandByObject(m);
-          const exitZ = _box.max.z;
-          const throatY = (top.obj.position.y + bot.obj.position.y) * 0.5;
-          aim.position.set((top.obj.position.x + bot.obj.position.x) * 0.5, throatY, exitZ);
-          surfaces.push(top, bot);
-          nozzleEngines.push({ top, bot, aim, exitZ });
-        } else {
-          const keep = topMade.length ? topMade : botMade.length ? botMade : eng.made;
-          const main = keep[0]!;
-          const bind = mountHinge(wrap, main, { x: cx, y: cy, z: cz }, "x", 1, 0.48, eng.tag === "L" ? "nozzleL" : "nozzleR", keep.slice(1));
-          wrap.updateMatrixWorld(true);
-          _box.makeEmpty();
-          for (const m of keep) _box.expandByObject(m);
-          const exitZ = _box.max.z;
-          aim.position.set(cx, bind.obj.position.y, exitZ);
-          surfaces.push(bind);
-          nozzleEngines.push({ top: bind, bot: bind, aim, exitZ });
-        }
-      }
+      mesh.visible = false;
     } else {
-      for (const e of engines) for (const m of e.made) wrap.remove(m);
-      const a = worldAabb(nozzleSrc);
-      surfaces.push(mountHinge(wrap, nozzleSrc, { x: a.cx, y: a.cy, z: a.minZ + 0.04 }, "x", 1, 0.48, "nozzle"));
+      surfaces.push(mountHinge(wrap, mesh, { x: a.cx, y: a.cy, z: a.minZ + 0.06 }, "x", 1, 0.38, "elevator"));
+    }
+  }
+  const splitLR = (meshes: THREE.Mesh[], prefix: string) => {
+    const out: { L: THREE.Mesh[]; R: THREE.Mesh[] } = { L: [], R: [] };
+    for (const mesh of meshes) {
+      for (const tag of ["L", "R"] as const) {
+        const geo = splitTriangles(mesh, wrap, (x) => (tag === "L" ? x < -0.02 : x > 0.02));
+        if (!geo) continue;
+        const h = makeHalfMesh(mesh, geo, `${prefix}${tag}`);
+        wrap.attach(h);
+        out[tag].push(h);
+      }
+      mesh.visible = false;
+    }
+    return out;
+  };
+  const up = splitLR(upperNoz, "NU");
+  const lo = splitLR(lowerNoz, "NL");
+  const nozzleEngines: NozzleEngine[] = [];
+  for (const tag of ["L", "R"] as const) {
+    const tops = up[tag];
+    const bots = lo[tag];
+    if (!tops.length && !bots.length) continue;
+    _box.makeEmpty();
+    for (const m of tops) _box.expandByObject(m);
+    for (const m of bots) _box.expandByObject(m);
+    const cx = (_box.min.x + _box.max.x) * 0.5;
+    const midY = (_box.min.y + _box.max.y) * 0.5;
+    const z0 = _box.min.z;
+    const z1 = _box.max.z;
+    const hingeZ = z0 + (z1 - z0) * 0.08;
+    const throatZ = z0 + (z1 - z0) * 0.28;
+    const exitZ = z1;
+    let topBind: PivotBind | null = null;
+    let botBind: PivotBind | null = null;
+    if (tops.length) {
+      _box.makeEmpty();
+      for (const m of tops) _box.expandByObject(m);
+      topBind = mountHinge(
+        wrap,
+        tops[0]!,
+        { x: cx, y: _box.min.y + 0.02, z: hingeZ },
+        "x",
+        1,
+        0.72,
+        tag === "L" ? "nozzleLT" : "nozzleRT",
+        tops.slice(1),
+      );
+    }
+    if (bots.length) {
+      _box.makeEmpty();
+      for (const m of bots) _box.expandByObject(m);
+      botBind = mountHinge(
+        wrap,
+        bots[0]!,
+        { x: cx, y: _box.max.y - 0.02, z: hingeZ },
+        "x",
+        1,
+        0.72,
+        tag === "L" ? "nozzleLB" : "nozzleRB",
+        bots.slice(1),
+      );
+    }
+    const top = topBind ?? botBind!;
+    const bot = botBind ?? topBind!;
+    const aim = new THREE.Group();
+    aim.name = `NozzleAim_${tag}`;
+    wrap.add(aim);
+    aim.position.set(cx, midY, throatZ);
+    if (topBind) surfaces.push(topBind);
+    if (botBind && botBind !== topBind) surfaces.push(botBind);
+    nozzleEngines.push({ top, bot, aim, exitZ, throatZ });
+  }
+  if (!nozzleEngines.length) {
+    const src = er ?? el;
+    if (src) {
+      const a = worldAabb(src);
+      surfaces.push(mountHinge(wrap, src, { x: a.cx, y: a.cy, z: a.minZ + 0.04 }, "x", 1, 0.48, "nozzle"));
     }
   }
   for (const obj of findNamed(wrap, /^rudder/)) {
     const a = worldAabb(obj);
-    surfaces.push(mountHinge(wrap, obj, { x: a.cx, y: a.minY + 0.15, z: a.minZ + 0.06 }, "y", 1, 0.46, "rudder"));
+    const left = a.cx < 0;
+    const inX = left ? a.maxX - 0.04 : a.minX + 0.04;
+    const outX = left ? a.minX + 0.04 : a.maxX - 0.04;
+    const hingeZ = a.minZ + (a.maxZ - a.minZ) * 0.14;
+    const hinge = { x: inX, y: a.minY + 0.14, z: hingeZ };
+    const tip = { x: outX, y: a.maxY - 0.05, z: hingeZ + 0.1 };
+    surfaces.push(mountCantedHinge(wrap, obj, hinge, tip, 1, 0.48, left ? "rudderL" : "rudderR"));
   }
   for (const obj of findNamed(wrap, /^wingflap_/)) {
     const a = worldAabb(obj);
@@ -1300,8 +1392,10 @@ function layoutFromWheels(wheels: WheelBind[], kind: "car" | "plane") {
 export function VehicleWorld() {
   const world = useStudio((s) => s.worldMap);
   const showCol = useStudio((s) => s.showCollision);
+  const spawnN = useStudio((s) => s.vehSpawnNonce);
   const [visuals, setVisuals] = useState<Visual[]>([]);
   const colRef = useRef<THREE.Group>(null);
+  const modelsRef = useRef<Awaited<ReturnType<typeof loadVehicleModels>> | null>(null);
 
   useEffect(() => {
     if (world !== "city") {
@@ -1316,6 +1410,7 @@ export function VehicleWorld() {
       try {
         const models = await loadVehicleModels();
         if (cancelled) return;
+        modelsRef.current = models;
         let n = 0;
         while (!getCityRuntime().ready && n++ < 80) await new Promise((r) => setTimeout(r, 50));
         if (cancelled || !getCityRuntime().ready) return;
@@ -1409,6 +1504,94 @@ export function VehicleWorld() {
     };
   }, [world]);
 
+  useEffect(() => {
+    if (world !== "city" || !spawnN) return;
+    let cancelled = false;
+    (async () => {
+      const models = modelsRef.current ?? (await loadVehicleModels());
+      if (cancelled) return;
+      modelsRef.current = models;
+      const missing = getVehicles().filter((v) => !visuals.some((o) => o.id === v.id));
+      if (!missing.length) return;
+      const carPrep = missing.some((v) => v.kind === "car") ? prepareCar(models.car) : null;
+      const add: Visual[] = [];
+      for (const v of missing) {
+        if (v.kind === "car" && carPrep) {
+          const wrap = carPrep.wrap.clone(true);
+          const wheels = collectHubs(wrap);
+          const lay = layoutFromWheels(wheels.length ? wheels : carPrep.wheels, "car");
+          applyWheelLayout(v.id, lay.wheels, lay.halfL, lay.halfW, lay.height, lay.wheelR);
+          const cock = (wrap.userData.cockpit as { x: number; y: number; z: number } | undefined) ?? carPrep.cockpit;
+          applyCockpit(v.id, cock, carPrep.originY);
+          const doors = findNamed(wrap, /^Scissor_[LR]$/).map((obj) => ({
+            obj,
+            rest: obj.quaternion.clone(),
+            axis: (obj.userData.axis as "x" | "y" | "z") || "z",
+            sign: typeof obj.userData.sign === "number" ? obj.userData.sign : /_L$/.test(obj.name) ? -1 : 1,
+            max: typeof obj.userData.max === "number" ? obj.userData.max : 1.35,
+            kind: "door" as const,
+          }));
+          const steer = firstNamed(wrap, /^Steering_wheel$/);
+          if (steer && !steer.userData.steerAxis) steer.userData.steerAxis = localThinAxis(steer);
+          const glow: THREE.PointLight[] = [];
+          wrap.traverse((o) => {
+            const l = o as THREE.PointLight;
+            if (l.isPointLight) glow.push(l);
+          });
+          add.push({
+            id: v.id,
+            kind: "car",
+            group: wrap,
+            wheels: wheels.length ? wheels : carPrep.wheels,
+            doors: doors.length ? doors : carPrep.doors,
+            gears: [],
+            gearDoors: [],
+            surfaces: [],
+            steerWheel: steer ? { obj: steer, rest: steer.quaternion.clone() } : null,
+            glow,
+            flapT: 0,
+            exhausts: [],
+            trails: [],
+            throttle: null,
+            wingTipL: new THREE.Vector3(),
+            wingTipR: new THREE.Vector3(),
+            nozzleEngines: [],
+            sonic: null,
+          });
+        } else if (v.kind === "plane") {
+          const prep = preparePlane(models.plane);
+          const lay = layoutFromWheels(prep.wheels, "plane");
+          applyWheelLayout(v.id, lay.wheels, lay.halfL, lay.halfW, lay.height, lay.wheelR);
+          applyCockpit(v.id, prep.cockpit, prep.originY);
+          add.push({
+            id: v.id,
+            kind: "plane",
+            group: prep.wrap,
+            wheels: prep.wheels,
+            doors: prep.doors,
+            gears: prep.gears,
+            gearDoors: prep.gearDoors,
+            surfaces: prep.surfaces,
+            steerWheel: prep.steer ? { obj: prep.steer, rest: prep.steer.quaternion.clone() } : null,
+            glow: prep.glow,
+            flapT: 0,
+            exhausts: prep.exhausts,
+            trails: [makeContrail(), makeContrail(), makeContrail(), makeContrail()],
+            throttle: prep.throttle ? { obj: prep.throttle, rest: prep.throttle.quaternion.clone() } : null,
+            wingTipL: prep.wingTipL.clone(),
+            wingTipR: prep.wingTipR.clone(),
+            nozzleEngines: prep.nozzleEngines,
+            sonic: prep.sonic,
+          });
+        }
+      }
+      if (!cancelled && add.length) setVisuals((prev) => [...prev, ...add]);
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [world, spawnN, visuals]);
+
   useFrame((state, dt) => {
     if (world !== "city") return;
     const d = Math.min(0.05, Math.max(0.001, dt));
@@ -1449,10 +1632,11 @@ export function VehicleWorld() {
       if (v.kind === "plane") {
         const pitchC = THREE.MathUtils.clamp(v.ctrlPitch, -1, 1);
         const rollC = THREE.MathUtils.clamp(v.ctrlRoll, -1, 1);
+        const gap = petalGap(v.thrust) * 0.35;
+        const vecL = -pitchC * 0.95 - rollC * 0.92;
+        const vecR = -pitchC * 0.95 + rollC * 0.92;
         const yawC = THREE.MathUtils.clamp(v.ctrlYaw || v.steerAngle * 1.6, -1, 1);
-        const gap = petalGap(v.thrust) * 0.45;
-        const vecL = -pitchC * 0.95 - rollC * 0.85;
-        const vecR = -pitchC * 0.95 + rollC * 0.85;
+        const brake = THREE.MathUtils.clamp(v.speedBrake, 0, 1);
         for (const s of vis.surfaces) {
           let t = 0;
           switch (s.kind) {
@@ -1487,7 +1671,13 @@ export function VehicleWorld() {
               t = vecR + gap;
               break;
             case "rudder":
-              t = -yawC;
+              t = yawC;
+              break;
+            case "rudderL":
+              t = yawC + brake * 0.72;
+              break;
+            case "rudderR":
+              t = yawC - brake * 0.72;
               break;
             case "flap": {
               const want = !v.airborne && (Math.abs(v.speed) > 6.5 || v.thrust > 0.2) ? 0.88 : 0;
@@ -1505,7 +1695,7 @@ export function VehicleWorld() {
           const ty = eng.top.obj.position.y;
           const bx = eng.bot.obj.position.x;
           const by = eng.bot.obj.position.y;
-          eng.aim.position.set((tx + bx) * 0.5, (ty + by) * 0.5, eng.exitZ);
+          eng.aim.position.set((tx + bx) * 0.5, (ty + by) * 0.5, eng.throatZ);
           eng.aim.quaternion.copy(eng.top.obj.quaternion).slerp(eng.bot.obj.quaternion, 0.5);
         }
       }

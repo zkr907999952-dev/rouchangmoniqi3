@@ -432,8 +432,35 @@ export function citySurfaceAt(x: number, z: number) {
   return 0;
 }
 
-export function cityGroundY(x: number, z: number) {
-  return citySurfaceAt(x, z);
+function isSeaName(name: string) {
+  return /\bsea\b|ocean|seawater/i.test(name);
+}
+
+/** Ground Y that ignores sea/ocean meshes so vehicles don't spawn in water. */
+export function cityLandY(x: number, z: number): number | null {
+  const top = Math.max(city.maxY + 80, 80);
+  const span = top - city.minY + 40;
+  if (!city.colliders.length) return null;
+  gatherColliders(x - 2.5, x + 2.5, z - 2.5, z + 2.5, _query);
+  _dirN.set(0, -1, 0);
+  const origin = _origin.set(x, top, z);
+  let lowest: number | null = null;
+  for (const col of _query) {
+    const sea = isSeaName(collectName(col.mesh));
+    if (sea) continue;
+    const s = prepareRay(col, origin, _dirN);
+    const hits = col.bvh.raycast(_ray, THREE.DoubleSide, 0, col.world ? span : span / s);
+    for (const hit of hits) {
+      if (!hit) continue;
+      hitToWorld(col, hit, origin, _dirN, s);
+      const y = _hitP.y;
+      if (y < -0.6 || y > 8) continue;
+      if (Math.abs(_hitP.x - x) > 1.8 || Math.abs(_hitP.z - z) > 1.8) continue;
+      if (lowest == null || y < lowest) lowest = y;
+    }
+  }
+  if (lowest == null) return null;
+  return lowest;
 }
 
 /** Outdoor walkable ground — rejects indoor floors under a roof. */
@@ -770,52 +797,83 @@ export function getAirportSpawn(): { x: number; y: number; z: number; yaw: numbe
 
 export function getAirportPlaneSpawns(): { x: number; y: number; z: number; yaw: number }[] {
   const track = city.landmarks.AirPort_Track ?? city.landmarks.Airport_Front ?? city.landmarks.AirPort;
-  const hangar = city.landmarks.AirPort ?? city.landmarks.Airport_Front;
+  const terminal = city.landmarks.Airport_Front ?? city.landmarks.AirPort;
   if (!track) return [];
-  const alongX = track.maxX - track.minX > track.maxZ - track.minZ;
-  const out: { x: number; y: number; z: number; yaw: number }[] = [];
-  const place = (x: number, z: number, yaw: number) => {
-    const y = cityLowestSurface(x, z, -2, 14);
-    if (Number.isFinite(y) && y > -1 && y < 8) out.push({ x, y, z, yaw });
-    else out.push({ x, y: 0, z, yaw });
-  };
 
-  if (alongX) {
-    const zMid = (track.minZ + track.maxZ) * 0.5;
-    const yawRun = -Math.PI / 2;
-    place(track.minX + 32, zMid - 9, yawRun);
-    place(track.minX + 32, zMid + 9, yawRun);
-  } else {
-    const xMid = (track.minX + track.maxX) * 0.5;
-    const yawRun = Math.PI;
-    place(xMid - 9, track.minZ + 32, yawRun);
-    place(xMid + 9, track.minZ + 32, yawRun);
-  }
-
-  if (hangar) {
-    const hcx = (hangar.minX + hangar.maxX) * 0.5;
-    const hcz = (hangar.minZ + hangar.maxZ) * 0.5;
-    const tcx = (track.minX + track.maxX) * 0.5;
-    const tcz = (track.minZ + track.maxZ) * 0.5;
-    const dx = tcx - hcx;
-    const dz = tcz - hcz;
-    if (Math.abs(dx) >= Math.abs(dz)) {
-      const outSign = dx >= 0 ? 1 : -1;
-      const yaw = outSign > 0 ? -Math.PI / 2 : Math.PI / 2;
-      const inset = Math.min(14, Math.max(6, (hangar.maxX - hangar.minX) * 0.18));
-      const x = outSign > 0 ? hangar.maxX - inset : hangar.minX + inset;
-      place(x, hcz - 11, yaw);
-      place(x, hcz + 11, yaw);
-    } else {
-      const outSign = dz >= 0 ? 1 : -1;
-      const yaw = outSign > 0 ? Math.PI : 0;
-      const inset = Math.min(14, Math.max(6, (hangar.maxZ - hangar.minZ) * 0.18));
-      const z = outSign > 0 ? hangar.maxZ - inset : hangar.minZ + inset;
-      place(hcx - 11, z, yaw);
-      place(hcx + 11, z, yaw);
+  let landMinX = Infinity;
+  let landMaxX = -Infinity;
+  let landMinZ = Infinity;
+  let landMaxZ = -Infinity;
+  let landN = 0;
+  const nx = 24;
+  const nz = 16;
+  for (let i = 0; i <= nx; i++) {
+    for (let j = 0; j <= nz; j++) {
+      const x = THREE.MathUtils.lerp(track.minX + 6, track.maxX - 6, i / nx);
+      const z = THREE.MathUtils.lerp(track.minZ + 6, track.maxZ - 6, j / nz);
+      const y = cityLandY(x, z);
+      if (y == null) continue;
+      landN++;
+      landMinX = Math.min(landMinX, x);
+      landMaxX = Math.max(landMaxX, x);
+      landMinZ = Math.min(landMinZ, z);
+      landMaxZ = Math.max(landMaxZ, z);
     }
   }
+  const box = landN >= 8
+    ? { minX: landMinX, maxX: landMaxX, minZ: landMinZ, maxZ: landMaxZ }
+    : { minX: track.minX, maxX: track.maxX, minZ: track.minZ, maxZ: track.maxZ };
 
+  const alongX = box.maxX - box.minX > box.maxZ - box.minZ;
+  const out: { x: number; y: number; z: number; yaw: number }[] = [];
+  const place = (x: number, z: number, yaw: number) => {
+    const y = cityLandY(x, z) ?? cityLowestSurface(x, z, -1, 8);
+    if (y == null || !Number.isFinite(y)) return;
+    out.push({ x, y, z, yaw });
+  };
+
+  const tcx = terminal ? (terminal.minX + terminal.maxX) * 0.5 : (box.minX + box.maxX) * 0.5;
+  const tcz = terminal ? (terminal.minZ + terminal.maxZ) * 0.5 : (box.minZ + box.maxZ) * 0.5;
+
+  if (alongX) {
+    const zMid = (box.minZ + box.maxZ) * 0.5;
+    const xMin = box.minX + 28;
+    const xMax = box.maxX - 28;
+    const useMax = Math.abs(xMax - tcx) <= Math.abs(xMin - tcx);
+    const x0 = useMax ? xMax : xMin;
+    const yawRun = useMax ? Math.PI / 2 : -Math.PI / 2;
+    const lane = Math.min(6.4, (box.maxZ - box.minZ) * 0.18);
+    place(x0, zMid - lane, yawRun);
+    place(x0, zMid + lane, yawRun);
+    const zPad = Math.abs(box.minZ - zMid) >= Math.abs(box.maxZ - zMid) ? box.minZ + 9 : box.maxZ - 9;
+    const yawH = zPad < zMid ? Math.PI : 0;
+    place(x0 - 6.5, zPad, yawH);
+    place(x0 + 6.5, zPad, yawH);
+  } else {
+    const xMid = (box.minX + box.maxX) * 0.5;
+    const zMin = box.minZ + 28;
+    const zMax = box.maxZ - 28;
+    const useMax = Math.abs(zMax - tcz) <= Math.abs(zMin - tcz);
+    const z0 = useMax ? zMax : zMin;
+    const yawRun = useMax ? 0 : Math.PI;
+    const lane = Math.min(6.4, (box.maxX - box.minX) * 0.18);
+    place(xMid - lane, z0, yawRun);
+    place(xMid + lane, z0, yawRun);
+    const xPad = Math.abs(box.minX - xMid) >= Math.abs(box.maxX - xMid) ? box.minX + 9 : box.maxX - 9;
+    const yawH = xPad < xMid ? -Math.PI / 2 : Math.PI / 2;
+    place(xPad, z0 - 6.5, yawH);
+    place(xPad, z0 + 6.5, yawH);
+  }
+
+  if (out.length < 4) {
+    const cx = (box.minX + box.maxX) * 0.5;
+    const cz = (box.minZ + box.maxZ) * 0.5;
+    const yaw = alongX ? -Math.PI / 2 : 0;
+    place(cx - 8, cz - 8, yaw);
+    place(cx + 8, cz - 8, yaw);
+    place(cx - 8, cz + 8, yaw);
+    place(cx + 8, cz + 8, yaw);
+  }
   return out.slice(0, 4);
 }
 

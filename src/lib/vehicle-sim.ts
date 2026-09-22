@@ -31,6 +31,7 @@ export type VehInput = {
   thrustDown: boolean;
   thrustSlider: number | null;
   mapOpen: boolean;
+  gearToggle: boolean;
 };
 
 export type Vehicle = {
@@ -73,12 +74,15 @@ export type Vehicle = {
   ctrlPitch: number;
   ctrlRoll: number;
   ctrlYaw: number;
+  speedBrake: number;
   gear: number;
   door: number;
   doorTarget: number;
   occupyPhase: number;
   occupied: boolean;
   airborne: boolean;
+  gearManual: boolean;
+  gearWant: number;
   halfL: number;
   halfW: number;
   height: number;
@@ -339,6 +343,33 @@ export function spawnVehicles() {
   vehLive.ready = true;
 }
 
+let spawnSeq = 0;
+let gearKeyPrev = false;
+
+export function spawnVehicleInFront(kind: VehKind) {
+  const yaw = fpLive.yaw;
+  const fx = -Math.sin(yaw);
+  const fz = -Math.cos(yaw);
+  let dist = kind === "plane" ? 18 : 7.4;
+  let x = fpLive.x + fx * dist;
+  let z = fpLive.z + fz * dist;
+  const minD = kind === "plane" ? 22 : 9;
+  for (let i = 0; i < 8; i++) {
+    const hit = vehLive.vehicles.some((o) => (o.x - x) ** 2 + (o.z - z) ** 2 < minD * minD);
+    if (!hit) break;
+    dist += kind === "plane" ? 8 : 4;
+    x = fpLive.x + fx * dist;
+    z = fpLive.z + fz * dist;
+  }
+  const y = cityLowestSurface(x, z, -2, 20);
+  spawnSeq += 1;
+  const id = `${kind}-user-${spawnSeq}`;
+  const v = kind === "car" ? makeCar(id, x, y, z, yaw) : makePlane(id, x, y, z, yaw);
+  vehLive.vehicles.push(v);
+  vehLive.ready = true;
+  return v;
+}
+
 function blankMotion(): Pick<
   Vehicle,
   | "pitch"
@@ -374,12 +405,15 @@ function blankMotion(): Pick<
   | "ctrlPitch"
   | "ctrlRoll"
   | "ctrlYaw"
+  | "speedBrake"
   | "gear"
   | "door"
   | "doorTarget"
   | "occupyPhase"
   | "occupied"
   | "airborne"
+  | "gearManual"
+  | "gearWant"
 > {
   return {
     pitch: 0,
@@ -415,12 +449,15 @@ function blankMotion(): Pick<
     ctrlPitch: 0,
     ctrlRoll: 0,
     ctrlYaw: 0,
+    speedBrake: 0,
     gear: 1,
     door: 0,
     doorTarget: 0,
     occupyPhase: 0,
     occupied: false,
     airborne: false,
+    gearManual: false,
+    gearWant: 1,
   };
 }
 
@@ -463,7 +500,7 @@ function makePlane(id: string, x: number, y: number, z: number, yaw: number): Ve
     z,
     yaw,
     ...blankMotion(),
-    thrust: 0.12,
+    thrust: 0,
     halfL: 8.6,
     halfW: 2.1,
     height: 2.8,
@@ -859,10 +896,25 @@ function stepPlane(v: Vehicle, dt: number, input: VehInput, driven: boolean) {
   v.ctrlPitch = THREE.MathUtils.lerp(v.ctrlPitch, pitchIn, follow);
   v.ctrlRoll = THREE.MathUtils.lerp(v.ctrlRoll, rollIn, follow);
   v.ctrlYaw = THREE.MathUtils.lerp(v.ctrlYaw, yawIn, follow);
-
-  if (v.airborne) {
+  const wantBrake = driven && !input.mapOpen && input.thrustDown ? 1 : 0;
+  v.speedBrake = THREE.MathUtils.lerp(v.speedBrake, wantBrake, 1 - Math.exp(-10 * dt));
+  const gearTap = driven && !input.mapOpen && input.gearToggle && !gearKeyPrev;
+  gearKeyPrev = driven && input.gearToggle;
+  if (gearTap) {
+    v.gearManual = true;
+    v.gearWant = v.gear > 0.5 ? 0 : 1;
+  }
+  if (v.gearManual) {
+    const dir = Math.sign(v.gearWant - v.gear);
+    if (dir) v.gear = THREE.MathUtils.clamp(v.gear + dir * dt * 1.55, 0, 1);
+  } else if (v.airborne) {
     if (agl > 3.4) v.gear = Math.max(0, v.gear - dt * 1.4);
     else if (agl < 2.6 && v.pitch < 0.22 && v.pitch > -0.35) v.gear = Math.min(1, v.gear + dt * 1.6);
+  } else {
+    v.gear = Math.min(1, v.gear + dt * 2);
+  }
+
+  if (v.airborne) {
 
     const as = Math.max(v.speed, 1);
     const ctrl = THREE.MathUtils.clamp(as / 42, 0.22, 1.55);
@@ -906,21 +958,18 @@ function stepPlane(v: Vehicle, dt: number, input: VehInput, driven: boolean) {
       v.vz = v.fz * v.speed;
       v.pitch *= 0.25;
       v.roll *= 0.12;
-      v.gear = 1;
+      if (!v.gearManual) v.gear = 1;
       writeQuatFromEuler(v);
       updateBasis(v);
     }
     v.visPitch = v.pitch;
     v.visRoll = v.roll;
   } else {
-    v.gear = Math.min(1, v.gear + dt * 2);
     const steerIn = yawIn;
     const max = PLANE_TAXI * (0.35 + v.thrust * 0.9);
     if (v.thrust > 0.04) v.speed += v.thrust * 24 * dt;
     else v.speed *= Math.max(0, 1 - 0.9 * dt);
-    if (driven && input.handbrake) v.speed *= Math.max(0, 1 - 1.6 * dt);
-    if (driven && input.throttle < -0.2) v.speed += input.throttle * 14 * dt;
-    v.speed = THREE.MathUtils.clamp(v.speed, -8, max);
+    v.speed = THREE.MathUtils.clamp(v.speed, 0, max);
     const speedF = THREE.MathUtils.clamp(Math.abs(v.speed) / 8, 0, 1);
     v.yaw += steerIn * 1.15 * speedF * dt;
     v.steerAngle = THREE.MathUtils.lerp(v.steerAngle, 0, 0.2);
